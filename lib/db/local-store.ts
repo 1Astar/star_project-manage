@@ -11,6 +11,7 @@ import type {
   NotificationItem,
   Project,
   Prototype,
+  PrototypeAnnotation,
   Requirement,
   RoleTask,
   ShareLink,
@@ -28,6 +29,7 @@ export interface DatabaseSnapshot {
   acceptance_records: AcceptanceRecord[];
   share_links: Array<ShareLink & { plain_token?: string }>;
   prototypes: Prototype[];
+  prototype_annotations: PrototypeAnnotation[];
   bugs: Bug[];
   notifications: NotificationItem[];
   activity_logs: ActivityLog[];
@@ -57,6 +59,13 @@ async function readSeedFile(): Promise<DatabaseSnapshot | null> {
   }
 }
 
+function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
+  if (!db.prototype_annotations) {
+    db.prototype_annotations = [];
+  }
+  return db;
+}
+
 async function ensureDb(): Promise<DatabaseSnapshot> {
   if (memoryDb) return memoryDb;
 
@@ -66,10 +75,10 @@ async function ensureDb(): Promise<DatabaseSnapshot> {
   try {
     await fs.mkdir(dataDir, { recursive: true });
     const raw = await fs.readFile(dbFile, "utf8");
-    memoryDb = JSON.parse(raw) as DatabaseSnapshot;
+    memoryDb = normalizeDb(JSON.parse(raw) as DatabaseSnapshot);
     return memoryDb;
   } catch {
-    const seeded = (await readSeedFile()) ?? createSeedData();
+    const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
     memoryDb = seeded;
     try {
       await fs.mkdir(dataDir, { recursive: true });
@@ -422,6 +431,7 @@ function createSeedData(): DatabaseSnapshot {
       },
     ],
     prototypes: [],
+    prototype_annotations: [],
     bugs: [],
     notifications: [
       {
@@ -473,6 +483,9 @@ export async function getProjectBundle(projectId: string) {
   const share_links = db.share_links.filter((l) => l.project_id === project.id);
   const notifications = db.notifications.filter((n) => n.project_id === project.id);
   const prototypes = db.prototypes.filter((p) => p.project_id === project.id);
+  const prototype_annotations = db.prototype_annotations.filter(
+    (a) => a.project_id === project.id
+  );
   const bugs = db.bugs.filter((b) => b.project_id === project.id);
 
   return {
@@ -484,8 +497,81 @@ export async function getProjectBundle(projectId: string) {
     share_links,
     notifications,
     prototypes,
+    prototype_annotations,
     bugs,
   };
+}
+
+export async function syncPrototypeAnnotations(
+  projectId: string,
+  annotations: Array<{
+    pinmark_id: string;
+    acceptance_item_id?: string | null;
+    requirement_id?: string | null;
+    title?: string | null;
+    description?: string | null;
+    annotation_type?: string | null;
+    shape?: "point" | "rect" | null;
+    payload: Record<string, unknown>;
+  }>,
+  actor: { name: string; role?: string }
+) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) throw new Error("项目不存在");
+
+  const now = nowIso();
+  const requirementIds = new Set(
+    db.requirements.filter((r) => r.project_id === project.id).map((r) => r.id)
+  );
+  const acceptanceIds = new Set(
+    db.acceptance_items
+      .filter((a) => requirementIds.has(a.requirement_id))
+      .map((a) => a.id)
+  );
+
+  db.prototype_annotations = db.prototype_annotations.filter(
+    (a) => a.project_id !== project.id
+  );
+
+  for (const item of annotations) {
+    const acceptanceItemId = item.acceptance_item_id ?? null;
+    const requirementId = item.requirement_id ?? null;
+    if (acceptanceItemId && !acceptanceIds.has(acceptanceItemId)) {
+      continue;
+    }
+    if (requirementId && !requirementIds.has(requirementId)) {
+      continue;
+    }
+
+    db.prototype_annotations.push({
+      id: uid("pann-"),
+      project_id: project.id,
+      pinmark_id: item.pinmark_id,
+      acceptance_item_id: acceptanceItemId,
+      requirement_id: requirementId,
+      title: item.title ?? null,
+      description: item.description ?? null,
+      annotation_type: item.annotation_type ?? null,
+      shape: item.shape ?? null,
+      payload: item.payload,
+      updated_at: now,
+    });
+  }
+
+  await logActivity(db, {
+    project_id: project.id,
+    entity_type: "prototype_annotation",
+    entity_id: project.id,
+    field_name: "sync",
+    old_value: null,
+    new_value: String(annotations.length),
+    actor_name: actor.name,
+    actor_role: actor.role ?? "admin",
+  });
+
+  await saveDb(db);
+  return db.prototype_annotations.filter((a) => a.project_id === project.id);
 }
 
 export async function getShareLinkByToken(token: string) {

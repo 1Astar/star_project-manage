@@ -10,8 +10,9 @@ import {
   toggleShareLink,
   updateAcceptanceItem,
   updateRoleTaskWithPermission,
+  syncPrototypeAnnotations,
 } from "@/lib/db/local-store";
-import type { RoleTask, ShareLink, TaskStatus } from "@/lib/types";
+import type { PinmarkAnnotationPayload, RoleTask, ShareLink, TaskStatus } from "@/lib/types";
 import { calcProjectStats } from "@/lib/utils";
 
 export async function fetchDashboardData() {
@@ -71,7 +72,31 @@ export async function saveAcceptanceAction(input: {
   );
   revalidatePath(`/projects/${input.projectId}/requirements/${input.requirementId}`);
   revalidatePath(`/projects/${input.projectId}/board`);
+  revalidatePath(`/projects/${input.projectId}/prototype`);
   return item;
+}
+
+export async function syncPrototypeAnnotationsAction(input: {
+  projectId: string;
+  annotations: PinmarkAnnotationPayload[];
+  actorName?: string;
+}) {
+  const synced = await syncPrototypeAnnotations(
+    input.projectId,
+    input.annotations.map((annotation) => ({
+      pinmark_id: annotation.id,
+      acceptance_item_id: annotation.starPmAcceptanceItemId ?? null,
+      requirement_id: annotation.starPmRequirementId ?? null,
+      title: annotation.title ?? null,
+      description: annotation.description ?? null,
+      annotation_type: annotation.type ?? null,
+      shape: annotation.shape ?? null,
+      payload: annotation as Record<string, unknown>,
+    })),
+    { name: input.actorName ?? "产品", role: "admin" }
+  );
+  revalidatePath(`/projects/${input.projectId}/prototype`);
+  return synced;
 }
 
 export async function submitTestAction(input: {

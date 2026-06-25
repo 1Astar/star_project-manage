@@ -143,6 +143,32 @@ export interface Prototype {
   created_at: string;
 }
 
+/** PinMark 标注快照，可绑定到验收项 */
+export interface PrototypeAnnotation {
+  id: string;
+  project_id: string;
+  pinmark_id: string;
+  acceptance_item_id: string | null;
+  requirement_id: string | null;
+  title: string | null;
+  description: string | null;
+  annotation_type: string | null;
+  shape: "point" | "rect" | null;
+  payload: Record<string, unknown>;
+  updated_at: string;
+}
+
+export type PinmarkAnnotationPayload = {
+  id: string;
+  type?: string;
+  title?: string;
+  description?: string;
+  shape?: "point" | "rect";
+  starPmAcceptanceItemId?: string | null;
+  starPmRequirementId?: string | null;
+  [key: string]: unknown;
+};
+
 export interface NotificationItem {
   id: string;
   project_id: string;
