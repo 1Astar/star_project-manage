@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createShareLinkAction, toggleShareLinkAction } from "@/lib/actions";
-import type { ShareLink, RoleType } from "@/lib/types";
+import type { ShareLink, RoleType, ProjectMember } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
+import { MembersRoster } from "@/components/members-roster";
 
 type ShareLinkWithToken = ShareLink & { plain_token?: string };
 
@@ -12,10 +13,12 @@ export function SettingsClient({
   projectId,
   projectSlug,
   shareLinks,
+  members,
 }: {
   projectId: string;
   projectSlug: string;
   shareLinks: ShareLinkWithToken[];
+  members: ProjectMember[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -74,6 +77,12 @@ export function SettingsClient({
 
   return (
     <div className="space-y-8">
+      <MembersRoster
+        projectId={projectId}
+        projectSlug={projectSlug}
+        members={members}
+      />
+
       <section className="card p-5">
         <h2 className="font-semibold">原型来源</h2>
         <form onSubmit={uploadPrototype} className="mt-4 space-y-3">

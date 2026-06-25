@@ -17,6 +17,19 @@ export const SEED_IDS = {
 
 const SEED_TIME = "2026-06-22T00:00:00.000Z";
 
+const POOL_FIELDS = {
+  in_pool: false,
+  category: null,
+  stage_type: null,
+  optimization_notes: null,
+  known_issues: null,
+  submitted_at: null,
+  due_date: null,
+  difficulty_notes: null,
+  scenario: null,
+  needs_discussion: false,
+} as const;
+
 export function createSeedData(): DatabaseSnapshot {
   const petProjectId = SEED_IDS.petProject;
   const controllerProjectId = SEED_IDS.controllerProject;
@@ -321,7 +334,7 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     modules: [],
-    requirements: [...petReqs, ...controllerReqs],
+    requirements: [...petReqs, ...controllerReqs].map((r) => ({ ...POOL_FIELDS, ...r })),
     acceptance_items: acceptanceItems,
     role_tasks: [...petTasks, ...controllerTasks],
     test_records: [],
@@ -375,5 +388,6 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     activity_logs: [],
+    project_members: [],
   };
 }

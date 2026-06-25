@@ -7,6 +7,7 @@ import type {
   ModuleNode,
   NotificationItem,
   Project,
+  ProjectMember,
   Prototype,
   PrototypeAnnotation,
   Requirement,
@@ -30,4 +31,5 @@ export interface DatabaseSnapshot {
   bugs: Bug[];
   notifications: NotificationItem[];
   activity_logs: ActivityLog[];
+  project_members: ProjectMember[];
 }

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { RequirementDetailClient } from "@/components/requirement-detail";
-import { AppShell, ProjectNav, StatusBadge } from "@/components/ui";
+import { AppShell, StatusBadge } from "@/components/ui";
+import { ProjectNavLoader } from "@/components/project-nav-loader";
 import { ROLE_LABELS } from "@/lib/types";
 
 export default async function RequirementDetailPage({
@@ -26,7 +27,7 @@ export default async function RequirementDetailPage({
     <AppShell
       title={requirement.title}
       subtitle={requirement.sub_function ?? bundle.iterations[0]?.name}
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
       actions={<StatusBadge status={requirement.status} />}
     >
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">

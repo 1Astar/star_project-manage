@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fetchDashboardData } from "@/lib/actions";
 import { DbStatusBanner } from "@/components/db-status";
+import { DemoDataNotice } from "@/components/demo-data-notice";
 import { AppShell, ProgressRing, StatCard } from "@/components/ui";
 
 export default async function HomePage() {
@@ -28,8 +29,9 @@ export default async function HomePage() {
         </div>
       }
     >
-      <div className="mb-6">
+      <div className="mb-6 space-y-3">
         <DbStatusBanner />
+        <DemoDataNotice />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         {summaries.map((item) =>

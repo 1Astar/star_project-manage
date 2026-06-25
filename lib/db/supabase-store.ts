@@ -30,6 +30,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     bugs,
     notifications,
     activity_logs,
+    project_members,
   ] = await Promise.all([
     sb.from("projects").select("*"),
     sb.from("iterations").select("*"),
@@ -45,6 +46,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     sb.from("bugs").select("*"),
     sb.from("notifications").select("*").order("created_at", { ascending: false }),
     sb.from("activity_logs").select("*").order("created_at", { ascending: false }),
+    sb.from("project_members").select("*"),
   ]);
 
   return {
@@ -67,6 +69,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     bugs: throwOnError(bugs, "bugs"),
     notifications: throwOnError(notifications, "notifications"),
     activity_logs: throwOnError(activity_logs, "activity_logs"),
+    project_members: throwOnError(project_members, "project_members"),
   };
 }
 
@@ -112,8 +115,10 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await upsertRows("bugs", snapshot.bugs);
   await upsertRows("notifications", snapshot.notifications);
   await upsertRows("activity_logs", snapshot.activity_logs);
+  await upsertRows("project_members", snapshot.project_members);
 
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
+  await deleteMissing("project_members", snapshot.project_members.map((r) => r.id));
   await deleteMissing("notifications", snapshot.notifications.map((r) => r.id));
   await deleteMissing("bugs", snapshot.bugs.map((r) => r.id));
   await deleteMissing("prototype_annotations", snapshot.prototype_annotations.map((r) => r.id));

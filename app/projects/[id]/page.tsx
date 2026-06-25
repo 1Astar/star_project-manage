@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
-import { AppShell, ProjectNav, StatCard } from "@/components/ui";
+import { AppShell, StatCard } from "@/components/ui";
+import { ProjectNavLoader } from "@/components/project-nav-loader";
 import { calcProjectStats } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
@@ -22,7 +23,7 @@ export default async function ProjectOverviewPage({
     <AppShell
       title={bundle.project.name}
       subtitle={bundle.iterations[0]?.name ?? "当前迭代"}
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="整体进度" value={`${stats.progressPercent}%`} />

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { GanttView } from "@/components/gantt-view";
-import { AppShell, ProjectNav } from "@/components/ui";
+import { AppShell } from "@/components/ui";
+import { ProjectNavLoader } from "@/components/project-nav-loader";
 
 export default async function GanttPage({
   params,
@@ -16,7 +17,7 @@ export default async function GanttPage({
     <AppShell
       title={`${bundle.project.name} · 甘特图`}
       subtitle="按角色任务起止时间自动生成，模块级排期不虚构子需求时间"
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <GanttView
         requirements={bundle.requirements}

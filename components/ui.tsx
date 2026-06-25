@@ -139,32 +139,3 @@ export function AppShell({
     </div>
   );
 }
-
-export function ProjectNav({ projectId, slug }: { projectId: string; slug: string }) {
-  const base = `/projects/${slug || projectId}`;
-  const links = [
-    { href: base, label: "总览" },
-    { href: `${base}/board`, label: "需求看板" },
-    { href: `${base}/prototype`, label: "原型工作区" },
-    { href: `${base}/gantt`, label: "甘特图" },
-    { href: `${base}/hours`, label: "工时统计" },
-    { href: `${base}/import`, label: "Excel 导入" },
-    { href: `${base}/settings`, label: "设置" },
-    { href: "/todos", label: "我的待办" },
-    { href: "/ui-preview", label: "UI 方向" },
-  ];
-
-  return (
-    <nav className="flex flex-wrap gap-2">
-      {links.map((link) => (
-        <a
-          key={link.href}
-          href={link.href}
-          className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-        >
-          {link.label}
-        </a>
-      ))}
-    </nav>
-  );
-}

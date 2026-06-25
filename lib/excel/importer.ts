@@ -78,14 +78,19 @@ export async function importSheetToProject(
 
   if (options?.clearProjectRequirements) {
     const reqIds = new Set(
-      db.requirements.filter((r) => r.project_id === project.id).map((r) => r.id)
+      db.requirements
+        .filter((r) => r.project_id === project.id && !r.in_pool)
+        .map((r) => r.id)
     );
-    db.requirements = db.requirements.filter((r) => r.project_id !== project.id);
+    db.requirements = db.requirements.filter(
+      (r) => r.project_id !== project.id || r.in_pool
+    );
     db.role_tasks = db.role_tasks.filter((t) => !reqIds.has(t.requirement_id));
     db.acceptance_items = db.acceptance_items.filter((a) => !reqIds.has(a.requirement_id));
     db.modules = db.modules.filter((m) => {
       const iter = db.iterations.find((i) => i.id === m.iteration_id);
-      return iter?.project_id !== project.id;
+      if (iter?.project_id !== project.id) return true;
+      return iter.name === "需求池";
     });
   }
 

@@ -509,3 +509,60 @@
     max-width: 100%;
   }
 }
+
+.pinmark-module-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--pin-line);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.pinmark-module-filter-sub {
+  padding-top: 0;
+  border-bottom: none;
+}
+
+.pinmark-module-filter button {
+  border: 1px solid var(--pin-line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pin-muted);
+  background: #fff;
+  cursor: pointer;
+}
+
+.pinmark-module-filter button:hover {
+  border-color: rgba(32, 36, 44, 0.2);
+  color: var(--pin-ink);
+}
+
+.pinmark-module-filter button.active {
+  border-color: var(--pin-accent);
+  background: rgba(227, 75, 49, 0.08);
+  color: var(--pin-accent);
+}
+
+.pinmark-note-input {
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 8px;
+  border: 1px solid var(--pin-line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  font-family: inherit;
+  color: var(--pin-ink);
+  background: #fff;
+}
+
+.pinmark-note-input:focus {
+  outline: none;
+  border-color: rgba(227, 75, 49, 0.45);
+  box-shadow: 0 0 0 3px rgba(227, 75, 49, 0.08);
+}

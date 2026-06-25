@@ -60,6 +60,16 @@ export interface Requirement {
   status: TaskStatus;
   blocker_reason: string | null;
   sort_order: number;
+  in_pool: boolean;
+  category: string | null;
+  stage_type: string | null;
+  optimization_notes: string | null;
+  known_issues: string | null;
+  submitted_at: string | null;
+  due_date: string | null;
+  difficulty_notes: string | null;
+  scenario: string | null;
+  needs_discussion: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -191,6 +201,15 @@ export interface ActivityLog {
   new_value: string | null;
   actor_name: string;
   actor_role: string | null;
+  created_at: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  name: string;
+  role: RoleType | null;
+  is_active: boolean;
   created_at: string;
 }
 

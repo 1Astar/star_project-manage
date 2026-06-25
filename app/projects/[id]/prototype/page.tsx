@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { PrototypeWorkspace } from "@/components/prototype-workspace";
-import { AppShell, ProjectNav } from "@/components/ui";
+import { AppShell } from "@/components/ui";
+import { ProjectNavLoader } from "@/components/project-nav-loader";
 import "@/app/prototype-workspace.css";
 
 export default async function PrototypePage({
@@ -17,7 +18,7 @@ export default async function PrototypePage({
     <AppShell
       title={`${bundle.project.name} · 原型工作区`}
       subtitle="PinMark 标注可绑定验收项，右侧逐项验收"
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <PrototypeWorkspace
         projectId={bundle.project.id}
@@ -28,6 +29,7 @@ export default async function PrototypePage({
         savedAnnotations={bundle.prototype_annotations}
         tasks={bundle.role_tasks}
         prototypes={bundle.prototypes}
+        modules={bundle.modules}
       />
     </AppShell>
   );

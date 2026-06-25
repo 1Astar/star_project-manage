@@ -41,7 +41,10 @@ export async function DbStatusBanner() {
   return (
     <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
       <strong>数据库：Supabase 已连接</strong>
-      <span className="ml-2">共 {ping.projectCount} 个项目，数据持久化生效</span>
+      <span className="ml-2">
+        共 {ping.projectCount} 个项目，数据持久化生效。若尚未导入 Excel，当前需求可能来自演示种子脚本，可在各项目「Excel
+        导入」页替换。
+      </span>
     </div>
   );
 }

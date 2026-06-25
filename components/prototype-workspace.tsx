@@ -12,6 +12,7 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUS_FLOW,
   type AcceptanceItem,
+  type ModuleNode,
   type PinmarkAnnotationPayload,
   type Prototype,
   type PrototypeAnnotation,
@@ -20,6 +21,7 @@ import {
   type TaskStatus,
 } from "@/lib/types";
 import { StatusBadge } from "@/components/ui";
+import { RequirementNoteEditor } from "@/components/requirement-note-editor";
 
 type WorkspaceMode = "browse" | "review" | "pinmark";
 
@@ -54,6 +56,7 @@ export function PrototypeWorkspace({
   savedAnnotations,
   tasks,
   prototypes,
+  modules,
 }: {
   projectId: string;
   projectSlug: string;
@@ -63,18 +66,78 @@ export function PrototypeWorkspace({
   savedAnnotations: PrototypeAnnotation[];
   tasks: RoleTask[];
   prototypes: Prototype[];
+  modules: ModuleNode[];
 }) {
   const [mode, setMode] = useState<WorkspaceMode>("browse");
   const [selectedReqId, setSelectedReqId] = useState(requirements[0]?.id ?? "");
   const [selectedAcceptanceId, setSelectedAcceptanceId] = useState(
     acceptanceItems[0]?.id ?? ""
   );
+  const [selectedL1Id, setSelectedL1Id] = useState<string | null>(null);
+  const [selectedL2Id, setSelectedL2Id] = useState<string | null>(null);
+  const [virtualKey, setVirtualKey] = useState<string | null>(null);
   const [scale, setScale] = useState(100);
   const [pinmarkReady, setPinmarkReady] = useState(false);
   const [liveAnnotations, setLiveAnnotations] = useState<PinmarkAnnotationPayload[]>([]);
   const [bindHint, setBindHint] = useState<string | null>(null);
   const pinmarkRef = useRef<HTMLIFrameElement>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const l1Modules = useMemo(
+    () => modules.filter((m) => m.level === 1).sort((a, b) => a.sort_order - b.sort_order),
+    [modules]
+  );
+
+  const l2Modules = useMemo(
+    () =>
+      selectedL1Id
+        ? modules
+            .filter((m) => m.level === 2 && m.parent_id === selectedL1Id)
+            .sort((a, b) => a.sort_order - b.sort_order)
+        : [],
+    [modules, selectedL1Id]
+  );
+
+  const virtualGroups = useMemo(() => {
+    if (l1Modules.length > 0) return [];
+    const seen = new Set<string>();
+    const groups: string[] = [];
+    for (const req of requirements) {
+      const key = req.sub_function?.trim() || req.title.trim();
+      if (!seen.has(key)) {
+        seen.add(key);
+        groups.push(key);
+      }
+    }
+    return groups.length > 1 ? groups : [];
+  }, [l1Modules.length, requirements]);
+
+  const filteredRequirements = useMemo(() => {
+    return requirements
+      .filter((req) => {
+        if (selectedL2Id) return req.module_l2_id === selectedL2Id;
+        if (selectedL1Id) return req.module_l1_id === selectedL1Id;
+        if (virtualKey) {
+          const key = req.sub_function?.trim() || req.title.trim();
+          return key === virtualKey;
+        }
+        return true;
+      })
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [requirements, selectedL1Id, selectedL2Id, virtualKey]);
+
+  useEffect(() => {
+    if (!filteredRequirements.length) return;
+    if (!filteredRequirements.some((r) => r.id === selectedReqId)) {
+      setSelectedReqId(filteredRequirements[0].id);
+    }
+  }, [filteredRequirements, selectedReqId]);
+
+  function clearModuleFilter() {
+    setSelectedL1Id(null);
+    setSelectedL2Id(null);
+    setVirtualKey(null);
+  }
 
   const selectedReq = requirements.find((r) => r.id === selectedReqId);
   const prototype =
@@ -214,6 +277,11 @@ export function PrototypeWorkspace({
     (item) => item.requirement_id === selectedReqId
   );
 
+  const noteInitial =
+    acceptanceForSelectedReq[0]?.note ?? selectedReq?.detail_work ?? null;
+
+  const showModuleFilter = l1Modules.length > 0 || virtualGroups.length > 0;
+
   return (
     <div className="pinmark-shell">
       <header className="pinmark-topbar">
@@ -333,13 +401,68 @@ export function PrototypeWorkspace({
             <span>
               {mode === "pinmark" || mode === "review"
                 ? `${acceptanceItems.length} 项验收`
-                : `${requirements.length} 项需求`}
+                : `${filteredRequirements.length} / ${requirements.length} 项需求`}
             </span>
           </div>
 
+          {showModuleFilter ? (
+            <div className="pinmark-module-filter">
+              <button
+                type="button"
+                className={!selectedL1Id && !selectedL2Id && !virtualKey ? "active" : ""}
+                onClick={clearModuleFilter}
+              >
+                全部模块
+              </button>
+              {l1Modules.map((mod) => (
+                <button
+                  key={mod.id}
+                  type="button"
+                  className={selectedL1Id === mod.id && !selectedL2Id ? "active" : ""}
+                  onClick={() => {
+                    setSelectedL1Id(mod.id);
+                    setSelectedL2Id(null);
+                    setVirtualKey(null);
+                  }}
+                >
+                  {mod.name}
+                </button>
+              ))}
+              {virtualGroups.map((group) => (
+                <button
+                  key={group}
+                  type="button"
+                  className={virtualKey === group ? "active" : ""}
+                  onClick={() => {
+                    setVirtualKey(group);
+                    setSelectedL1Id(null);
+                    setSelectedL2Id(null);
+                  }}
+                >
+                  {group}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {l2Modules.length > 0 ? (
+            <div className="pinmark-module-filter pinmark-module-filter-sub">
+              {l2Modules.map((mod) => (
+                <button
+                  key={mod.id}
+                  type="button"
+                  className={selectedL2Id === mod.id ? "active" : ""}
+                  onClick={() => setSelectedL2Id(mod.id)}
+                >
+                  {mod.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           {mode === "pinmark" || mode === "review" ? (
             <div className="pinmark-annotation-list">
-              {requirements.map((req) => {
+              {filteredRequirements.map((req) => {
                 const items = acceptanceItems.filter((item) => item.requirement_id === req.id);
                 if (!items.length) return null;
                 return (
@@ -448,7 +571,7 @@ export function PrototypeWorkspace({
             </div>
           ) : (
             <div className="pinmark-annotation-list">
-              {requirements.map((req, index) => {
+              {filteredRequirements.map((req, index) => {
                 const reqTasks = tasks.filter((t) => t.requirement_id === req.id);
                 const active = req.id === selectedReqId;
                 return (
@@ -485,12 +608,20 @@ export function PrototypeWorkspace({
                   <p>{selectedReq.acceptance_criteria}</p>
                 </div>
               ) : null}
-              {selectedReq.detail_work ? (
+              {selectedReq.detail_work && !noteInitial ? (
                 <div className="pinmark-editor-block">
                   <div className="pinmark-editor-label">详细说明</div>
                   <p>{selectedReq.detail_work}</p>
                 </div>
               ) : null}
+
+              <RequirementNoteEditor
+                key={selectedReq.id}
+                projectId={projectId}
+                projectSlug={projectSlug}
+                requirementId={selectedReq.id}
+                initialNote={noteInitial}
+              />
 
               {mode === "review" && acceptanceForSelectedReq.length > 0 ? (
                 <div className="pinmark-editor-block">

@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { HoursView } from "@/components/hours-view";
-import { AppShell, ProjectNav } from "@/components/ui";
+import { AppShell } from "@/components/ui";
+import { ProjectNavLoader } from "@/components/project-nav-loader";
 import { readDb } from "@/lib/db";
 
 export default async function HoursPage({
@@ -21,7 +22,7 @@ export default async function HoursPage({
     <AppShell
       title={`${bundle.project.name} · 工时统计`}
       subtitle="模块级与需求级工时不重复累计"
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <HoursView
         requirements={bundle.requirements}

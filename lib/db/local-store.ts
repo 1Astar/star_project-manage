@@ -13,10 +13,12 @@ import type {
   ModuleNode,
   NotificationItem,
   Project,
+  ProjectMember,
   Prototype,
   PrototypeAnnotation,
   Requirement,
   RoleTask,
+  RoleType,
   ShareLink,
   TestRecord,
 } from "@/lib/types";
@@ -52,6 +54,23 @@ async function readSeedFile(): Promise<DatabaseSnapshot | null> {
 function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
   if (!db.prototype_annotations) {
     db.prototype_annotations = [];
+  }
+  if (!db.project_members) {
+    db.project_members = [];
+  }
+  for (const req of db.requirements) {
+    if (req.in_pool === undefined) req.in_pool = false;
+    if (req.category === undefined) req.category = null;
+    if (req.stage_type === undefined) req.stage_type = null;
+    if (req.optimization_notes === undefined) req.optimization_notes = null;
+    if (req.known_issues === undefined) req.known_issues = null;
+    if (req.submitted_at === undefined) {
+      req.submitted_at = req.created_at ? req.created_at.slice(0, 10) : null;
+    }
+    if (req.due_date === undefined) req.due_date = null;
+    if (req.difficulty_notes === undefined) req.difficulty_notes = null;
+    if (req.scenario === undefined) req.scenario = null;
+    if (req.needs_discussion === undefined) req.needs_discussion = false;
   }
   return db;
 }
@@ -150,7 +169,11 @@ export async function getProjectBundle(projectId: string) {
   if (!project) return null;
 
   const iterations = db.iterations.filter((i) => i.project_id === project.id);
-  const requirements = db.requirements.filter((r) => r.project_id === project.id);
+  const iterationIds = new Set(iterations.map((i) => i.id));
+  const modules = db.modules.filter((m) => iterationIds.has(m.iteration_id));
+  const requirements = db.requirements.filter(
+    (r) => r.project_id === project.id && !r.in_pool
+  );
   const requirementIds = new Set(requirements.map((r) => r.id));
   const role_tasks = db.role_tasks.filter((t) => requirementIds.has(t.requirement_id));
   const acceptance_items = db.acceptance_items.filter((a) =>
@@ -163,10 +186,12 @@ export async function getProjectBundle(projectId: string) {
     (a) => a.project_id === project.id
   );
   const bugs = db.bugs.filter((b) => b.project_id === project.id);
+  const project_members = db.project_members.filter((m) => m.project_id === project.id);
 
   return {
     project,
     iterations,
+    modules,
     requirements,
     role_tasks,
     acceptance_items,
@@ -175,6 +200,7 @@ export async function getProjectBundle(projectId: string) {
     prototypes,
     prototype_annotations,
     bugs,
+    project_members,
   };
 }
 
@@ -305,6 +331,61 @@ export async function updateRoleTask(
 
   await writeDb(db);
   return task;
+}
+
+export async function updateRequirement(
+  requirementId: string,
+  updates: Partial<
+    Pick<
+      Requirement,
+      | "title"
+      | "detail_work"
+      | "acceptance_criteria"
+      | "sub_function"
+      | "priority"
+      | "status"
+      | "category"
+      | "stage_type"
+      | "optimization_notes"
+      | "known_issues"
+      | "sort_order"
+      | "module_l1_id"
+      | "module_l2_id"
+      | "submitted_at"
+      | "due_date"
+      | "difficulty_notes"
+      | "scenario"
+      | "needs_discussion"
+    >
+  >,
+  actor: { name: string; role?: string }
+) {
+  const db = await readDb();
+  const req = db.requirements.find((r) => r.id === requirementId);
+  if (!req) throw new Error("需求不存在");
+
+  const before = { ...req };
+  Object.assign(req, updates, { updated_at: nowIso() });
+
+  for (const [field, value] of Object.entries(updates)) {
+    const oldVal = String((before as Record<string, unknown>)[field] ?? "");
+    const newVal = String(value ?? "");
+    if (oldVal !== newVal) {
+      await logActivity(db, {
+        project_id: req.project_id,
+        entity_type: "requirement",
+        entity_id: req.id,
+        field_name: field,
+        old_value: oldVal,
+        new_value: newVal,
+        actor_name: actor.name,
+        actor_role: actor.role ?? "admin",
+      });
+    }
+  }
+
+  await writeDb(db);
+  return req;
 }
 
 export async function updateAcceptanceItem(
@@ -628,6 +709,320 @@ export async function updateRoleTaskWithPermission(
     }
   }
   return updateRoleTask(taskId, updates, actor);
+}
+
+const POOL_ITERATION_NAME = "需求池";
+
+export async function ensurePoolIteration(projectId: string): Promise<Iteration> {
+  const db = await readDb();
+  let iteration = db.iterations.find(
+    (i) => i.project_id === projectId && i.name === POOL_ITERATION_NAME
+  );
+  if (!iteration) {
+    iteration = {
+      id: uid("iter-"),
+      project_id: projectId,
+      name: POOL_ITERATION_NAME,
+      sort_order: -1,
+      created_at: nowIso(),
+    };
+    db.iterations.push(iteration);
+    await writeDb(db);
+  }
+  return iteration;
+}
+
+export async function getPoolBundle(projectId: string) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) return null;
+
+  const poolIteration = await ensurePoolIteration(project.id);
+  const poolRequirements = db.requirements
+    .filter((r) => r.project_id === project.id && r.in_pool)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const poolModules = db.modules
+    .filter((m) => m.iteration_id === poolIteration.id)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const activeIterations = db.iterations
+    .filter((i) => i.project_id === project.id && i.name !== POOL_ITERATION_NAME)
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  return {
+    project,
+    poolIteration,
+    poolRequirements,
+    poolModules,
+    activeIterations,
+    project_members: db.project_members.filter((m) => m.project_id === project.id),
+  };
+}
+
+export async function createPoolRequirement(
+  projectId: string,
+  input: Partial<
+    Pick<
+      Requirement,
+      | "title"
+      | "category"
+      | "stage_type"
+      | "priority"
+      | "status"
+      | "optimization_notes"
+      | "known_issues"
+      | "module_l1_id"
+      | "sub_function"
+    >
+  >
+) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) throw new Error("项目不存在");
+
+  const poolIteration = await ensurePoolIteration(project.id);
+  const sortOrder =
+    db.requirements.filter((r) => r.project_id === project.id && r.in_pool).length + 1;
+
+  const req: Requirement = {
+    id: uid("req-"),
+    project_id: project.id,
+    iteration_id: poolIteration.id,
+    module_l1_id: input.module_l1_id ?? null,
+    module_l2_id: null,
+    title: input.title?.trim() || "新功能点",
+    sub_function: input.sub_function ?? null,
+    detail_work: null,
+    acceptance_criteria: null,
+    priority: input.priority ?? null,
+    status: input.status ?? "pending",
+    blocker_reason: null,
+    sort_order: sortOrder,
+    in_pool: true,
+    category: input.category ?? null,
+    stage_type: input.stage_type ?? null,
+    optimization_notes: input.optimization_notes ?? null,
+    known_issues: input.known_issues ?? null,
+    submitted_at: nowIso().slice(0, 10),
+    due_date: null,
+    difficulty_notes: null,
+    scenario: null,
+    needs_discussion: false,
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+  db.requirements.push(req);
+  await writeDb(db);
+  return req;
+}
+
+export async function updatePoolRequirement(
+  requirementId: string,
+  updates: Partial<
+    Pick<
+      Requirement,
+      | "title"
+      | "category"
+      | "stage_type"
+      | "priority"
+      | "status"
+      | "optimization_notes"
+      | "known_issues"
+      | "sub_function"
+      | "sort_order"
+      | "module_l1_id"
+      | "submitted_at"
+      | "due_date"
+      | "difficulty_notes"
+      | "scenario"
+      | "needs_discussion"
+    >
+  >,
+  actor: { name: string; role?: string }
+) {
+  const db = await readDb();
+  const req = db.requirements.find((r) => r.id === requirementId);
+  if (!req?.in_pool) throw new Error("需求不在需求池中");
+  return updateRequirement(requirementId, updates, actor);
+}
+
+export async function deletePoolRequirement(requirementId: string) {
+  const db = await readDb();
+  const req = db.requirements.find((r) => r.id === requirementId);
+  if (!req?.in_pool) throw new Error("需求不在需求池中");
+  db.requirements = db.requirements.filter((r) => r.id !== requirementId);
+  db.acceptance_items = db.acceptance_items.filter((a) => a.requirement_id !== requirementId);
+  db.role_tasks = db.role_tasks.filter((t) => t.requirement_id !== requirementId);
+  await writeDb(db);
+}
+
+export async function promotePoolRequirement(
+  requirementId: string,
+  targetIterationId: string,
+  actor: { name: string; role?: string }
+) {
+  const db = await readDb();
+  const req = db.requirements.find((r) => r.id === requirementId);
+  if (!req?.in_pool) throw new Error("需求不在需求池中");
+
+  const iteration = db.iterations.find((i) => i.id === targetIterationId);
+  if (!iteration || iteration.project_id !== req.project_id) {
+    throw new Error("目标迭代无效");
+  }
+  if (iteration.name === POOL_ITERATION_NAME) {
+    throw new Error("不能规划回需求池迭代");
+  }
+
+  req.in_pool = false;
+  req.iteration_id = targetIterationId;
+  req.updated_at = nowIso();
+
+  const acceptance: AcceptanceItem = {
+    id: uid("acc-"),
+    requirement_id: req.id,
+    description: `${req.title} - 功能符合 PRD`,
+    passed: null,
+    note: req.optimization_notes,
+    sort_order: 1,
+  };
+  db.acceptance_items.push(acceptance);
+
+  await logActivity(db, {
+    project_id: req.project_id,
+    entity_type: "requirement",
+    entity_id: req.id,
+    field_name: "in_pool",
+    old_value: "true",
+    new_value: "false",
+    actor_name: actor.name,
+    actor_role: actor.role ?? "admin",
+  });
+
+  await writeDb(db);
+  return req;
+}
+
+export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const db = await readDb();
+  return db.project_members
+    .filter((m) => m.project_id === projectId)
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+}
+
+export async function createProjectMember(input: {
+  project_id: string;
+  name: string;
+  role?: RoleType | null;
+}) {
+  const db = await readDb();
+  const name = input.name.trim();
+  if (!name) throw new Error("姓名不能为空");
+  const exists = db.project_members.some(
+    (m) => m.project_id === input.project_id && m.name === name
+  );
+  if (exists) throw new Error("该成员已存在");
+
+  const member: ProjectMember = {
+    id: uid("mem-"),
+    project_id: input.project_id,
+    name,
+    role: input.role ?? null,
+    is_active: true,
+    created_at: nowIso(),
+  };
+  db.project_members.push(member);
+  await writeDb(db);
+  return member;
+}
+
+export async function updateProjectMember(
+  memberId: string,
+  updates: Partial<Pick<ProjectMember, "name" | "role" | "is_active">>
+) {
+  const db = await readDb();
+  const member = db.project_members.find((m) => m.id === memberId);
+  if (!member) throw new Error("成员不存在");
+
+  if (updates.name) {
+    const name = updates.name.trim();
+    const dup = db.project_members.some(
+      (m) => m.project_id === member.project_id && m.name === name && m.id !== memberId
+    );
+    if (dup) throw new Error("该姓名已被使用");
+    member.name = name;
+  }
+  if (updates.role !== undefined) member.role = updates.role;
+  if (updates.is_active !== undefined) member.is_active = updates.is_active;
+
+  await writeDb(db);
+  return member;
+}
+
+export async function deleteProjectMember(memberId: string, clearAssignees = false) {
+  const db = await readDb();
+  const member = db.project_members.find((m) => m.id === memberId);
+  if (!member) throw new Error("成员不存在");
+
+  if (clearAssignees) {
+    for (const task of db.role_tasks) {
+      const req = db.requirements.find((r) => r.id === task.requirement_id);
+      if (req?.project_id === member.project_id && task.assignee === member.name) {
+        task.assignee = null;
+        task.updated_at = nowIso();
+      }
+    }
+    for (const bug of db.bugs) {
+      if (bug.project_id === member.project_id && bug.assignee === member.name) {
+        bug.assignee = null;
+        bug.updated_at = nowIso();
+      }
+    }
+  }
+
+  db.project_members = db.project_members.filter((m) => m.id !== memberId);
+  await writeDb(db);
+}
+
+export async function claimShareAssignee(shareToken: string, displayName: string) {
+  const linkData = await getShareLinkByToken(shareToken);
+  if (!linkData?.bundle) throw new Error("无效或已停用的链接");
+
+  const name = displayName.trim();
+  if (!name) throw new Error("请填写姓名");
+
+  const db = await readDb();
+  const roster = db.project_members.filter(
+    (m) => m.project_id === linkData.link.project_id && m.is_active
+  );
+  if (roster.length > 0) {
+    const member = roster.find((m) => m.name === name);
+    if (!member) {
+      throw new Error("姓名不在项目成员名册中，请联系产品添加或核对拼写");
+    }
+    if (
+      member.role &&
+      linkData.link.role !== "admin" &&
+      linkData.link.role !== "readonly" &&
+      linkData.link.role !== "test" &&
+      member.role !== linkData.link.role
+    ) {
+      throw new Error(`该链接为${linkData.link.role}角色，与成员岗位不匹配`);
+    }
+  }
+
+  let updated = 0;
+  const { link } = linkData;
+  for (const task of db.role_tasks) {
+    const req = db.requirements.find((r) => r.id === task.requirement_id);
+    if (!req || req.in_pool) continue;
+    if (link.role !== "admin" && link.role !== task.role) continue;
+    if (task.assignee) continue;
+    task.assignee = name;
+    task.updated_at = nowIso();
+    updated++;
+  }
+
+  if (updated > 0) await writeDb(db);
+  return { updated, displayName: name };
 }
 
 export { uid, nowIso };
