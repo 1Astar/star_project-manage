@@ -33,8 +33,64 @@ export interface DatabaseSnapshot {
   activity_logs: ActivityLog[];
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "db.json");
+const SEED_FILE = path.join(process.cwd(), "data", "db.seed.json");
+
+function getDataDir(): string {
+  if (process.env.VERCEL === "1") {
+    return path.join("/tmp", "star-pm");
+  }
+  return path.join(process.cwd(), "data");
+}
+
+function getDbFile(): string {
+  return path.join(getDataDir(), "db.json");
+}
+
+let memoryDb: DatabaseSnapshot | null = null;
+
+async function readSeedFile(): Promise<DatabaseSnapshot | null> {
+  try {
+    const raw = await fs.readFile(SEED_FILE, "utf8");
+    return JSON.parse(raw) as DatabaseSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+async function ensureDb(): Promise<DatabaseSnapshot> {
+  if (memoryDb) return memoryDb;
+
+  const dbFile = getDbFile();
+  const dataDir = getDataDir();
+
+  try {
+    await fs.mkdir(dataDir, { recursive: true });
+    const raw = await fs.readFile(dbFile, "utf8");
+    memoryDb = JSON.parse(raw) as DatabaseSnapshot;
+    return memoryDb;
+  } catch {
+    const seeded = (await readSeedFile()) ?? createSeedData();
+    memoryDb = seeded;
+    try {
+      await fs.mkdir(dataDir, { recursive: true });
+      await fs.writeFile(dbFile, JSON.stringify(seeded, null, 2), "utf8");
+    } catch {
+      // Vercel 等项目目录只读时，仅使用内存 + /tmp 不可用时的降级
+    }
+    return seeded;
+  }
+}
+
+async function saveDb(db: DatabaseSnapshot): Promise<void> {
+  memoryDb = db;
+  const dbFile = getDbFile();
+  try {
+    await fs.mkdir(getDataDir(), { recursive: true });
+    await fs.writeFile(dbFile, JSON.stringify(db, null, 2), "utf8");
+  } catch {
+    // 写入失败时仍保留 memoryDb，避免服务端崩溃
+  }
+}
 
 function uid(prefix = ""): string {
   return `${prefix}${crypto.randomUUID()}`;
@@ -42,22 +98,6 @@ function uid(prefix = ""): string {
 
 function nowIso(): string {
   return new Date().toISOString();
-}
-
-async function ensureDb(): Promise<DatabaseSnapshot> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    const raw = await fs.readFile(DB_FILE, "utf8");
-    return JSON.parse(raw) as DatabaseSnapshot;
-  } catch {
-    const seeded = createSeedData();
-    await fs.writeFile(DB_FILE, JSON.stringify(seeded, null, 2), "utf8");
-    return seeded;
-  }
-}
-
-async function saveDb(db: DatabaseSnapshot): Promise<void> {
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf8");
 }
 
 function createSeedData(): DatabaseSnapshot {
