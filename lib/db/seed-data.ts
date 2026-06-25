@@ -1,6 +1,6 @@
 import { hashToken } from "@/lib/utils";
 import type { AcceptanceItem, Requirement, RoleTask } from "@/lib/types";
-import type { DatabaseSnapshot } from "@/lib/db/local-store";
+import type { DatabaseSnapshot } from "@/lib/db/types";
 
 /** 固定 ID，保证 Vercel 多实例与刷新后链接仍有效 */
 export const SEED_IDS = {

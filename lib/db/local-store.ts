@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { createSeedData } from "@/lib/db/seed-data";
+import { readSupabaseDb, writeSupabaseDb } from "@/lib/db/supabase-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { generateShareToken, hashToken } from "@/lib/utils";
 import type {
   AcceptanceItem,
@@ -19,22 +21,9 @@ import type {
   TestRecord,
 } from "@/lib/types";
 
-export interface DatabaseSnapshot {
-  projects: Project[];
-  iterations: Iteration[];
-  modules: ModuleNode[];
-  requirements: Requirement[];
-  acceptance_items: AcceptanceItem[];
-  role_tasks: RoleTask[];
-  test_records: TestRecord[];
-  acceptance_records: AcceptanceRecord[];
-  share_links: Array<ShareLink & { plain_token?: string }>;
-  prototypes: Prototype[];
-  prototype_annotations: PrototypeAnnotation[];
-  bugs: Bug[];
-  notifications: NotificationItem[];
-  activity_logs: ActivityLog[];
-}
+import type { DatabaseSnapshot } from "@/lib/db/types";
+
+export type { DatabaseSnapshot } from "@/lib/db/types";
 
 const SEED_FILE = path.join(process.cwd(), "data", "db.seed.json");
 
@@ -79,11 +68,11 @@ function requirementLink(db: DatabaseSnapshot, requirement: Requirement): string
   return `/projects/${projectSlug(db, requirement.project_id)}/requirements/${requirement.id}`;
 }
 
-async function ensureDb(): Promise<DatabaseSnapshot> {
+async function readLocalDb(): Promise<DatabaseSnapshot> {
   if (isValidDb(memoryDb)) return memoryDb;
 
   // Vercel 无持久化存储：始终从仓库内种子文件启动，保证 ID 与链接稳定
-  if (process.env.VERCEL === "1") {
+  if (process.env.VERCEL === "1" && !isSupabaseConfigured()) {
     const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
     memoryDb = seeded;
     return seeded;
@@ -115,7 +104,7 @@ async function ensureDb(): Promise<DatabaseSnapshot> {
   return seeded;
 }
 
-async function saveDb(db: DatabaseSnapshot): Promise<void> {
+async function saveLocalDb(db: DatabaseSnapshot): Promise<void> {
   memoryDb = db;
   const dbFile = getDbFile();
   try {
@@ -126,8 +115,8 @@ async function saveDb(db: DatabaseSnapshot): Promise<void> {
   }
 }
 
-function uid(prefix = ""): string {
-  return `${prefix}${crypto.randomUUID()}`;
+function uid(_prefix = ""): string {
+  return crypto.randomUUID();
 }
 
 function nowIso(): string {
@@ -135,11 +124,13 @@ function nowIso(): string {
 }
 
 export async function readDb(): Promise<DatabaseSnapshot> {
-  return ensureDb();
+  if (isSupabaseConfigured()) return readSupabaseDb();
+  return readLocalDb();
 }
 
 export async function writeDb(db: DatabaseSnapshot): Promise<void> {
-  await saveDb(db);
+  if (isSupabaseConfigured()) return writeSupabaseDb(db);
+  return saveLocalDb(db);
 }
 
 export async function getProjects(): Promise<Project[]> {
@@ -255,7 +246,7 @@ export async function syncPrototypeAnnotations(
     actor_role: actor.role ?? "admin",
   });
 
-  await saveDb(db);
+  await writeDb(db);
   return db.prototype_annotations.filter((a) => a.project_id === project.id);
 }
 
@@ -312,7 +303,7 @@ export async function updateRoleTask(
     }
   }
 
-  await saveDb(db);
+  await writeDb(db);
   return task;
 }
 
@@ -360,7 +351,7 @@ export async function updateAcceptanceItem(
     actor_role: actor.role ?? "admin",
   });
 
-  await saveDb(db);
+  await writeDb(db);
   return item;
 }
 
@@ -425,7 +416,7 @@ export async function addTestRecord(input: {
     });
   }
 
-  await saveDb(db);
+  await writeDb(db);
   return record;
 }
 
@@ -447,7 +438,7 @@ export async function createShareLink(
     plain_token: token,
   };
   db.share_links.push(link);
-  await saveDb(db);
+  await writeDb(db);
   return link;
 }
 
@@ -456,7 +447,7 @@ export async function toggleShareLink(linkId: string, isActive: boolean) {
   const link = db.share_links.find((l) => l.id === linkId);
   if (!link) throw new Error("链接不存在");
   link.is_active = isActive;
-  await saveDb(db);
+  await writeDb(db);
   return link;
 }
 
@@ -526,7 +517,7 @@ export async function createBug(input: {
     is_read: false,
     created_at: nowIso(),
   });
-  await saveDb(db);
+  await writeDb(db);
   return bug;
 }
 
@@ -550,7 +541,7 @@ export async function addPrototype(input: {
     created_at: nowIso(),
   };
   db.prototypes.push(proto);
-  await saveDb(db);
+  await writeDb(db);
   return proto;
 }
 
@@ -570,7 +561,7 @@ export async function markNotificationRead(notificationId: string) {
   const db = await readDb();
   const n = db.notifications.find((x) => x.id === notificationId);
   if (n) n.is_read = true;
-  await saveDb(db);
+  await writeDb(db);
 }
 
 export async function runDeadlineReminders() {
@@ -608,7 +599,7 @@ export async function runDeadlineReminders() {
       created++;
     }
   }
-  if (created > 0) await saveDb(db);
+  if (created > 0) await writeDb(db);
   return { created };
 }
 

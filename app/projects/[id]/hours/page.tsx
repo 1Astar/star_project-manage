@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { HoursView } from "@/components/hours-view";
 import { AppShell, ProjectNav } from "@/components/ui";
-import { readDb } from "@/lib/db/local-store";
+import { readDb } from "@/lib/db";
 
 export default async function HoursPage({
   params,

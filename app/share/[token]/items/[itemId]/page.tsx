@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { validateShareToken } from "@/lib/actions";
-import { getRequirementDetail, getBugById } from "@/lib/db/local-store";
+import { getRequirementDetail, getBugById } from "@/lib/db";
 import { AppShell, StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
 

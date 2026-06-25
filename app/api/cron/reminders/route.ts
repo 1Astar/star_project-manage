@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { runDeadlineReminders } from "@/lib/db/local-store";
+import { runDeadlineReminders } from "@/lib/db";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");

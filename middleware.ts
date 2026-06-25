@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = [
   "/share",
   "/ui-preview",
   "/api/cron",
+  "/api/health",
   "/_next",
   "/favicon",
   "/prototypes",

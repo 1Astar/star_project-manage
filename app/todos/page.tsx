@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getMyTodos, getProjects } from "@/lib/db/local-store";
+import { getMyTodos, getProjects } from "@/lib/db";
 import { AppShell, StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
 

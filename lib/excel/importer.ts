@@ -6,7 +6,7 @@ import {
   uid,
   nowIso,
   getProjectById,
-} from "@/lib/db/local-store";
+} from "@/lib/db";
 
 const STATUS_MAP: Record<string, TaskStatus> = {
   未开始: "pending",

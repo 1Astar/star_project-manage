@@ -22,7 +22,7 @@ export default async function GanttPage({
         requirements={bundle.requirements}
         tasks={bundle.role_tasks}
         modules={await (async () => {
-          const { readDb } = await import("@/lib/db/local-store");
+          const { readDb } = await import("@/lib/db");
           const db = await readDb();
           const iterIds = new Set(bundle.iterations.map((i) => i.id));
           return db.modules.filter((m) => iterIds.has(m.iteration_id));

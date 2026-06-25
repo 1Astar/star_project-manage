@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { readDb } from "@/lib/db/local-store";
+import { readDb } from "@/lib/db";
 import { AppShell } from "@/components/ui";
 
 export default async function NotificationsPage() {

@@ -11,7 +11,7 @@ import {
   updateAcceptanceItem,
   updateRoleTaskWithPermission,
   syncPrototypeAnnotations,
-} from "@/lib/db/local-store";
+} from "@/lib/db";
 import type { PinmarkAnnotationPayload, RoleTask, ShareLink, TaskStatus } from "@/lib/types";
 import { calcProjectStats } from "@/lib/utils";
 
