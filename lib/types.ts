@@ -24,6 +24,21 @@ export interface Project {
   name: string;
   slug: string;
   description: string | null;
+  pool_tag_options: string[];
+  created_at: string;
+}
+
+export type PoolColumnType = "text" | "number" | "date" | "checkbox" | "select" | "url";
+
+export interface PoolColumnDef {
+  id: string;
+  project_id: string;
+  key: string;
+  label: string;
+  column_type: PoolColumnType;
+  options: string[];
+  sort_order: number;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -70,6 +85,11 @@ export interface Requirement {
   difficulty_notes: string | null;
   scenario: string | null;
   needs_discussion: boolean;
+  prd_link: string | null;
+  prototype_link: string | null;
+  product_estimate_hours: number | null;
+  tags: string[];
+  custom_fields: Record<string, string | number | boolean | null>;
   created_at: string;
   updated_at: string;
 }

@@ -5,8 +5,10 @@ import {
   addTestRecord,
   claimShareAssignee,
   createPoolRequirement,
+  createPoolColumnDef,
   createProjectMember,
   createShareLink,
+  deletePoolColumnDef,
   deletePoolRequirement,
   deleteProjectMember,
   getPoolBundle,
@@ -18,12 +20,14 @@ import {
   updateAcceptanceItem,
   updatePoolRequirement,
   updateProjectMember,
+  updateProjectPoolTagOptions,
   updateRequirement,
   updateRoleTaskWithPermission,
   syncPrototypeAnnotations,
 } from "@/lib/db";
 import type {
   PinmarkAnnotationPayload,
+  PoolColumnType,
   RoleTask,
   RoleType,
   ShareLink,
@@ -74,12 +78,67 @@ export async function savePoolRequirementAction(input: {
     difficulty_notes: string | null;
     scenario: string | null;
     needs_discussion: boolean;
+    prd_link: string | null;
+    prototype_link: string | null;
+    product_estimate_hours: number | null;
+    tags: string[];
+    custom_fields?: Record<string, string | number | boolean | null>;
   }>;
 }) {
   await updatePoolRequirement(input.requirementId, input.updates, {
     name: "产品",
     role: "admin",
   });
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function saveRequirementMetaAction(input: {
+  requirementId: string;
+  projectSlug: string;
+  updates: Partial<{
+    prd_link: string | null;
+    prototype_link: string | null;
+    product_estimate_hours: number | null;
+    tags: string[];
+    custom_fields: Record<string, string | number | boolean | null>;
+  }>;
+}) {
+  await updateRequirement(input.requirementId, input.updates, {
+    name: "产品",
+    role: "admin",
+  });
+  revalidatePath(`/projects/${input.projectSlug}/requirements/${input.requirementId}`);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/board`);
+}
+
+export async function createPoolColumnAction(input: {
+  projectId: string;
+  projectSlug: string;
+  label: string;
+  columnType: PoolColumnType;
+  options?: string[];
+}) {
+  await createPoolColumnDef({
+    project_id: input.projectId,
+    label: input.label,
+    column_type: input.columnType,
+    options: input.options,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function deletePoolColumnAction(defId: string, projectSlug: string) {
+  await deletePoolColumnDef(defId);
+  revalidatePath(`/projects/${projectSlug}/pool`);
+}
+
+export async function savePoolTagOptionsAction(input: {
+  projectId: string;
+  projectSlug: string;
+  tagOptions: string[];
+}) {
+  await updateProjectPoolTagOptions(input.projectId, input.tagOptions);
   revalidatePath(`/projects/${input.projectSlug}/pool`);
 }
 

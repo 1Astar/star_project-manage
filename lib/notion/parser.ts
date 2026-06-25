@@ -15,6 +15,7 @@ export interface NotionCsvRow {
   submittedAt: string | null;
   dueDate: string | null;
   needsDiscussion: boolean;
+  tags: string[];
   isModuleHeader: boolean;
 }
 
@@ -52,6 +53,7 @@ const HEADER_MAP: Record<string, keyof Omit<NotionCsvRow, "isModuleHeader">> = {
   截止日期: "dueDate",
   截止: "dueDate",
   需讨论: "needsDiscussion",
+  标签: "tags",
 };
 
 };
@@ -174,6 +176,7 @@ export function parseNotionCsv(text: string, fileName = "notion.csv"): NotionCsv
       submittedAt: null,
       dueDate: null,
       needsDiscussion: false,
+      tags: [],
       isModuleHeader: false,
     };
 
@@ -185,6 +188,8 @@ export function parseNotionCsv(text: string, fileName = "notion.csv"): NotionCsv
       if (field === "title") row.title = value;
       else if (field === "needsDiscussion") {
         row.needsDiscussion = ["是", "true", "yes", "1", "✓", "☑"].includes(value.toLowerCase());
+      } else if (field === "tags") {
+        row.tags = value.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
       } else if (field === "submittedAt" || field === "dueDate") {
         row[field] = parseNotionDate(value);
       } else if (field !== "isModuleHeader") {

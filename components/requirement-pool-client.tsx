@@ -8,8 +8,8 @@ import {
   promotePoolRequirementAction,
   savePoolRequirementAction,
 } from "@/lib/actions";
-import type { Iteration, ModuleNode, Requirement } from "@/lib/types";
-import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
+import { PoolColumnManager } from "@/components/pool-column-manager";
+import { TASK_STATUS_LABELS, type Iteration, type ModuleNode, type PoolColumnDef, type Requirement, type TaskStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: TaskStatus[] = [
   "pending",
@@ -26,12 +26,16 @@ export function RequirementPoolClient({
   requirements,
   modules,
   activeIterations,
+  columnDefs,
+  tagOptions,
 }: {
   projectId: string;
   projectSlug: string;
   requirements: Requirement[];
   modules: ModuleNode[];
   activeIterations: Iteration[];
+  columnDefs: PoolColumnDef[];
+  tagOptions: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -66,15 +70,24 @@ export function RequirementPoolClient({
   function saveField(
     requirementId: string,
     field: keyof Requirement,
-    value: string | boolean
+    value: string | boolean | number | string[] | null
   ) {
     startTransition(async () => {
       await savePoolRequirementAction({
         requirementId,
         projectSlug,
-        updates: { [field]: value === "" ? null : value } as Parameters<
-          typeof savePoolRequirementAction
-        >[0]["updates"],
+        updates: { [field]: value } as Parameters<typeof savePoolRequirementAction>[0]["updates"],
+      });
+      router.refresh();
+    });
+  }
+
+  function saveCustomField(requirementId: string, key: string, value: string | number | boolean | null) {
+    startTransition(async () => {
+      await savePoolRequirementAction({
+        requirementId,
+        projectSlug,
+        updates: { custom_fields: { [key]: value } },
       });
       router.refresh();
     });
@@ -107,6 +120,13 @@ export function RequirementPoolClient({
 
   return (
     <div className="space-y-4">
+      <PoolColumnManager
+        projectId={projectId}
+        projectSlug={projectSlug}
+        columnDefs={columnDefs}
+        tagOptions={tagOptions}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-500">
           仅产品可见的需求池。规划成熟后「加入迭代」会进入需求看板，团队通过分享链接可见。
@@ -163,30 +183,37 @@ export function RequirementPoolClient({
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-[1600px] w-full text-sm">
+          <table className="min-w-[2000px] w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-3 w-40">功能点</th>
-                <th className="px-3 py-3 w-24">产品模块</th>
-                <th className="px-3 py-3 w-24">功能细分</th>
-                <th className="px-3 py-3 w-20">分类</th>
-                <th className="px-3 py-3 w-20">阶段</th>
+                <th className="px-3 py-3 w-36">功能点</th>
+                <th className="px-3 py-3 w-20">模块</th>
+                <th className="px-3 py-3 w-20">细分</th>
+                <th className="px-3 py-3 w-24">标签</th>
+                <th className="px-3 py-3 w-16">预估h</th>
+                <th className="px-3 py-3 w-28">PRD</th>
+                <th className="px-3 py-3 w-28">原型</th>
+                <th className="px-3 py-3 w-16">分类</th>
+                <th className="px-3 py-3 w-16">阶段</th>
                 <th className="px-3 py-3 w-20">状态</th>
-                <th className="px-3 py-3 w-16">优先级</th>
-                <th className="px-3 py-3 w-28">需求提出时间</th>
-                <th className="px-3 py-3 w-28">截止日期</th>
-                <th className="px-3 py-3 w-16">需讨论</th>
-                <th className="px-3 py-3 min-w-[120px]">场景</th>
-                <th className="px-3 py-3 min-w-[120px]">难点</th>
-                <th className="px-3 py-3 min-w-[140px]">优化方向</th>
-                <th className="px-3 py-3 min-w-[120px]">存在问题</th>
+                <th className="px-3 py-3 w-14">优先级</th>
+                <th className="px-3 py-3 w-28">提出时间</th>
+                <th className="px-3 py-3 w-28">截止</th>
+                <th className="px-3 py-3 w-12">讨论</th>
+                {columnDefs.map((def) => (
+                  <th key={def.id} className="px-3 py-3 min-w-[100px]">
+                    {def.label}
+                  </th>
+                ))}
+                <th className="px-3 py-3 min-w-[100px]">优化方向</th>
+                <th className="px-3 py-3 min-w-[100px]">问题</th>
                 <th className="px-3 py-3 w-32">操作</th>
               </tr>
             </thead>
             <tbody>
               {visibleRequirements.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={16 + columnDefs.length} className="px-4 py-10 text-center text-slate-500">
                     需求池为空。可手动新建，或在「Excel 导入」页导入 Notion CSV。
                   </td>
                 </tr>
@@ -203,7 +230,10 @@ export function RequirementPoolClient({
                     pending={pending}
                     defaultIterationId={defaultIterationId}
                     activeIterations={activeIterations}
+                    columnDefs={columnDefs}
+                    tagOptions={tagOptions}
                     onSave={saveField}
+                    onSaveCustom={saveCustomField}
                     onDelete={() => removeRow(req.id)}
                     onPromote={(iterationId) => promote(req.id, iterationId)}
                   />
@@ -223,7 +253,10 @@ function PoolRow({
   pending,
   defaultIterationId,
   activeIterations,
+  columnDefs,
+  tagOptions,
   onSave,
+  onSaveCustom,
   onDelete,
   onPromote,
 }: {
@@ -232,11 +265,16 @@ function PoolRow({
   pending: boolean;
   defaultIterationId?: string;
   activeIterations: Iteration[];
-  onSave: (id: string, field: keyof Requirement, value: string | boolean) => void;
+  columnDefs: PoolColumnDef[];
+  tagOptions: string[];
+  onSave: (id: string, field: keyof Requirement, value: string | boolean | number | string[] | null) => void;
+  onSaveCustom: (id: string, key: string, value: string | number | boolean | null) => void;
   onDelete: () => void;
   onPromote: (iterationId: string) => void;
 }) {
   const [iterationId, setIterationId] = useState(defaultIterationId ?? "");
+  const tags = req.tags ?? [];
+  const allTags = Array.from(new Set([...tagOptions, ...tags]));
 
   return (
     <tr className="border-t border-slate-100 align-top hover:bg-slate-50/60">
@@ -247,31 +285,78 @@ function PoolRow({
           onCommit={(v) => onSave(req.id, "title", v)}
         />
       </td>
-      <td className="px-2 py-2 text-slate-600">{moduleLabel}</td>
+      <td className="px-2 py-2 text-xs text-slate-600">{moduleLabel}</td>
       <td className="px-2 py-2">
         <CellInput
           value={req.sub_function ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "sub_function", v)}
+          onCommit={(v) => onSave(req.id, "sub_function", v || null)}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <div className="flex max-w-[140px] flex-wrap gap-1">
+          {allTags.map((tag) => {
+            const active = tags.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const next = active ? tags.filter((t) => t !== tag) : [...tags, tag];
+                  onSave(req.id, "tags", next);
+                }}
+                className={`rounded-full border px-1.5 py-0.5 text-[10px] ${
+                  active
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-slate-200 text-slate-500"
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
+        </div>
+      </td>
+      <td className="px-2 py-2">
+        <CellInput
+          type="number"
+          value={req.product_estimate_hours != null ? String(req.product_estimate_hours) : ""}
+          disabled={pending}
+          onCommit={(v) => onSave(req.id, "product_estimate_hours", v ? Number(v) : null)}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <CellInput
+          value={req.prd_link ?? ""}
+          disabled={pending}
+          onCommit={(v) => onSave(req.id, "prd_link", v || null)}
+        />
+      </td>
+      <td className="px-2 py-2">
+        <CellInput
+          value={req.prototype_link ?? ""}
+          disabled={pending}
+          onCommit={(v) => onSave(req.id, "prototype_link", v || null)}
         />
       </td>
       <td className="px-2 py-2">
         <CellInput
           value={req.category ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "category", v)}
+          onCommit={(v) => onSave(req.id, "category", v || null)}
         />
       </td>
       <td className="px-2 py-2">
         <CellInput
           value={req.stage_type ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "stage_type", v)}
+          onCommit={(v) => onSave(req.id, "stage_type", v || null)}
         />
       </td>
       <td className="px-2 py-2">
         <select
-          className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+          className="w-full rounded border border-slate-200 px-1 py-1 text-xs"
           value={req.status}
           disabled={pending}
           onChange={(e) => onSave(req.id, "status", e.target.value)}
@@ -287,7 +372,7 @@ function PoolRow({
         <CellInput
           value={req.priority ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "priority", v)}
+          onCommit={(v) => onSave(req.id, "priority", v || null)}
         />
       </td>
       <td className="px-2 py-2">
@@ -295,7 +380,7 @@ function PoolRow({
           type="date"
           value={req.submitted_at ?? req.created_at.slice(0, 10)}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "submitted_at", v)}
+          onCommit={(v) => onSave(req.id, "submitted_at", v || null)}
         />
       </td>
       <td className="px-2 py-2">
@@ -303,7 +388,7 @@ function PoolRow({
           type="date"
           value={req.due_date ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "due_date", v)}
+          onCommit={(v) => onSave(req.id, "due_date", v || null)}
         />
       </td>
       <td className="px-2 py-2 text-center">
@@ -314,32 +399,28 @@ function PoolRow({
           onChange={(e) => onSave(req.id, "needs_discussion", e.target.checked)}
         />
       </td>
-      <td className="px-2 py-2">
-        <CellTextarea
-          value={req.scenario ?? ""}
-          disabled={pending}
-          onCommit={(v) => onSave(req.id, "scenario", v)}
-        />
-      </td>
-      <td className="px-2 py-2">
-        <CellTextarea
-          value={req.difficulty_notes ?? ""}
-          disabled={pending}
-          onCommit={(v) => onSave(req.id, "difficulty_notes", v)}
-        />
-      </td>
+      {columnDefs.map((def) => (
+        <td key={def.id} className="px-2 py-2">
+          <CustomFieldCell
+            def={def}
+            value={req.custom_fields?.[def.key] ?? null}
+            disabled={pending}
+            onCommit={(v) => onSaveCustom(req.id, def.key, v)}
+          />
+        </td>
+      ))}
       <td className="px-2 py-2">
         <CellTextarea
           value={req.optimization_notes ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "optimization_notes", v)}
+          onCommit={(v) => onSave(req.id, "optimization_notes", v || null)}
         />
       </td>
       <td className="px-2 py-2">
         <CellTextarea
           value={req.known_issues ?? ""}
           disabled={pending}
-          onCommit={(v) => onSave(req.id, "known_issues", v)}
+          onCommit={(v) => onSave(req.id, "known_issues", v || null)}
         />
       </td>
       <td className="px-2 py-2">
@@ -391,7 +472,7 @@ function CellInput({
 }: {
   value: string;
   disabled: boolean;
-  type?: "text" | "date";
+  type?: "text" | "date" | "number";
   onCommit: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
@@ -400,13 +481,71 @@ function CellInput({
   }, [value]);
   return (
     <input
-      type={type}
+      type={type === "number" ? "number" : type}
+      step={type === "number" ? "0.5" : undefined}
       className="w-full rounded border border-transparent px-2 py-1 text-xs hover:border-slate-200 focus:border-blue-400 focus:outline-none"
       value={draft}
       disabled={disabled}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
         if (draft !== value) onCommit(draft);
+      }}
+    />
+  );
+}
+
+function CustomFieldCell({
+  def,
+  value,
+  disabled,
+  onCommit,
+}: {
+  def: PoolColumnDef;
+  value: string | number | boolean | null;
+  disabled: boolean;
+  onCommit: (value: string | number | boolean | null) => void;
+}) {
+  if (def.column_type === "checkbox") {
+    return (
+      <input
+        type="checkbox"
+        checked={Boolean(value)}
+        disabled={disabled}
+        onChange={(e) => onCommit(e.target.checked)}
+      />
+    );
+  }
+  if (def.column_type === "select") {
+    return (
+      <select
+        className="w-full rounded border border-slate-200 px-1 py-1 text-xs"
+        value={String(value ?? "")}
+        disabled={disabled}
+        onChange={(e) => onCommit(e.target.value || null)}
+      >
+        <option value="">—</option>
+        {def.options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <CellInput
+      type={
+        def.column_type === "number"
+          ? "number"
+          : def.column_type === "date"
+            ? "date"
+            : "text"
+      }
+      value={value != null ? String(value) : ""}
+      disabled={disabled}
+      onCommit={(v) => {
+        if (def.column_type === "number") onCommit(v ? Number(v) : null);
+        else onCommit(v || null);
       }}
     />
   );

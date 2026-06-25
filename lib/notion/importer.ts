@@ -104,6 +104,11 @@ export async function importNotionCsvToPool(
       difficulty_notes: row.difficultyNotes,
       scenario: row.scenario,
       needs_discussion: row.needsDiscussion,
+      prd_link: null,
+      prototype_link: null,
+      product_estimate_hours: null,
+      tags: row.tags ?? [],
+      custom_fields: {},
       created_at: nowIso(),
       updated_at: nowIso(),
     };

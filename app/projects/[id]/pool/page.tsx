@@ -25,6 +25,8 @@ export default async function PoolPage({
         requirements={bundle.poolRequirements}
         modules={bundle.poolModules}
         activeIterations={bundle.activeIterations}
+        columnDefs={bundle.poolColumnDefs}
+        tagOptions={bundle.tagOptions}
       />
     </AppShell>
   );

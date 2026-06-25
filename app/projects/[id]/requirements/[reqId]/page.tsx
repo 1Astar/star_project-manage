@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { RequirementDetailClient } from "@/components/requirement-detail";
+import { RequirementMetaPanel } from "@/components/requirement-meta-panel";
 import { AppShell, StatusBadge } from "@/components/ui";
 import { ProjectNavLoader } from "@/components/project-nav-loader";
 import { ROLE_LABELS } from "@/lib/types";
@@ -32,6 +33,13 @@ export default async function RequirementDetailPage({
     >
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
+          <RequirementMetaPanel
+            requirement={requirement}
+            projectSlug={bundle.project.slug}
+            poolColumnDefs={bundle.pool_column_defs}
+            tagOptions={bundle.tagOptions}
+          />
+
           <section className="card p-5 space-y-3">
             <h2 className="font-semibold">需求信息</h2>
             {requirement.detail_work ? (

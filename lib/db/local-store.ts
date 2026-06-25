@@ -13,6 +13,8 @@ import type {
   ModuleNode,
   NotificationItem,
   Project,
+  PoolColumnDef,
+  PoolColumnType,
   ProjectMember,
   Prototype,
   PrototypeAnnotation,
@@ -58,6 +60,14 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
   if (!db.project_members) {
     db.project_members = [];
   }
+  if (!db.pool_column_defs) {
+    db.pool_column_defs = [];
+  }
+  for (const project of db.projects) {
+    if (!project.pool_tag_options?.length) {
+      project.pool_tag_options = ["硬件", "软件", "体验"];
+    }
+  }
   for (const req of db.requirements) {
     if (req.in_pool === undefined) req.in_pool = false;
     if (req.category === undefined) req.category = null;
@@ -71,6 +81,14 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     if (req.difficulty_notes === undefined) req.difficulty_notes = null;
     if (req.scenario === undefined) req.scenario = null;
     if (req.needs_discussion === undefined) req.needs_discussion = false;
+    if (req.prd_link === undefined) req.prd_link = null;
+    if (req.prototype_link === undefined) req.prototype_link = null;
+    if (req.product_estimate_hours === undefined) req.product_estimate_hours = null;
+    if (!req.tags) req.tags = [];
+    if (!req.custom_fields) req.custom_fields = {};
+  }
+  for (const def of db.pool_column_defs) {
+    if (!Array.isArray(def.options)) def.options = [];
   }
   return db;
 }
@@ -187,6 +205,9 @@ export async function getProjectBundle(projectId: string) {
   );
   const bugs = db.bugs.filter((b) => b.project_id === project.id);
   const project_members = db.project_members.filter((m) => m.project_id === project.id);
+  const pool_column_defs = db.pool_column_defs
+    .filter((d) => d.project_id === project.id && d.is_active)
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   return {
     project,
@@ -201,6 +222,10 @@ export async function getProjectBundle(projectId: string) {
     prototype_annotations,
     bugs,
     project_members,
+    pool_column_defs,
+    tagOptions: project.pool_tag_options?.length
+      ? project.pool_tag_options
+      : ["硬件", "软件", "体验"],
   };
 }
 
@@ -356,8 +381,12 @@ export async function updateRequirement(
       | "difficulty_notes"
       | "scenario"
       | "needs_discussion"
+      | "prd_link"
+      | "prototype_link"
+      | "product_estimate_hours"
+      | "tags"
     >
-  >,
+  > & { custom_fields?: Record<string, string | number | boolean | null> },
   actor: { name: string; role?: string }
 ) {
   const db = await readDb();
@@ -365,11 +394,23 @@ export async function updateRequirement(
   if (!req) throw new Error("需求不存在");
 
   const before = { ...req };
-  Object.assign(req, updates, { updated_at: nowIso() });
+  const { custom_fields, ...rest } = updates;
+  Object.assign(req, rest, { updated_at: nowIso() });
+  if (custom_fields) {
+    req.custom_fields = { ...req.custom_fields, ...custom_fields };
+  }
 
-  for (const [field, value] of Object.entries(updates)) {
-    const oldVal = String((before as Record<string, unknown>)[field] ?? "");
-    const newVal = String(value ?? "");
+  for (const [field, value] of Object.entries({ ...rest, ...(custom_fields ? { custom_fields } : {}) })) {
+    const oldVal =
+      field === "custom_fields"
+        ? JSON.stringify(before.custom_fields ?? {})
+        : String((before as Record<string, unknown>)[field] ?? "");
+    const newVal =
+      field === "custom_fields"
+        ? JSON.stringify(req.custom_fields ?? {})
+        : field === "tags"
+          ? JSON.stringify(value ?? [])
+          : String(value ?? "");
     if (oldVal !== newVal) {
       await logActivity(db, {
         project_id: req.project_id,
@@ -755,6 +796,12 @@ export async function getPoolBundle(projectId: string) {
     poolModules,
     activeIterations,
     project_members: db.project_members.filter((m) => m.project_id === project.id),
+    poolColumnDefs: db.pool_column_defs
+      .filter((d) => d.project_id === project.id && d.is_active)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    tagOptions: project.pool_tag_options?.length
+      ? project.pool_tag_options
+      : ["硬件", "软件", "体验"],
   };
 }
 
@@ -807,6 +854,11 @@ export async function createPoolRequirement(
     difficulty_notes: null,
     scenario: null,
     needs_discussion: false,
+    prd_link: null,
+    prototype_link: null,
+    product_estimate_hours: null,
+    tags: [],
+    custom_fields: {},
     created_at: nowIso(),
     updated_at: nowIso(),
   };
@@ -835,8 +887,17 @@ export async function updatePoolRequirement(
       | "difficulty_notes"
       | "scenario"
       | "needs_discussion"
+      | "prd_link"
+      | "prototype_link"
+      | "product_estimate_hours"
+      | "tags"
+      | "sort_order"
+      | "module_l1_id"
+      | "submitted_at"
+      | "due_date"
+      | "difficulty_notes"
     >
-  >,
+  > & { custom_fields?: Record<string, string | number | boolean | null> },
   actor: { name: string; role?: string }
 ) {
   const db = await readDb();
@@ -980,6 +1041,68 @@ export async function deleteProjectMember(memberId: string, clearAssignees = fal
 
   db.project_members = db.project_members.filter((m) => m.id !== memberId);
   await writeDb(db);
+}
+
+export async function createPoolColumnDef(input: {
+  project_id: string;
+  label: string;
+  column_type: PoolColumnType;
+  options?: string[];
+}) {
+  const db = await readDb();
+  const label = input.label.trim();
+  if (!label) throw new Error("列名不能为空");
+
+  const baseKey = label
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_\u4e00-\u9fa5]/g, "")
+    .slice(0, 32);
+  let key = baseKey || `col_${uid().slice(0, 6)}`;
+  let suffix = 1;
+  while (db.pool_column_defs.some((d) => d.project_id === input.project_id && d.key === key)) {
+    key = `${baseKey}_${suffix++}`;
+  }
+
+  const def: PoolColumnDef = {
+    id: uid("pcd-"),
+    project_id: input.project_id,
+    key,
+    label,
+    column_type: input.column_type,
+    options: input.options ?? [],
+    sort_order:
+      db.pool_column_defs.filter((d) => d.project_id === input.project_id).length + 1,
+    is_active: true,
+    created_at: nowIso(),
+  };
+  db.pool_column_defs.push(def);
+  await writeDb(db);
+  return def;
+}
+
+export async function deletePoolColumnDef(defId: string) {
+  const db = await readDb();
+  db.pool_column_defs = db.pool_column_defs.filter((d) => d.id !== defId);
+  await writeDb(db);
+}
+
+export async function togglePoolColumnDef(defId: string, isActive: boolean) {
+  const db = await readDb();
+  const def = db.pool_column_defs.find((d) => d.id === defId);
+  if (!def) throw new Error("自定义列不存在");
+  def.is_active = isActive;
+  await writeDb(db);
+  return def;
+}
+
+export async function updateProjectPoolTagOptions(projectId: string, tagOptions: string[]) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) throw new Error("项目不存在");
+  project.pool_tag_options = tagOptions.map((t) => t.trim()).filter(Boolean);
+  await writeDb(db);
+  return project;
 }
 
 export async function claimShareAssignee(shareToken: string, displayName: string) {

@@ -28,6 +28,11 @@ const POOL_FIELDS = {
   difficulty_notes: null,
   scenario: null,
   needs_discussion: false,
+  prd_link: null,
+  prototype_link: null,
+  product_estimate_hours: null,
+  tags: [],
+  custom_fields: {},
 } as const;
 
 export function createSeedData(): DatabaseSnapshot {
@@ -307,6 +312,7 @@ export function createSeedData(): DatabaseSnapshot {
         name: "AI 宠物",
         slug: "ai-pet",
         description: "宠物 App 优化需求管理",
+        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
       },
       {
@@ -314,6 +320,7 @@ export function createSeedData(): DatabaseSnapshot {
         name: "AI 控制器",
         slug: "ai-controller",
         description: "元井 AI 控制器优化需求管理",
+        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
       },
     ],
@@ -389,5 +396,6 @@ export function createSeedData(): DatabaseSnapshot {
     ],
     activity_logs: [],
     project_members: [],
+    pool_column_defs: [],
   };
 }

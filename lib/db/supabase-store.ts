@@ -31,6 +31,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     notifications,
     activity_logs,
     project_members,
+    pool_column_defs,
   ] = await Promise.all([
     sb.from("projects").select("*"),
     sb.from("iterations").select("*"),
@@ -47,13 +48,23 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     sb.from("notifications").select("*").order("created_at", { ascending: false }),
     sb.from("activity_logs").select("*").order("created_at", { ascending: false }),
     sb.from("project_members").select("*"),
+    sb.from("pool_column_defs").select("*"),
   ]);
 
   return {
-    projects: throwOnError(projects, "projects"),
+    projects: (throwOnError(projects, "projects") as DatabaseSnapshot["projects"]).map((p) => ({
+      ...p,
+      pool_tag_options: p.pool_tag_options?.length ? p.pool_tag_options : ["硬件", "软件", "体验"],
+    })),
     iterations: throwOnError(iterations, "iterations"),
     modules: throwOnError(modules, "modules"),
-    requirements: throwOnError(requirements, "requirements"),
+    requirements: (throwOnError(requirements, "requirements") as DatabaseSnapshot["requirements"]).map(
+      (row) => ({
+        ...row,
+        tags: row.tags ?? [],
+        custom_fields: (row.custom_fields ?? {}) as Record<string, string | number | boolean | null>,
+      })
+    ),
     acceptance_items: throwOnError(acceptance_items, "acceptance_items"),
     role_tasks: throwOnError(role_tasks, "role_tasks"),
     test_records: throwOnError(test_records, "test_records"),
@@ -70,6 +81,12 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     notifications: throwOnError(notifications, "notifications"),
     activity_logs: throwOnError(activity_logs, "activity_logs"),
     project_members: throwOnError(project_members, "project_members"),
+    pool_column_defs: (throwOnError(pool_column_defs, "pool_column_defs") as DatabaseSnapshot["pool_column_defs"]).map(
+      (row) => ({
+        ...row,
+        options: Array.isArray(row.options) ? row.options : [],
+      })
+    ),
   };
 }
 
@@ -116,8 +133,10 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await upsertRows("notifications", snapshot.notifications);
   await upsertRows("activity_logs", snapshot.activity_logs);
   await upsertRows("project_members", snapshot.project_members);
+  await upsertRows("pool_column_defs", snapshot.pool_column_defs);
 
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
+  await deleteMissing("pool_column_defs", snapshot.pool_column_defs.map((r) => r.id));
   await deleteMissing("project_members", snapshot.project_members.map((r) => r.id));
   await deleteMissing("notifications", snapshot.notifications.map((r) => r.id));
   await deleteMissing("bugs", snapshot.bugs.map((r) => r.id));
