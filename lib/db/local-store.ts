@@ -1,5 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
+import { createSeedData } from "@/lib/db/seed-data";
 import { generateShareToken, hashToken } from "@/lib/utils";
 import type {
   AcceptanceItem,
@@ -66,8 +67,27 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
   return db;
 }
 
+function isValidDb(db: DatabaseSnapshot | null | undefined): db is DatabaseSnapshot {
+  return Boolean(db?.projects?.length && db.requirements?.length);
+}
+
+function projectSlug(db: DatabaseSnapshot, projectId: string): string {
+  return db.projects.find((p) => p.id === projectId)?.slug ?? projectId;
+}
+
+function requirementLink(db: DatabaseSnapshot, requirement: Requirement): string {
+  return `/projects/${projectSlug(db, requirement.project_id)}/requirements/${requirement.id}`;
+}
+
 async function ensureDb(): Promise<DatabaseSnapshot> {
-  if (memoryDb) return memoryDb;
+  if (isValidDb(memoryDb)) return memoryDb;
+
+  // Vercel 无持久化存储：始终从仓库内种子文件启动，保证 ID 与链接稳定
+  if (process.env.VERCEL === "1") {
+    const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
+    memoryDb = seeded;
+    return seeded;
+  }
 
   const dbFile = getDbFile();
   const dataDir = getDataDir();
@@ -75,19 +95,24 @@ async function ensureDb(): Promise<DatabaseSnapshot> {
   try {
     await fs.mkdir(dataDir, { recursive: true });
     const raw = await fs.readFile(dbFile, "utf8");
-    memoryDb = normalizeDb(JSON.parse(raw) as DatabaseSnapshot);
-    return memoryDb;
-  } catch {
-    const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
-    memoryDb = seeded;
-    try {
-      await fs.mkdir(dataDir, { recursive: true });
-      await fs.writeFile(dbFile, JSON.stringify(seeded, null, 2), "utf8");
-    } catch {
-      // Vercel 等项目目录只读时，仅使用内存 + /tmp 不可用时的降级
+    const parsed = normalizeDb(JSON.parse(raw) as DatabaseSnapshot);
+    if (isValidDb(parsed)) {
+      memoryDb = parsed;
+      return memoryDb;
     }
-    return seeded;
+  } catch {
+    // 继续尝试种子文件
   }
+
+  const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
+  memoryDb = seeded;
+  try {
+    await fs.mkdir(dataDir, { recursive: true });
+    await fs.writeFile(dbFile, JSON.stringify(seeded, null, 2), "utf8");
+  } catch {
+    // Vercel 等项目目录只读时，仅使用内存
+  }
+  return seeded;
 }
 
 async function saveDb(db: DatabaseSnapshot): Promise<void> {
@@ -109,347 +134,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function createSeedData(): DatabaseSnapshot {
-  const petProjectId = uid("proj-");
-  const controllerProjectId = uid("proj-");
-  const petIterationId = uid("iter-");
-  const controllerIterationId = uid("iter-");
-
-  const petReqs: Requirement[] = [
-    {
-      id: uid("req-"),
-      project_id: petProjectId,
-      iteration_id: petIterationId,
-      module_l1_id: null,
-      module_l2_id: null,
-      title: "主页页面整体结构优化",
-      sub_function: null,
-      detail_work: null,
-      acceptance_criteria: "主页结构符合设计稿，导航与模块分区清晰",
-      priority: null,
-      status: "in_progress",
-      blocker_reason: null,
-      sort_order: 1,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("req-"),
-      project_id: petProjectId,
-      iteration_id: petIterationId,
-      module_l1_id: null,
-      module_l2_id: null,
-      title: "安静状态下的陪伴专注横幅",
-      sub_function: "安静状态下的陪伴专注横幅",
-      detail_work: null,
-      acceptance_criteria: "安静模式下正确展示专注横幅，交互符合 PRD",
-      priority: null,
-      status: "testing",
-      blocker_reason: null,
-      sort_order: 2,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("req-"),
-      project_id: petProjectId,
-      iteration_id: petIterationId,
-      module_l1_id: null,
-      module_l2_id: null,
-      title: "推送模块（推送/勿扰/喝水）",
-      sub_function: null,
-      detail_work: "后端整体评估 40 小时，覆盖三个子模块",
-      acceptance_criteria: "推送、勿扰、喝水三条链路均可独立验收",
-      priority: "P0",
-      status: "in_progress",
-      blocker_reason: null,
-      sort_order: 3,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    },
-  ];
-
-  const controllerReqs: Requirement[] = [
-    {
-      id: uid("req-"),
-      project_id: controllerProjectId,
-      iteration_id: controllerIterationId,
-      module_l1_id: null,
-      module_l2_id: null,
-      title: "下控遮罩等待界面",
-      sub_function: "下控遮罩等待界面",
-      detail_work: null,
-      acceptance_criteria: "下控流程中遮罩等待界面展示正确，超时处理符合规范",
-      priority: "P0",
-      status: "acceptance",
-      blocker_reason: null,
-      sort_order: 1,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("req-"),
-      project_id: controllerProjectId,
-      iteration_id: controllerIterationId,
-      module_l1_id: null,
-      module_l2_id: null,
-      title: "设备归属和批量迁移",
-      sub_function: "设备归属和批量迁移",
-      detail_work: null,
-      acceptance_criteria: "批量迁移后设备归属关系正确，日志可追溯",
-      priority: "P0",
-      status: "testing",
-      blocker_reason: null,
-      sort_order: 2,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    },
-  ];
-
-  const petTasks: RoleTask[] = [
-    {
-      id: uid("task-"),
-      requirement_id: petReqs[0].id,
-      role: "ui",
-      assignee: "游春梅",
-      estimate_hours: null,
-      actual_hours: null,
-      start_date: null,
-      end_date: null,
-      status: "in_progress",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 30,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: petReqs[0].id,
-      role: "frontend",
-      assignee: "陈伟平",
-      estimate_hours: null,
-      actual_hours: null,
-      start_date: null,
-      end_date: null,
-      status: "pending",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 0,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: petReqs[1].id,
-      role: "backend",
-      assignee: "李德堂",
-      estimate_hours: 16,
-      actual_hours: null,
-      start_date: "2026-06-01",
-      end_date: "2026-06-05",
-      status: "testing",
-      notes: "已提测",
-      blocker_reason: null,
-      progress_percent: 100,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: petReqs[1].id,
-      role: "frontend",
-      assignee: "陈伟平",
-      estimate_hours: 24,
-      actual_hours: null,
-      start_date: "2026-06-03",
-      end_date: "2026-06-08",
-      status: "testing",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 100,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: petReqs[2].id,
-      role: "backend",
-      assignee: "李德堂",
-      estimate_hours: 40,
-      actual_hours: null,
-      start_date: "2026-06-01",
-      end_date: "2026-06-15",
-      status: "in_progress",
-      notes: "模块级工时，覆盖推送/勿扰/喝水",
-      blocker_reason: null,
-      progress_percent: 21.32,
-      updated_at: nowIso(),
-    },
-  ];
-
-  const controllerTasks: RoleTask[] = [
-    {
-      id: uid("task-"),
-      requirement_id: controllerReqs[0].id,
-      role: "backend",
-      assignee: "谢鑫",
-      estimate_hours: 12,
-      actual_hours: null,
-      start_date: "2026-04-24",
-      end_date: "2026-05-06",
-      status: "acceptance",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 100,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: controllerReqs[0].id,
-      role: "frontend",
-      assignee: "陈伟平",
-      estimate_hours: 4,
-      actual_hours: null,
-      start_date: "2026-04-27",
-      end_date: "2026-05-15",
-      status: "acceptance",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 100,
-      updated_at: nowIso(),
-    },
-    {
-      id: uid("task-"),
-      requirement_id: controllerReqs[1].id,
-      role: "backend",
-      assignee: "谢鑫",
-      estimate_hours: 8,
-      actual_hours: null,
-      start_date: null,
-      end_date: null,
-      status: "testing",
-      notes: null,
-      blocker_reason: null,
-      progress_percent: 100,
-      updated_at: nowIso(),
-    },
-  ];
-
-  const acceptanceItems: AcceptanceItem[] = [
-    ...petReqs.flatMap((req, idx) => [
-      {
-        id: uid("acc-"),
-        requirement_id: req.id,
-        description: `${req.title} - 功能符合 PRD`,
-        passed: idx === 0 ? null : idx === 1 ? false : null,
-        note: idx === 1 ? "横幅在横屏下位置偏移" : null,
-        sort_order: 1,
-      },
-    ]),
-    ...controllerReqs.flatMap((req) => [
-      {
-        id: uid("acc-"),
-        requirement_id: req.id,
-        description: `${req.title} - 验收标准达成`,
-        passed: null,
-        note: null,
-        sort_order: 1,
-      },
-    ]),
-  ];
-
-  const frontendToken = generateShareToken();
-  const backendToken = generateShareToken();
-  const testToken = generateShareToken();
-
-  return {
-    projects: [
-      {
-        id: petProjectId,
-        name: "AI 宠物",
-        slug: "ai-pet",
-        description: "宠物 App 优化需求管理",
-        created_at: nowIso(),
-      },
-      {
-        id: controllerProjectId,
-        name: "AI 控制器",
-        slug: "ai-controller",
-        description: "元井 AI 控制器优化需求管理",
-        created_at: nowIso(),
-      },
-    ],
-    iterations: [
-      {
-        id: petIterationId,
-        project_id: petProjectId,
-        name: "20260610 优化版本",
-        sort_order: 1,
-        created_at: nowIso(),
-      },
-      {
-        id: controllerIterationId,
-        project_id: controllerProjectId,
-        name: "20260417 元井AI控制器",
-        sort_order: 1,
-        created_at: nowIso(),
-      },
-    ],
-    modules: [],
-    requirements: [...petReqs, ...controllerReqs],
-    acceptance_items: acceptanceItems,
-    role_tasks: [...petTasks, ...controllerTasks],
-    test_records: [],
-    acceptance_records: [],
-    share_links: [
-      {
-        id: uid("link-"),
-        project_id: petProjectId,
-        role: "frontend",
-        label: "前端协作链接",
-        token_hash: hashToken(frontendToken),
-        is_active: true,
-        created_at: nowIso(),
-        plain_token: frontendToken,
-      },
-      {
-        id: uid("link-"),
-        project_id: petProjectId,
-        role: "backend",
-        label: "后端协作链接",
-        token_hash: hashToken(backendToken),
-        is_active: true,
-        created_at: nowIso(),
-        plain_token: backendToken,
-      },
-      {
-        id: uid("link-"),
-        project_id: petProjectId,
-        role: "test",
-        label: "测试协作链接",
-        token_hash: hashToken(testToken),
-        is_active: true,
-        created_at: nowIso(),
-        plain_token: testToken,
-      },
-    ],
-    prototypes: [],
-    prototype_annotations: [],
-    bugs: [],
-    notifications: [
-      {
-        id: uid("notif-"),
-        project_id: petProjectId,
-        recipient_name: "产品",
-        type: "acceptance_pending",
-        title: "2 条需求待产品验收",
-        body: "安静状态下的陪伴专注横幅 等需求已进入待验收",
-        link: `/projects/${petProjectId}/board`,
-        is_read: false,
-        created_at: nowIso(),
-      },
-    ],
-    activity_logs: [],
-  };
-}
-
 export async function readDb(): Promise<DatabaseSnapshot> {
   return ensureDb();
 }
@@ -467,6 +151,7 @@ export async function getProjectById(id: string): Promise<Project | null> {
   const db = await readDb();
   return db.projects.find((p) => p.id === id || p.slug === id) ?? null;
 }
+
 
 export async function getProjectBundle(projectId: string) {
   const db = await readDb();
@@ -720,7 +405,7 @@ export async function addTestRecord(input: {
       type: "test_failed",
       title: `测试不通过：${req.title}`,
       body: input.issue_description ?? "请查看测试记录",
-      link: `/projects/${req.project_id}/requirements/${req.id}`,
+      link: requirementLink(db, req),
       is_read: false,
       created_at: nowIso(),
     });
@@ -734,7 +419,7 @@ export async function addTestRecord(input: {
       type: "acceptance_pending",
       title: `待验收：${req.title}`,
       body: "测试已通过，等待产品验收",
-      link: `/projects/${req.project_id}/requirements/${req.id}`,
+      link: requirementLink(db, req),
       is_read: false,
       created_at: nowIso(),
     });
@@ -916,7 +601,7 @@ export async function runDeadlineReminders() {
         type: "deadline_soon",
         title: `任务临近截止：${req.title}`,
         body: `task:${task.id} 截止 ${task.end_date}`,
-        link: `/projects/${req.project_id}/requirements/${req.id}`,
+        link: requirementLink(db, req),
         is_read: false,
         created_at: nowIso(),
       });

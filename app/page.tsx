@@ -9,6 +9,7 @@ export default async function HomePage() {
     <AppShell
       title="项目总览"
       subtitle="按项目切换，查看完成度、阻塞项与待验收数量"
+      showHomeLink={false}
       actions={
         <div className="flex gap-2">
           <Link

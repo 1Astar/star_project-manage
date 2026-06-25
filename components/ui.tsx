@@ -92,26 +92,36 @@ export function AppShell({
   nav,
   children,
   actions,
+  showHomeLink = true,
 }: {
   title: string;
   subtitle?: string;
   nav?: React.ReactNode;
   children: React.ReactNode;
   actions?: React.ReactNode;
+  showHomeLink?: boolean;
 }) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+            <Link href="/" className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">
               Star PM
-            </div>
+            </Link>
             <h1 className="text-xl font-bold text-slate-900">{title}</h1>
             {subtitle ? <p className="text-sm text-slate-500">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {actions}
+            {showHomeLink ? (
+              <Link
+                href="/"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+              >
+                返回总览
+              </Link>
+            ) : null}
             <Link
               href="/todos"
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
