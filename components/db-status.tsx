@@ -1,10 +1,8 @@
 import { getProjects } from "@/lib/db";
 import { pingSupabase } from "@/lib/db/supabase-store";
-import { getSupabasePublicConfig, isSupabaseConfigured } from "@/lib/supabase/config";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function DbStatusBanner() {
-  const config = getSupabasePublicConfig();
-
   if (!isSupabaseConfigured()) {
     const projects = await getProjects();
     return (

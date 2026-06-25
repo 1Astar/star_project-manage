@@ -70,7 +70,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   };
 }
 
-async function upsertRows(table: string, rows: Record<string, unknown>[]) {
+async function upsertRows<T extends object>(table: string, rows: T[]) {
   if (!rows.length) return;
   const sb = client();
   const { error } = await sb.from(table).upsert(rows, { onConflict: "id" });
