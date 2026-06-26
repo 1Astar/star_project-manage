@@ -54,6 +54,12 @@ export default async function HomePage() {
                     >
                       需求看板
                     </Link>
+                    <Link
+                      href={`/projects/${item.project.slug}/pool`}
+                      className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100"
+                    >
+                      需求池
+                    </Link>
                   </div>
                 </div>
                 <ProgressRing percent={item.stats.progressPercent} />

@@ -56,8 +56,6 @@ const HEADER_MAP: Record<string, keyof Omit<NotionCsvRow, "isModuleHeader">> = {
   标签: "tags",
 };
 
-};
-
 const STATUS_MAP: Record<string, TaskStatus> = {
   未开始: "pending",
   待开始: "pending",
