@@ -1,5 +1,5 @@
 import type { ParsePreview, ParsedRequirementRow } from "@/lib/excel/parser";
-import type { EstimateLevel, RoleType, TaskStatus } from "@/lib/types";
+import { REQUIREMENT_POOL_DEFAULTS, type EstimateLevel, type RoleType, type TaskStatus } from "@/lib/types";
 import {
   readDb,
   writeDb,
@@ -184,6 +184,7 @@ export async function importSheetToProject(
       status: mapStatus(row.status),
       blocker_reason: row.blocker ?? null,
       sort_order: requirementsCreated,
+      ...REQUIREMENT_POOL_DEFAULTS,
       created_at: nowIso(),
       updated_at: nowIso(),
     };

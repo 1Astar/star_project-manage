@@ -1,5 +1,5 @@
 import { hashToken } from "@/lib/utils";
-import type { AcceptanceItem, Requirement, RoleTask } from "@/lib/types";
+import { REQUIREMENT_POOL_DEFAULTS, type AcceptanceItem, type Requirement, type RoleTask } from "@/lib/types";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 
 /** 固定 ID，保证 Vercel 多实例与刷新后链接仍有效 */
@@ -17,23 +17,7 @@ export const SEED_IDS = {
 
 const SEED_TIME = "2026-06-22T00:00:00.000Z";
 
-const POOL_FIELDS = {
-  in_pool: false,
-  category: null,
-  stage_type: null,
-  optimization_notes: null,
-  known_issues: null,
-  submitted_at: null,
-  due_date: null,
-  difficulty_notes: null,
-  scenario: null,
-  needs_discussion: false,
-  prd_link: null,
-  prototype_link: null,
-  product_estimate_hours: null,
-  tags: [],
-  custom_fields: {},
-} as const;
+type SeedRequirement = Omit<Requirement, keyof typeof REQUIREMENT_POOL_DEFAULTS>;
 
 export function createSeedData(): DatabaseSnapshot {
   const petProjectId = SEED_IDS.petProject;
@@ -41,7 +25,7 @@ export function createSeedData(): DatabaseSnapshot {
   const petIterationId = SEED_IDS.petIter;
   const controllerIterationId = SEED_IDS.controllerIter;
 
-  const petReqs: Requirement[] = [
+  const petReqs: SeedRequirement[] = [
     {
       id: SEED_IDS.petReqHome,
       project_id: petProjectId,
@@ -95,7 +79,7 @@ export function createSeedData(): DatabaseSnapshot {
     },
   ];
 
-  const controllerReqs: Requirement[] = [
+  const controllerReqs: SeedRequirement[] = [
     {
       id: SEED_IDS.ctrlReqMask,
       project_id: controllerProjectId,
@@ -341,7 +325,7 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     modules: [],
-    requirements: [...petReqs, ...controllerReqs].map((r) => ({ ...POOL_FIELDS, ...r })),
+    requirements: [...petReqs, ...controllerReqs].map((r) => ({ ...REQUIREMENT_POOL_DEFAULTS, ...r })),
     acceptance_items: acceptanceItems,
     role_tasks: [...petTasks, ...controllerTasks],
     test_records: [],

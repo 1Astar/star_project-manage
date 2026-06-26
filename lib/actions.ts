@@ -28,6 +28,7 @@ import {
 import type {
   PinmarkAnnotationPayload,
   PoolColumnType,
+  RequirementUpdates,
   RoleTask,
   RoleType,
   ShareLink,
@@ -64,26 +65,7 @@ export async function fetchPoolData(projectId: string) {
 export async function savePoolRequirementAction(input: {
   requirementId: string;
   projectSlug: string;
-  updates: Partial<{
-    title: string | null;
-    category: string | null;
-    stage_type: string | null;
-    priority: string | null;
-    status: TaskStatus;
-    optimization_notes: string | null;
-    known_issues: string | null;
-    sub_function: string | null;
-    submitted_at: string | null;
-    due_date: string | null;
-    difficulty_notes: string | null;
-    scenario: string | null;
-    needs_discussion: boolean;
-    prd_link: string | null;
-    prototype_link: string | null;
-    product_estimate_hours: number | null;
-    tags: string[];
-    custom_fields?: Record<string, string | number | boolean | null>;
-  }>;
+  updates: RequirementUpdates;
 }) {
   await updatePoolRequirement(input.requirementId, input.updates, {
     name: "产品",
@@ -95,13 +77,10 @@ export async function savePoolRequirementAction(input: {
 export async function saveRequirementMetaAction(input: {
   requirementId: string;
   projectSlug: string;
-  updates: Partial<{
-    prd_link: string | null;
-    prototype_link: string | null;
-    product_estimate_hours: number | null;
-    tags: string[];
-    custom_fields: Record<string, string | number | boolean | null>;
-  }>;
+  updates: Pick<
+    RequirementUpdates,
+    "prd_link" | "prototype_link" | "product_estimate_hours" | "tags" | "custom_fields"
+  >;
 }) {
   await updateRequirement(input.requirementId, input.updates, {
     name: "产品",

@@ -94,6 +94,68 @@ export interface Requirement {
   updated_at: string;
 }
 
+export const REQUIREMENT_POOL_DEFAULTS: Pick<
+  Requirement,
+  | "in_pool"
+  | "category"
+  | "stage_type"
+  | "optimization_notes"
+  | "known_issues"
+  | "submitted_at"
+  | "due_date"
+  | "difficulty_notes"
+  | "scenario"
+  | "needs_discussion"
+  | "prd_link"
+  | "prototype_link"
+  | "product_estimate_hours"
+  | "tags"
+  | "custom_fields"
+> = {
+  in_pool: false,
+  category: null,
+  stage_type: null,
+  optimization_notes: null,
+  known_issues: null,
+  submitted_at: null,
+  due_date: null,
+  difficulty_notes: null,
+  scenario: null,
+  needs_discussion: false,
+  prd_link: null,
+  prototype_link: null,
+  product_estimate_hours: null,
+  tags: [],
+  custom_fields: {},
+};
+
+/** Server-side partial updates; nullable fields accept null to clear values. */
+export type RequirementUpdates = Partial<{
+  title: string | null;
+  sub_function: string | null;
+  detail_work: string | null;
+  acceptance_criteria: string | null;
+  priority: string | null;
+  status: TaskStatus;
+  category: string | null;
+  stage_type: string | null;
+  optimization_notes: string | null;
+  known_issues: string | null;
+  sort_order: number;
+  module_l1_id: string | null;
+  module_l2_id: string | null;
+  submitted_at: string | null;
+  due_date: string | null;
+  difficulty_notes: string | null;
+  scenario: string | null;
+  needs_discussion: boolean;
+  prd_link: string | null;
+  prototype_link: string | null;
+  product_estimate_hours: number | null;
+  tags: string[];
+  custom_fields: Record<string, string | number | boolean | null>;
+}>;
+
 export interface AcceptanceItem {
   id: string;
   requirement_id: string;

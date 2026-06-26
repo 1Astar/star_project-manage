@@ -190,7 +190,7 @@ export function parseNotionCsv(text: string, fileName = "notion.csv"): NotionCsv
         row.tags = value.split(/[,，、]/).map((t) => t.trim()).filter(Boolean);
       } else if (field === "submittedAt" || field === "dueDate") {
         row[field] = parseNotionDate(value);
-      } else if (field !== "isModuleHeader") {
+      } else {
         row[field] = value;
       }
     });

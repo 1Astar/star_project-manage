@@ -19,6 +19,7 @@ import type {
   Prototype,
   PrototypeAnnotation,
   Requirement,
+  RequirementUpdates,
   RoleTask,
   RoleType,
   ShareLink,
@@ -360,33 +361,7 @@ export async function updateRoleTask(
 
 export async function updateRequirement(
   requirementId: string,
-  updates: Partial<
-    Pick<
-      Requirement,
-      | "title"
-      | "detail_work"
-      | "acceptance_criteria"
-      | "sub_function"
-      | "priority"
-      | "status"
-      | "category"
-      | "stage_type"
-      | "optimization_notes"
-      | "known_issues"
-      | "sort_order"
-      | "module_l1_id"
-      | "module_l2_id"
-      | "submitted_at"
-      | "due_date"
-      | "difficulty_notes"
-      | "scenario"
-      | "needs_discussion"
-      | "prd_link"
-      | "prototype_link"
-      | "product_estimate_hours"
-      | "tags"
-    >
-  > & { custom_fields?: Record<string, string | number | boolean | null> },
+  updates: RequirementUpdates,
   actor: { name: string; role?: string }
 ) {
   const db = await readDb();
@@ -869,35 +844,7 @@ export async function createPoolRequirement(
 
 export async function updatePoolRequirement(
   requirementId: string,
-  updates: Partial<
-    Pick<
-      Requirement,
-      | "title"
-      | "category"
-      | "stage_type"
-      | "priority"
-      | "status"
-      | "optimization_notes"
-      | "known_issues"
-      | "sub_function"
-      | "sort_order"
-      | "module_l1_id"
-      | "submitted_at"
-      | "due_date"
-      | "difficulty_notes"
-      | "scenario"
-      | "needs_discussion"
-      | "prd_link"
-      | "prototype_link"
-      | "product_estimate_hours"
-      | "tags"
-      | "sort_order"
-      | "module_l1_id"
-      | "submitted_at"
-      | "due_date"
-      | "difficulty_notes"
-    >
-  > & { custom_fields?: Record<string, string | number | boolean | null> },
+  updates: RequirementUpdates,
   actor: { name: string; role?: string }
 ) {
   const db = await readDb();
