@@ -162,7 +162,21 @@ function nowIso(): string {
 }
 
 export async function readDb(): Promise<DatabaseSnapshot> {
-  if (isSupabaseConfigured()) return readSupabaseDb();
+  if (isSupabaseConfigured()) {
+    try {
+      return await readSupabaseDb();
+    } catch (error) {
+      // Vercel build may prerender before env/network is ready; don't fail the deploy.
+      if (process.env.NEXT_PHASE === "phase-production-build") {
+        console.warn(
+          "[readDb] Supabase unavailable during build, using seed fallback:",
+          error instanceof Error ? error.message : error
+        );
+        return readLocalDb();
+      }
+      throw error;
+    }
+  }
   return readLocalDb();
 }
 
