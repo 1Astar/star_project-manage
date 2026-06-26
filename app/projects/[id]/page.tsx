@@ -33,6 +33,21 @@ export default async function ProjectOverviewPage({
         <StatCard label="已完成" value={stats.doneTasks} tone="success" />
       </div>
 
+      <section className="mt-6">
+        <Link
+          href={`/projects/${bundle.project.slug}/pool`}
+          className="card flex flex-col gap-1 border-violet-200 bg-violet-50 p-4 hover:border-violet-300 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <div className="font-semibold text-violet-900">需求池</div>
+            <p className="text-sm text-violet-700">
+              产品规划专用：录入功能点、导入 Notion CSV，成熟后再加入迭代看板。
+            </p>
+          </div>
+          <span className="text-sm font-medium text-violet-800">进入需求池 →</span>
+        </Link>
+      </section>
+
       <section className="mt-8">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">待你验收</h2>

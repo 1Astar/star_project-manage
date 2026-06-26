@@ -187,7 +187,7 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
     const colBlocker = findColumnByKeyword(sheet, mergedMap, "阻塞项");
 
     const rows: ParsedRequirementRow[] = [];
-    let current = {
+    const current = {
       iterationName: "",
       moduleL1: "",
       moduleL2: "",
