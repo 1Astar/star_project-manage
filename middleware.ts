@@ -13,18 +13,26 @@ const PUBLIC_PREFIXES = [
 ];
 
 export function middleware(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+
+  const withPathname = () =>
+    NextResponse.next({
+      request: { headers: requestHeaders },
+    });
+
   if (process.env.REQUIRE_AUTH === "false") {
-    return NextResponse.next();
+    return withPathname();
   }
 
   const { pathname } = request.nextUrl;
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
+    return withPathname();
   }
 
   const token = request.cookies.get("star-pm-session")?.value;
   if (token && token.includes(".")) {
-    return NextResponse.next();
+    return withPathname();
   }
 
   if (pathname.startsWith("/api/")) {

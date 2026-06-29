@@ -3,6 +3,8 @@ import { pingSupabase } from "@/lib/db/supabase-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function DbStatusBanner() {
+  const deployRef = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local";
+
   if (!isSupabaseConfigured()) {
     const projects = await getProjects();
     return (
@@ -12,6 +14,7 @@ export async function DbStatusBanner() {
           当前 {projects.length} 个项目。Vercel 生产环境请在环境变量中配置{" "}
           <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code> 后重新部署。
         </span>
+        <span className="ml-2 text-xs text-amber-700">版本 {deployRef}</span>
       </div>
     );
   }
@@ -45,6 +48,7 @@ export async function DbStatusBanner() {
         共 {ping.projectCount} 个项目，数据持久化生效。若尚未导入 Excel，当前需求可能来自演示种子脚本，可在各项目「Excel
         导入」页替换。
       </span>
+      <span className="ml-2 text-xs text-green-700">版本 {deployRef}</span>
     </div>
   );
 }
