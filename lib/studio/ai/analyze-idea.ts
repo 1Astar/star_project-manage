@@ -6,6 +6,11 @@ const ideaTypeSchema = z.enum(["product", "feature", "ui", "content", "tech", "b
 const emotionSchema = z.enum(["normal", "like", "excited"]);
 const actionSchema = z.enum(["inbox", "park"]);
 
+const scoreSchema = z.object({
+  score: z.number().min(1).max(5),
+  summary: z.string().min(1),
+});
+
 export const ideaAnalysisSchema = z.object({
   title: z.string().min(1),
   oneLineIdea: z.string().min(1),
@@ -16,6 +21,8 @@ export const ideaAnalysisSchema = z.object({
   triggerSource: z.string(),
   suggestedAction: actionSchema,
   reasoning: z.string().min(1),
+  feasibility: scoreSchema,
+  competitiveness: scoreSchema,
   subtasks: z
     .array(
       z.object({
@@ -37,6 +44,9 @@ export type OpenAiCredentials = {
 
 export type AnalyzeIdeaContext = {
   rawInput: string;
+  whyThought?: string;
+  emotionLevel?: EmotionLevel;
+  preferPark?: boolean;
   relatedProject?: {
     title: string;
     positioning: string;
@@ -57,31 +67,43 @@ function resolveOpenAiCredentials(credentials: OpenAiCredentials) {
 }
 
 function buildContextBlock(context: AnalyzeIdeaContext): string {
+  const lines: string[] = [];
+
+  if (context.whyThought?.trim()) {
+    lines.push("【用户补充：为什么突然想到】", context.whyThought.trim(), "");
+  }
+  if (context.emotionLevel) {
+    lines.push(`【用户情绪强度】${context.emotionLevel}`, "");
+  }
+  if (context.preferPark) {
+    lines.push("【用户倾向】希望先放进停车场，短期不做", "");
+  }
+
   if (context.relatedProject) {
     const p = context.relatedProject;
-    return [
+    lines.push(
       "【关联项目】",
       `- 标题：${p.title}`,
       `- 定位：${p.positioning || "（空）"}`,
       `- 状态：${p.status}`,
       `- 项目优先级：${p.priority}`,
-      `- 下一步：${p.nextAction || "（空）"}`,
-    ].join("\n");
-  }
-
-  if (context.relatedIdea) {
+      `- 下一步：${p.nextAction || "（空）"}`
+    );
+  } else if (context.relatedIdea) {
     const i = context.relatedIdea;
-    return [
+    lines.push(
       "【关联灵感】",
       `- 标题：${i.title}`,
       `- 一句话：${i.oneLineIdea}`,
       `- 为什么：${i.whyItMatters}`,
       `- 类型：${i.type}`,
-      `- 当前优先级：${i.priority}`,
-    ].join("\n");
+      `- 当前优先级：${i.priority}`
+    );
+  } else {
+    lines.push("【关联上下文】无（独立新灵感）");
   }
 
-  return "【关联上下文】无（独立新灵感）";
+  return lines.join("\n");
 }
 
 function buildPrompt(context: AnalyzeIdeaContext): string {
@@ -99,9 +121,11 @@ function buildPrompt(context: AnalyzeIdeaContext): string {
     "2. 为整条灵感定 priority（P0 紧急且高价值 … P3 可延后）",
     "3. 拆 2–8 条可执行 subtasks，每条带 priority 与 rationale",
     "4. reasoning 用 2–4 句中文说明优先级判断依据（结合关联上下文与团队资源）",
-    "5. suggestedAction：inbox（默认进收件箱）或 park（明显偏离主线、短期不做）",
-    "6. 若已关联项目，子任务应可落地到该项目；若关联灵感，子任务应推进该灵感",
-    "7. 只输出 JSON，字段名与 schema 完全一致，不要 markdown",
+    "5. feasibility：实现性评估（score 1–5，summary 2–3 句：技术难度、资源、现有基础）",
+    "6. competitiveness：竞争力评估（score 1–5，summary 2–3 句：差异化、市场、竞品）",
+    "7. suggestedAction：inbox（默认进收件箱）或 park（明显偏离主线、短期不做）；若用户倾向停车则优先 park",
+    "8. 若已关联项目，子任务应可落地到该项目；若关联灵感，子任务应推进该灵感",
+    "9. 只输出 JSON，字段名与 schema 完全一致，不要 markdown",
   ].join("\n");
 }
 

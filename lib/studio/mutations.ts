@@ -133,6 +133,11 @@ export type CreateTaskInput = {
   workload?: string;
   blocker?: string | null;
   dueDate?: string | null;
+  progressNote?: string;
+  completionSource?: StudioTask["completionSource"];
+  gitCommitSha?: string | null;
+  gitCommitMessage?: string | null;
+  sourceIdeaId?: string | null;
 };
 
 export type UpdateTaskInput = Partial<CreateTaskInput>;
@@ -355,6 +360,7 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
           projectId: created.relatedProjectId!,
           priority: subtask.priority,
           workload: subtask.rationale,
+          sourceIdeaId: created.id,
         })
       )
     );
@@ -515,6 +521,11 @@ export async function createStudioTask(input: CreateTaskInput): Promise<StudioTa
     workload: input.workload ?? "",
     blocker: input.blocker ?? null,
     dueDate: input.dueDate ?? null,
+    progressNote: input.progressNote ?? "",
+    completionSource: input.completionSource ?? null,
+    gitCommitSha: input.gitCommitSha ?? null,
+    gitCommitMessage: input.gitCommitMessage ?? null,
+    sourceIdeaId: input.sourceIdeaId ?? null,
   };
 
   return writeSupabase(

@@ -320,6 +320,11 @@ function mapTaskPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
     workload: getPropertyText(page, "工作量", "Workload"),
     blocker: getPropertyText(page, "阻塞", "Blocker") || null,
     dueDate: getPropertyText(page, "截止日期", "Due") || null,
+    progressNote: getPropertyText(page, "进度备注", "备注") || "",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   };
 }
 

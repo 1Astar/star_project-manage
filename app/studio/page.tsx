@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { StudioShell, StudioBadge } from "@/components/studio/shell";
 import { NotionImportPanel } from "@/components/studio/notion-import-panel";
+import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
 import {
   getMainlineProject,
   getTodayFocus,
@@ -8,6 +9,7 @@ import {
   getRecentEvolution,
   getParkedIdeas,
   getActiveProjects,
+  getAllProjects,
   getProjectTitle,
 } from "@/lib/studio/data";
 import {
@@ -18,7 +20,7 @@ import {
 } from "@/lib/studio/types";
 
 export default async function StudioDashboardPage() {
-  const [focus, mainline, recentIdeas, recentEvolution, parkedIdeas, activeProjects] =
+  const [focus, mainline, recentIdeas, recentEvolution, parkedIdeas, activeProjects, allProjects] =
     await Promise.all([
       getTodayFocus(),
       getMainlineProject(),
@@ -26,6 +28,7 @@ export default async function StudioDashboardPage() {
       getRecentEvolution(5),
       getParkedIdeas(),
       getActiveProjects(),
+      getAllProjects(),
     ]);
 
   const evolutionWithTitles = await Promise.all(
@@ -37,7 +40,10 @@ export default async function StudioDashboardPage() {
 
   return (
     <StudioShell title="Dashboard" subtitle="今日聚焦 · 主线 · 灵感 · 演进">
-      <NotionImportPanel />
+      <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
+      <div className="mt-4">
+        <NotionImportPanel />
+      </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-stone-500">今日只做什么</h2>

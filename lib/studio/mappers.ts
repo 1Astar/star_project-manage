@@ -87,6 +87,11 @@ export interface StudioTaskRow {
   workload: string;
   blocker: string | null;
   due_date: string | null;
+  progress_note?: string;
+  completion_source?: string | null;
+  git_commit_sha?: string | null;
+  git_commit_message?: string | null;
+  source_idea_id?: string | null;
   created_at: string;
 }
 
@@ -267,6 +272,11 @@ export function taskToRow(task: StudioTask): StudioTaskRow {
     workload: task.workload,
     blocker: task.blocker,
     due_date: task.dueDate,
+    progress_note: task.progressNote,
+    completion_source: task.completionSource,
+    git_commit_sha: task.gitCommitSha,
+    git_commit_message: task.gitCommitMessage,
+    source_idea_id: task.sourceIdeaId,
     created_at: new Date().toISOString(),
   };
 }
@@ -281,6 +291,11 @@ export function rowToTask(row: StudioTaskRow): StudioTask {
     workload: row.workload,
     blocker: row.blocker,
     dueDate: row.due_date,
+    progressNote: row.progress_note ?? "",
+    completionSource: (row.completion_source as StudioTask["completionSource"]) ?? null,
+    gitCommitSha: row.git_commit_sha ?? null,
+    gitCommitMessage: row.git_commit_message ?? null,
+    sourceIdeaId: row.source_idea_id ?? null,
   };
 }
 

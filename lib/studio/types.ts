@@ -101,6 +101,8 @@ export interface EvolutionLog {
   createdAt: string;
 }
 
+export type TaskCompletionSource = "manual" | "git";
+
 export interface StudioTask {
   id: string;
   title: string;
@@ -110,6 +112,11 @@ export interface StudioTask {
   workload: string;
   blocker: string | null;
   dueDate: string | null;
+  progressNote: string;
+  completionSource: TaskCompletionSource | null;
+  gitCommitSha: string | null;
+  gitCommitMessage: string | null;
+  sourceIdeaId: string | null;
 }
 
 export interface Asset {

@@ -7,6 +7,7 @@ import {
   BodySection,
   RecoveryCard,
 } from "@/components/studio/shell";
+import { ProjectTaskBoard } from "@/components/studio/project-task-board";
 import {
   getProjectById,
   getProjectTasks,
@@ -17,7 +18,6 @@ import {
 import { getStudioProjectGitPreview } from "@/lib/studio/project-git";
 import {
   PROJECT_STATUS_LABELS,
-  TASK_STATUS_LABELS,
   ASSET_TYPE_LABELS,
   IDEA_TYPE_LABELS,
 } from "@/lib/studio/types";
@@ -109,24 +109,12 @@ export default async function ProjectDetailPage({
         <BodySection title="复盘记录" content={project.body.retrospectives} />
       </div>
 
-      {/* 关联任务 */}
-      {tasks.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="text-sm font-semibold text-stone-500">关联任务</h2>
-          <ul className="mt-3 space-y-2">
-            {tasks.map((t) => (
-              <li key={t.id} className="flex items-center justify-between rounded-md border border-stone-100 bg-white px-4 py-3 text-sm">
-                <span>{t.title}</span>
-                <div className="flex gap-2">
-                  <StudioBadge>{TASK_STATUS_LABELS[t.status]}</StudioBadge>
-                  <StudioBadge tone={t.priority === "P0" ? "p0" : "p1"}>{t.priority}</StudioBadge>
-                  {t.dueDate ? <span className="text-xs text-stone-400">{t.dueDate}</span> : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {/* 需求任务 */}
+      <ProjectTaskBoard
+        projectId={project.id}
+        tasks={tasks}
+        hasGitHub={!!project.githubRepo}
+      />
 
       {/* 关联灵感 */}
       {ideas.length > 0 ? (
