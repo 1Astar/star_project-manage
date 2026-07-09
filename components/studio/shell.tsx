@@ -1,17 +1,8 @@
 import Link from "next/link";
-import { AppBrandFooter } from "@/components/app-brand-footer";
-import { appVersionLabel } from "@/lib/app-meta";
+import { WorkbenchShell } from "@/components/workbench-shell";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/studio", label: "Dashboard", icon: "◉" },
-  { href: "/studio/mainline", label: "当前主线", icon: "★" },
-  { href: "/studio/inbox", label: "灵感收件箱", icon: "✦" },
-  { href: "/studio/projects", label: "项目库", icon: "▣" },
-  { href: "/studio/evolution", label: "演进记录", icon: "↻" },
-  { href: "/studio/parking", label: "灵感停车场", icon: "⏸" },
-];
-
+/** @deprecated 使用 WorkbenchShell；保留别名便于渐进迁移 */
 export function StudioShell({
   title,
   subtitle,
@@ -24,55 +15,9 @@ export function StudioShell({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-[#f7f7f5]">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-stone-200 bg-[#fbfbfa] p-4 md:flex">
-        <div className="mb-6 px-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-stone-400">
-              Idea Studio
-            </div>
-            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-500">
-              {appVersionLabel()}
-            </span>
-          </div>
-          <div className="mt-1 text-sm font-bold text-stone-800">灵感 → 项目</div>
-        </div>
-        <nav className="space-y-0.5">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-stone-600 hover:bg-stone-100"
-            >
-              <span className="w-4 text-center text-xs text-stone-400">{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="mt-auto space-y-3 border-t border-stone-200 pt-4 px-2">
-          <AppBrandFooter variant="compact" />
-          <Link href="/" className="block text-xs text-stone-400 hover:text-stone-600">
-            ← 返回 Star PM
-          </Link>
-        </div>
-      </aside>
-
-      <div className="flex-1 overflow-x-hidden">
-        <header className="border-b border-stone-200 bg-white/80 px-6 py-4 backdrop-blur">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-bold text-stone-900">{title}</h1>
-              {subtitle ? <p className="mt-1 text-sm text-stone-500">{subtitle}</p> : null}
-            </div>
-            {actions}
-          </div>
-        </header>
-        <main className="px-6 py-6">
-          {children}
-          <AppBrandFooter className="mt-8 md:hidden" />
-        </main>
-      </div>
-    </div>
+    <WorkbenchShell title={title} subtitle={subtitle} actions={actions}>
+      {children}
+    </WorkbenchShell>
   );
 }
 
@@ -137,23 +82,23 @@ export function RecoveryCard({
   const repoUrl = project.githubRepo ? `https://github.com/${project.githubRepo}` : null;
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-5">
-      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">项目恢复卡</div>
-      <div className="mt-3 grid gap-2 text-sm">
+    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-wider text-indigo-600">项目恢复卡</div>
+      <div className="mt-4 grid gap-3 text-sm">
         <div>
-          <span className="text-stone-500">当前状态：</span>
-          <StudioBadge tone={project.priority === "P0" ? "p0" : "p1"}>
+          <span className="text-slate-500">当前状态：</span>
+          <StudioBadge tone={project.status === "mainline" ? "mainline" : project.priority === "P0" ? "p0" : "default"}>
             {project.priority} · {project.currentStage || project.status}
           </StudioBadge>
         </div>
         <div>
-          <span className="text-stone-500">下一步：</span>
-          {project.nextAction || project.body.nextStep || "—"}
+          <span className="text-slate-500">下一步：</span>
+          <span className="font-medium text-slate-800">{project.nextAction || project.body.nextStep || "—"}</span>
         </div>
         {project.demoUrl ? (
           <div>
             <span className="text-stone-500">Demo：</span>
-            <a href={project.demoUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+            <a href={project.demoUrl} className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
               {project.demoUrl}
             </a>
           </div>
@@ -161,7 +106,7 @@ export function RecoveryCard({
         {repoUrl ? (
           <div>
             <span className="text-stone-500">GitHub：</span>
-            <a href={repoUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+            <a href={repoUrl} className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
               {project.githubRepo}
             </a>
           </div>
@@ -169,7 +114,7 @@ export function RecoveryCard({
         {project.vercelUrl ? (
           <div>
             <span className="text-stone-500">Vercel：</span>
-            <a href={project.vercelUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+            <a href={project.vercelUrl} className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
               {project.vercelUrl}
             </a>
           </div>
@@ -186,7 +131,7 @@ export function RecoveryCard({
           <div>
             <span className="text-stone-500">最近 Git 更新：</span>
             {gitPreview?.url ? (
-              <a href={gitPreview.url} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+              <a href={gitPreview.url} className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
                 {latest}
               </a>
             ) : (

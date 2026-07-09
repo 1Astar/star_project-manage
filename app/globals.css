@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #f7f8fa;
   --foreground: #0f172a;
   --card: #ffffff;
   --muted: #64748b;
   --border: #e2e8f0;
-  --primary: #2563eb;
+  --primary: #4f46e5;
   --primary-foreground: #ffffff;
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
-  --sidebar: #0f172a;
+  --sidebar: #ffffff;
 }
 
 * {
@@ -76,5 +76,5 @@ textarea {
 .progress-bar > span {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  background: linear-gradient(90deg, #4f46e5, #6366f1);
 }

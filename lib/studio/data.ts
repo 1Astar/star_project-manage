@@ -102,3 +102,30 @@ export async function getActiveProjects() {
   const { projects } = await getStudioSnapshot();
   return projects.filter((p) => p.status !== "archived" && p.status !== "parking");
 }
+
+export async function getAllAssets() {
+  const { assets } = await getStudioSnapshot();
+  return assets;
+}
+
+export async function getPendingAlerts() {
+  const { tasks, ideas } = await getStudioSnapshot();
+  const blockers = tasks.filter((t) => t.blocker && t.status !== "done");
+  const inboxCount = ideas.filter((i) => i.status === "inbox").length;
+  return { blockers, inboxCount };
+}
+
+export async function getRecentGitUpdates(limit = 5) {
+  const { projects } = await getStudioSnapshot();
+  return [...projects]
+    .filter((p) => p.lastCommitMessage || p.githubRepo)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit)
+    .map((p) => ({
+      projectId: p.id,
+      title: p.title,
+      message: p.lastCommitMessage ?? "已配置 GitHub 仓库",
+      updatedAt: p.lastCommitAt ?? p.updatedAt,
+      githubRepo: p.githubRepo,
+    }));
+}

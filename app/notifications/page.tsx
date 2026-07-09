@@ -1,18 +1,18 @@
 import Link from "next/link";
 import { readDb } from "@/lib/db/local-store";
-import { AppShell } from "@/components/ui";
+import { WorkbenchShell } from "@/components/workbench-shell";
 
 export default async function NotificationsPage() {
   const db = await readDb();
   const notifications = db.notifications.slice(0, 50);
 
   return (
-    <AppShell
+    <WorkbenchShell
       title="通知中心"
       subtitle="任务分配、待测试、测试不通过、待验收等系统内提醒"
       actions={
-        <Link href="/" className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
-          返回总览
+        <Link href="/" className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+          返回工作台
         </Link>
       }
     >
@@ -39,6 +39,6 @@ export default async function NotificationsPage() {
           ))
         )}
       </div>
-    </AppShell>
+    </WorkbenchShell>
   );
 }

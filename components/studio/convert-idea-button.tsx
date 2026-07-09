@@ -25,7 +25,7 @@ export function ConvertIdeaButton({
   if (status === "converted" && relatedProjectId) {
     return (
       <Link
-        href={`/studio/projects/${relatedProjectId}`}
+        href={`/projects/${relatedProjectId}`}
         className="text-xs font-medium text-blue-600 hover:underline"
       >
         查看项目 →
@@ -58,7 +58,7 @@ export function ConvertIdeaButton({
         return;
       }
 
-      router.push(`/studio/projects/${data.project.id}`);
+      router.push(`/projects/${data.project.id}`);
       router.refresh();
     } catch {
       setError("网络错误");

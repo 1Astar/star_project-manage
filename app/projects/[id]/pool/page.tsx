@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { fetchPoolData } from "@/lib/actions";
 import { RequirementPoolClient } from "@/components/requirement-pool-client";
-import { AppShell, ProjectNav } from "@/components/ui";
+import { resolveProjectRoute } from "@/lib/project-bridge";
 
 export default async function PoolPage({
   params,
@@ -9,24 +9,20 @@ export default async function PoolPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const bundle = await fetchPoolData(id);
+  const ctx = await resolveProjectRoute(id);
+  const slug = ctx.pmSlug ?? id;
+  const bundle = await fetchPoolData(slug);
   if (!bundle) notFound();
 
   return (
-    <AppShell
-      title={`${bundle.project.name} · 需求池`}
-      subtitle="产品私有功能点库，规划成熟后加入当前迭代"
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
-    >
-      <RequirementPoolClient
-        projectId={bundle.project.id}
-        projectSlug={bundle.project.slug}
-        requirements={bundle.poolRequirements}
-        modules={bundle.poolModules}
-        activeIterations={bundle.activeIterations}
-        columnDefs={bundle.poolColumnDefs}
-        tagOptions={bundle.tagOptions}
-      />
-    </AppShell>
+    <RequirementPoolClient
+      projectId={bundle.project.id}
+      projectSlug={bundle.project.slug}
+      requirements={bundle.poolRequirements}
+      modules={bundle.poolModules}
+      activeIterations={bundle.activeIterations}
+      columnDefs={bundle.poolColumnDefs}
+      tagOptions={bundle.tagOptions}
+    />
   );
 }
