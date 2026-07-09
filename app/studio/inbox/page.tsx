@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { StudioShell, StudioBadge } from "@/components/studio/shell";
 import { IdeaCapturePanel } from "@/components/studio/idea-capture-panel";
+import { StructuredCapturePanel } from "@/components/studio/structured-capture-panel";
+import { InboxSyncButton } from "@/components/studio/inbox-sync-button";
 import { getAllIdeas, getAllProjects, getProjectTitle } from "@/lib/studio/data";
 import {
   IDEA_TYPE_LABELS,
@@ -35,8 +37,15 @@ export default async function InboxPage() {
   }
 
   return (
-    <StudioShell title="灵感收件箱" subtitle="所有突发奇想先丢这里">
-      <IdeaCapturePanel projects={projectOptions} ideas={ideaOptions} />
+    <StudioShell
+      title="灵感收件箱"
+      subtitle="ChatGPT → GitHub Issue → 同步进收件箱"
+      actions={<InboxSyncButton />}
+    >
+      <div className="space-y-4">
+        <StructuredCapturePanel projects={projectOptions} />
+        <IdeaCapturePanel projects={projectOptions} ideas={ideaOptions} />
+      </div>
 
       <div className="mt-6 overflow-hidden rounded-lg border border-stone-200 bg-white">
         <table className="w-full text-sm">
@@ -48,6 +57,8 @@ export default async function InboxPage() {
               <th className="px-4 py-3 font-medium">优先级</th>
               <th className="px-4 py-3 font-medium">情绪</th>
               <th className="px-4 py-3 font-medium">状态</th>
+              <th className="px-4 py-3 font-medium">来源</th>
+              <th className="px-4 py-3 font-medium">Issue</th>
               <th className="px-4 py-3 font-medium">关联</th>
               <th className="px-4 py-3 font-medium">创建时间</th>
             </tr>
@@ -72,6 +83,21 @@ export default async function InboxPage() {
                   <StudioBadge tone={idea.status === "converted" ? "success" : "muted"}>
                     {IDEA_STATUS_LABELS[idea.status]}
                   </StudioBadge>
+                </td>
+                <td className="px-4 py-3 text-stone-500">{idea.triggerSource || "—"}</td>
+                <td className="px-4 py-3">
+                  {idea.githubIssueUrl ? (
+                    <a
+                      href={idea.githubIssueUrl}
+                      className="text-blue-600 hover:underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      #{idea.githubIssueNumber}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {idea.relatedProjectId ? (

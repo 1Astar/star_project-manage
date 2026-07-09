@@ -14,6 +14,7 @@ import {
   getProjectEvolution,
   getProjectIdeas,
 } from "@/lib/studio/data";
+import { getStudioProjectGitPreview } from "@/lib/studio/project-git";
 import {
   PROJECT_STATUS_LABELS,
   TASK_STATUS_LABELS,
@@ -30,11 +31,12 @@ export default async function ProjectDetailPage({
   const project = await getProjectById(id);
   if (!project) notFound();
 
-  const [tasks, assets, evolution, ideas] = await Promise.all([
+  const [tasks, assets, evolution, ideas, gitPreview] = await Promise.all([
     getProjectTasks(id),
     getProjectAssets(id),
     getProjectEvolution(id),
     getProjectIdeas(id),
+    getStudioProjectGitPreview(project),
   ]);
 
   return (
@@ -47,7 +49,7 @@ export default async function ProjectDetailPage({
         </Link>
       }
     >
-      <RecoveryCard project={project} />
+      <RecoveryCard project={project} gitPreview={gitPreview} />
 
       {/* Notion-like 属性区 */}
       <div className="mt-8 rounded-lg border border-stone-200 bg-white px-5 py-2">

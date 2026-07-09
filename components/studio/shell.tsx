@@ -126,8 +126,16 @@ export function BodySection({ title, content }: { title: string; content: string
   );
 }
 
-export function RecoveryCard({ project }: { project: import("@/lib/studio/types").Project }) {
-  const latest = getLatestProgress(project);
+export function RecoveryCard({
+  project,
+  gitPreview,
+}: {
+  project: import("@/lib/studio/types").Project;
+  gitPreview?: { message: string; url: string | null; date: string | null } | null;
+}) {
+  const latest = gitPreview?.message ?? getLatestProgress(project);
+  const repoUrl = project.githubRepo ? `https://github.com/${project.githubRepo}` : null;
+
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-5">
       <div className="text-xs font-semibold uppercase tracking-wider text-amber-700">项目恢复卡</div>
@@ -135,38 +143,60 @@ export function RecoveryCard({ project }: { project: import("@/lib/studio/types"
         <div>
           <span className="text-stone-500">当前状态：</span>
           <StudioBadge tone={project.priority === "P0" ? "p0" : "p1"}>
-            {project.priority} {project.currentStage}
+            {project.priority} · {project.currentStage || project.status}
           </StudioBadge>
         </div>
         <div>
           <span className="text-stone-500">下一步：</span>
-          {project.nextAction}
+          {project.nextAction || project.body.nextStep || "—"}
         </div>
-        {project.localRunGuide ? (
-          <div>
-            <span className="text-stone-500">本地启动：</span>
-            <pre className="mt-1 rounded bg-white/80 p-2 text-xs text-stone-700">
-              {project.localRunGuide}
-            </pre>
-          </div>
-        ) : null}
         {project.demoUrl ? (
           <div>
-            <span className="text-stone-500">打开：</span>
+            <span className="text-stone-500">Demo：</span>
             <a href={project.demoUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
               {project.demoUrl}
             </a>
           </div>
         ) : null}
+        {repoUrl ? (
+          <div>
+            <span className="text-stone-500">GitHub：</span>
+            <a href={repoUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+              {project.githubRepo}
+            </a>
+          </div>
+        ) : null}
+        {project.vercelUrl ? (
+          <div>
+            <span className="text-stone-500">Vercel：</span>
+            <a href={project.vercelUrl} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+              {project.vercelUrl}
+            </a>
+          </div>
+        ) : null}
+        {project.localRunGuide ? (
+          <div>
+            <span className="text-stone-500">本地启动：</span>
+            <pre className="mt-1 rounded bg-white/80 p-2 text-xs text-stone-700 whitespace-pre-wrap">
+              {project.localRunGuide}
+            </pre>
+          </div>
+        ) : null}
         {latest ? (
           <div>
-            <span className="text-stone-500">最近一次进展：</span>
-            {latest}
+            <span className="text-stone-500">最近 Git 更新：</span>
+            {gitPreview?.url ? (
+              <a href={gitPreview.url} className="text-blue-600 hover:underline" target="_blank" rel="noreferrer">
+                {latest}
+              </a>
+            ) : (
+              latest
+            )}
           </div>
         ) : null}
         {project.body.notDone ? (
           <div>
-            <span className="text-stone-500">现在不做：</span>
+            <span className="text-stone-500">暂时不做：</span>
             <span className="text-stone-600">{project.body.notDone}</span>
           </div>
         ) : null}

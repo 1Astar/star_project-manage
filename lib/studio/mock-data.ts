@@ -15,6 +15,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: "cd E:\\projects\\moonpie\npnpm dev",
     codePath: "E:\\projects\\moonpie",
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: "https://app.notion.com/p/Moonpie-395a86f50915810a9bf2da9551d6e782",
     portfolioValue: "作品集核心项目：手势交互 + 文化学习 + 情绪叙事",
     body: {
@@ -50,6 +54,10 @@ export const mockProjects: Project[] = [
     demoUrl: "https://star-project-manage.vercel.app",
     localRunGuide: "cd star-pm\nnpm run dev",
     codePath: "E:\\文档\\star\\工具\\private\\工具\\star-pm",
+    githubRepo: "1Astar/star_project-manage",
+    vercelUrl: "https://star-project-manage.vercel.app",
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "展示产品全流程管理能力 + 技术全栈",
     body: {
@@ -78,6 +86,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: null,
     codePath: null,
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "商业产品实战经验",
     body: {
@@ -106,6 +118,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: null,
     codePath: null,
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "教育 + 文化赛道探索",
     body: {
@@ -253,7 +269,14 @@ export const mockIdeas: Idea[] = [
     status: "parked",
     createdAt: "2026-06-25T11:00:00.000Z",
   },
-];
+].map((idea) => ({
+  suggestedNextStep: "",
+  githubIssueNumber: null,
+  githubIssueUrl: null,
+  githubLabels: [] as string[],
+  updatedAt: idea.createdAt,
+  ...idea,
+})) as Idea[];
 
 export const mockEvolutionLogs: EvolutionLog[] = [
   {

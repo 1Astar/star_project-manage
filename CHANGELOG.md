@@ -10,6 +10,14 @@
 
 ---
 
+## v1.2.0 · 2026-07-09
+
+- **AI 灵感收件箱 + GitHub Issue 中转**：`POST /api/ideas/capture` 创建 Issue，不直接写库
+- **定时/手动同步**：`GET /api/github/sync-ideas`、`POST /api/studio/ideas/sync`、`/api/cron/sync-ideas`
+- 收件箱新增 **AI Capture 模板**（结构化粘贴 + 同步按钮）
+- Idea 转 Project 时自动写入 **演进记录**（初始想法）
+- **项目恢复卡**扩展：GitHub / Vercel / 最近 Git 更新 / 暂时不做
+
 ## v1.1.5 · 2026-07-09
 
 - 修复 Vercel 构建：恢复**需求池**相关 actions / db / types 导出（`fetchPoolData`、`ensurePoolIteration` 等）

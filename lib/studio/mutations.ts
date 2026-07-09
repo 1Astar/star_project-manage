@@ -80,6 +80,8 @@ export type CreateProjectInput = {
   demoUrl?: string | null;
   localRunGuide?: string | null;
   codePath?: string | null;
+  githubRepo?: string | null;
+  vercelUrl?: string | null;
   relatedPageUrl?: string | null;
   portfolioValue?: string;
   body?: Partial<ProjectBody>;
@@ -100,6 +102,10 @@ export type CreateIdeaInput = {
   relatedIdeaId?: string | null;
   subtasks?: IdeaSubtask[];
   status?: IdeaStatus;
+  suggestedNextStep?: string;
+  githubIssueNumber?: number | null;
+  githubIssueUrl?: string | null;
+  githubLabels?: string[];
   syncSubtasksToProject?: boolean;
 };
 
@@ -179,6 +185,10 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
     localRunGuide:
       input.localRunGuide !== undefined ? input.localRunGuide : (existing?.localRunGuide ?? null),
     codePath: input.codePath !== undefined ? input.codePath : (existing?.codePath ?? null),
+    githubRepo: input.githubRepo !== undefined ? input.githubRepo : (existing?.githubRepo ?? null),
+    vercelUrl: input.vercelUrl !== undefined ? input.vercelUrl : (existing?.vercelUrl ?? null),
+    lastCommitMessage: existing?.lastCommitMessage ?? null,
+    lastCommitAt: existing?.lastCommitAt ?? null,
     relatedPageUrl:
       input.relatedPageUrl !== undefined ? input.relatedPageUrl : (existing?.relatedPageUrl ?? null),
     portfolioValue: input.portfolioValue ?? existing?.portfolioValue ?? "",
@@ -300,6 +310,7 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
     rationale: item.rationale?.trim() ?? "",
   })).filter((item) => item.title.length > 0);
 
+  const now = nowIso();
   const idea: Idea = {
     id: studioId("idea-"),
     title: input.title.trim(),
@@ -314,7 +325,12 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
     relatedIdeaId: input.relatedIdeaId ?? null,
     subtasks,
     status: input.status ?? "inbox",
-    createdAt: nowIso(),
+    suggestedNextStep: input.suggestedNextStep ?? "",
+    githubIssueNumber: input.githubIssueNumber ?? null,
+    githubIssueUrl: input.githubIssueUrl ?? null,
+    githubLabels: input.githubLabels ?? [],
+    createdAt: now,
+    updatedAt: now,
   };
 
   const created = await writeSupabase(
@@ -358,6 +374,7 @@ export async function updateStudioIdea(id: string, patch: UpdateIdeaInput): Prom
     title: patch.title?.trim() ?? existing.title,
     subtasks: patch.subtasks ?? existing.subtasks,
     createdAt: existing.createdAt,
+    updatedAt: nowIso(),
   };
 
   if (idea.relatedProjectId && idea.relatedIdeaId) {
@@ -640,6 +657,87 @@ export async function parkStudioIdea(id: string): Promise<Idea> {
   return updateStudioIdea(id, { status: "parked" });
 }
 
+export type UpsertIdeaFromGitHubInput = {
+  title: string;
+  rawInput: string;
+  oneLineIdea: string;
+  whyItMatters: string;
+  triggerSource: string;
+  type: IdeaType;
+  status: IdeaStatus;
+  suggestedNextStep: string;
+  relatedProjectId: string | null;
+  githubIssueNumber: number;
+  githubIssueUrl: string;
+  githubLabels: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function upsertStudioIdeaFromGitHub(
+  input: UpsertIdeaFromGitHubInput
+): Promise<{ idea: Idea; created: boolean }> {
+  const snapshot = await getStudioSnapshot();
+  const existing = snapshot.ideas.find((i) => i.githubIssueNumber === input.githubIssueNumber);
+
+  if (existing) {
+    const idea = await updateStudioIdea(existing.id, {
+      title: input.title,
+      rawInput: input.rawInput,
+      oneLineIdea: input.oneLineIdea,
+      whyItMatters: input.whyItMatters,
+      triggerSource: input.triggerSource,
+      type: input.type,
+      status: input.status,
+      suggestedNextStep: input.suggestedNextStep,
+      relatedProjectId: input.relatedProjectId,
+      githubIssueUrl: input.githubIssueUrl,
+      githubLabels: input.githubLabels,
+    });
+    return { idea, created: false };
+  }
+
+  const idea = await createStudioIdea({
+    title: input.title,
+    rawInput: input.rawInput,
+    oneLineIdea: input.oneLineIdea,
+    whyItMatters: input.whyItMatters,
+    triggerSource: input.triggerSource,
+    type: input.type,
+    status: input.status,
+    suggestedNextStep: input.suggestedNextStep,
+    relatedProjectId: input.relatedProjectId,
+    githubIssueNumber: input.githubIssueNumber,
+    githubIssueUrl: input.githubIssueUrl,
+    githubLabels: input.githubLabels,
+  });
+
+  if (isSupabaseConfigured()) {
+    await sb()
+      .from("studio_ideas")
+      .update({
+        created_at: input.createdAt,
+        updated_at: input.updatedAt,
+      })
+      .eq("id", idea.id);
+    invalidateStudioCache();
+  } else {
+    applyMemoryMutation((snap) => {
+      const idx = snap.ideas.findIndex((i) => i.id === idea.id);
+      if (idx >= 0) {
+        snap.ideas[idx] = {
+          ...snap.ideas[idx],
+          createdAt: input.createdAt,
+          updatedAt: input.updatedAt,
+        };
+      }
+    });
+  }
+
+  const refreshed = (await getStudioSnapshot()).ideas.find((i) => i.id === idea.id)!;
+  return { idea: refreshed, created: true };
+}
+
 export async function convertIdeaToProject(ideaId: string, projectInput?: CreateProjectInput): Promise<{
   idea: Idea;
   project: Project;
@@ -652,8 +750,9 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
     title: projectInput?.title ?? idea.title,
     positioning: projectInput?.positioning ?? idea.oneLineIdea,
     body: {
-      initialThought: idea.oneLineIdea,
+      initialThought: idea.rawInput || idea.oneLineIdea,
       whyThought: idea.whyItMatters,
+      nextStep: idea.suggestedNextStep || projectInput?.body?.nextStep || "",
       ...(projectInput?.body ?? {}),
     },
     ...projectInput,
@@ -662,6 +761,24 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
   const updatedIdea = await updateStudioIdea(ideaId, {
     status: "converted",
     relatedProjectId: project.id,
+  });
+
+  const evolutionContent = [
+    idea.rawInput ? `原始想法：${idea.rawInput}` : "",
+    idea.oneLineIdea ? `摘要：${idea.oneLineIdea}` : "",
+    idea.whyItMatters ? `为什么：${idea.whyItMatters}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  await createStudioEvolution({
+    title: "初始想法",
+    projectId: project.id,
+    logType: "initial",
+    before: "",
+    after: idea.oneLineIdea || idea.title,
+    reason: evolutionContent,
+    decision: `来源：${idea.triggerSource || "手动"}${idea.githubIssueUrl ? ` · ${idea.githubIssueUrl}` : ""}`,
   });
 
   return { idea: updatedIdea, project };
