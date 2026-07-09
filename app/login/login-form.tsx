@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { AppBrandFooter } from "@/components/app-brand-footer";
+import { appVersionLabel } from "@/lib/app-meta";
 import { loginAction } from "@/lib/auth/actions";
 
 export default function LoginForm() {
@@ -26,18 +28,24 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-      <form onSubmit={onSubmit} className="card w-full max-w-sm p-6 space-y-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6">
+      <form onSubmit={onSubmit} className="card w-full max-w-sm space-y-4 p-6">
         <div>
-          <div className="text-sm font-semibold text-blue-600">Star PM</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-blue-600">Star PM</div>
+            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+              {appVersionLabel()}
+            </span>
+          </div>
           <h1 className="text-xl font-bold">管理员登录</h1>
-          <p className="mt-1 text-sm text-slate-500">默认 dev：admin@star.local / star-pm-dev</p>
+          <p className="mt-1 text-sm text-slate-500">账号 admin</p>
         </div>
         <input
-          name="email"
-          type="email"
+          name="account"
+          type="text"
           required
-          placeholder="邮箱"
+          autoComplete="username"
+          placeholder="账号"
           className="w-full rounded-lg border border-slate-200 px-3 py-2"
         />
         <input
@@ -56,6 +64,7 @@ export default function LoginForm() {
           登录
         </button>
       </form>
+      <AppBrandFooter className="mt-6 w-full max-w-sm border-none px-1" />
     </div>
   );
 }

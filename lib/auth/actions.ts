@@ -8,12 +8,12 @@ import {
 } from "@/lib/auth/session";
 
 export async function loginAction(formData: FormData): Promise<{ error?: string }> {
-  const email = String(formData.get("email") ?? "").trim();
+  const account = String(formData.get("account") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!validateAdminCredentials(email, password)) {
-    return { error: "邮箱或密码错误" };
+  if (!validateAdminCredentials(account, password)) {
+    return { error: "账号或密码错误" };
   }
-  await setAdminSession(email);
+  await setAdminSession(account);
   return {};
 }
 

@@ -1,7 +1,5 @@
 import Link from "next/link";
 import { fetchDashboardData } from "@/lib/actions";
-import { DbStatusBanner } from "@/components/db-status";
-import { DemoDataNotice } from "@/components/demo-data-notice";
 import { AppShell, ProgressRing, StatCard } from "@/components/ui";
 
 export default async function HomePage() {
@@ -11,9 +9,14 @@ export default async function HomePage() {
     <AppShell
       title="项目总览"
       subtitle="按项目切换，查看完成度、阻塞项与待验收数量"
-      showHomeLink={false}
       actions={
         <div className="flex gap-2">
+          <Link
+            href="/studio"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
+          >
+            Idea Studio
+          </Link>
           <Link
             href="/todos"
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50"
@@ -29,10 +32,6 @@ export default async function HomePage() {
         </div>
       }
     >
-      <div className="mb-6 space-y-3">
-        <DbStatusBanner />
-        <DemoDataNotice />
-      </div>
       <div className="grid gap-6 lg:grid-cols-2">
         {summaries.map((item) =>
           item ? (
@@ -53,12 +52,6 @@ export default async function HomePage() {
                       className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium hover:bg-slate-50"
                     >
                       需求看板
-                    </Link>
-                    <Link
-                      href={`/projects/${item.project.slug}/pool`}
-                      className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100"
-                    >
-                      需求池
                     </Link>
                   </div>
                 </div>

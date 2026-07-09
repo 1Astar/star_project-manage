@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
-import { RequirementDetailClient } from "@/components/requirement-detail";
-import { RequirementMetaPanel } from "@/components/requirement-meta-panel";
-import { AppShell, StatusBadge } from "@/components/ui";
-import { ProjectNavLoader } from "@/components/project-nav-loader";
+import { RequirementCollabPanel } from "@/components/requirement-collab";
+import { AppShell, ProjectNav, StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
 
 export default async function RequirementDetailPage({
@@ -23,23 +21,17 @@ export default async function RequirementDetailPage({
   const acceptanceItems = bundle.acceptance_items.filter(
     (a) => a.requirement_id === reqId
   );
+  const comments = (bundle.comments ?? []).filter((c) => c.requirement_id === reqId);
 
   return (
     <AppShell
       title={requirement.title}
       subtitle={requirement.sub_function ?? bundle.iterations[0]?.name}
-      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
       actions={<StatusBadge status={requirement.status} />}
     >
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
-          <RequirementMetaPanel
-            requirement={requirement}
-            projectSlug={bundle.project.slug}
-            poolColumnDefs={bundle.pool_column_defs}
-            tagOptions={bundle.tagOptions}
-          />
-
           <section className="card p-5 space-y-3">
             <h2 className="font-semibold">需求信息</h2>
             {requirement.detail_work ? (
@@ -73,10 +65,15 @@ export default async function RequirementDetailPage({
           </section>
         </div>
 
-        <RequirementDetailClient
+        <RequirementCollabPanel
           projectId={bundle.project.id}
           requirementId={requirement.id}
           acceptanceItems={acceptanceItems}
+          comments={comments}
+          actorName="管理员"
+          actorRole="admin"
+          canSubmitTest
+          canEditAcceptance
         />
       </div>
 

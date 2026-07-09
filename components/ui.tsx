@@ -2,6 +2,8 @@ import type { TaskStatus } from "@/lib/types";
 import { TASK_STATUS_LABELS } from "@/lib/types";
 import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
+import { AppBrandFooter } from "@/components/app-brand-footer";
+import { appVersionLabel } from "@/lib/app-meta";
 import { cn } from "@/lib/utils";
 
 export function StatusBadge({
@@ -92,36 +94,31 @@ export function AppShell({
   nav,
   children,
   actions,
-  showHomeLink = true,
 }: {
   title: string;
   subtitle?: string;
   nav?: React.ReactNode;
   children: React.ReactNode;
   actions?: React.ReactNode;
-  showHomeLink?: boolean;
 }) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
           <div>
-            <Link href="/" className="text-xs font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-700">
-              Star PM
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-xs font-semibold uppercase tracking-wider text-blue-600">
+                Star PM
+              </div>
+              <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                {appVersionLabel()}
+              </span>
+            </div>
             <h1 className="text-xl font-bold text-slate-900">{title}</h1>
             {subtitle ? <p className="text-sm text-slate-500">{subtitle}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {actions}
-            {showHomeLink ? (
-              <Link
-                href="/"
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
-              >
-                返回总览
-              </Link>
-            ) : null}
             <Link
               href="/todos"
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
@@ -135,7 +132,39 @@ export function AppShell({
           <div className="mx-auto max-w-7xl border-t border-slate-100 px-6 py-2">{nav}</div>
         ) : null}
       </header>
-      <main className="mx-auto max-w-7xl px-6 py-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-6 py-6">
+        {children}
+        <AppBrandFooter className="mt-8" />
+      </main>
     </div>
+  );
+}
+
+export function ProjectNav({ projectId, slug }: { projectId: string; slug: string }) {
+  const base = `/projects/${slug || projectId}`;
+  const links = [
+    { href: base, label: "总览" },
+    { href: `${base}/board`, label: "需求看板" },
+    { href: `${base}/prototype`, label: "原型工作区" },
+    { href: `${base}/gantt`, label: "甘特图" },
+    { href: `${base}/hours`, label: "工时统计" },
+    { href: `${base}/import`, label: "Excel 导入" },
+    { href: `${base}/settings`, label: "设置" },
+    { href: "/todos", label: "我的待办" },
+    { href: "/ui-preview", label: "UI 方向" },
+  ];
+
+  return (
+    <nav className="flex flex-wrap gap-2">
+      {links.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+        >
+          {link.label}
+        </a>
+      ))}
+    </nav>
   );
 }

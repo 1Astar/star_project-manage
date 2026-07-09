@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { addPrototype, getProjectById } from "@/lib/db";
+import { addPrototype, getProjectById } from "@/lib/db/local-store";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "prototypes");
 

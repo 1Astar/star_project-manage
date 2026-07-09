@@ -1,23 +1,39 @@
-import { hashToken } from "@/lib/utils";
-import { REQUIREMENT_POOL_DEFAULTS, type AcceptanceItem, type Requirement, type RoleTask } from "@/lib/types";
+import { generateShareToken, hashToken } from "@/lib/utils";
+import type { AcceptanceItem, Requirement, RoleTask } from "@/lib/types";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 
-/** 固定 ID，保证 Vercel 多实例与刷新后链接仍有效 */
+/** 固定 UUID，与 supabase/migrations/003_seed.sql 一致 */
 export const SEED_IDS = {
-  petProject: "proj-ai-pet",
-  controllerProject: "proj-ai-controller",
-  petIter: "iter-ai-pet-202606",
-  controllerIter: "iter-ai-controller-202604",
-  petReqHome: "req-pet-home",
-  petReqBanner: "req-pet-banner",
-  petReqPush: "req-pet-push",
-  ctrlReqMask: "req-ctrl-mask",
-  ctrlReqMigrate: "req-ctrl-migrate",
+  petProject: "a1000001-0001-4001-8001-000000000001",
+  controllerProject: "a1000001-0001-4001-8001-000000000002",
+  petIter: "a2000001-0001-4001-8001-000000000001",
+  controllerIter: "a2000001-0001-4001-8001-000000000002",
+  petReqHome: "b1000001-0001-4001-8001-000000000001",
+  petReqBanner: "b1000001-0001-4001-8001-000000000002",
+  petReqPush: "b1000001-0001-4001-8001-000000000003",
+  ctrlReqMask: "b1000001-0001-4001-8001-000000000004",
+  ctrlReqMigrate: "b1000001-0001-4001-8001-000000000005",
 } as const;
 
 const SEED_TIME = "2026-06-22T00:00:00.000Z";
 
-type SeedRequirement = Omit<Requirement, keyof typeof REQUIREMENT_POOL_DEFAULTS>;
+function emptyProjectGitFields() {
+  return {
+    repo_full_name: null,
+    repo_branch: null,
+    repo_url: null,
+    last_commit_sha: null,
+    last_commit_message: null,
+    last_commit_at: null,
+    last_git_synced_at: null,
+    vercel_project_id: null,
+    vercel_deployment_url: null,
+    last_deploy_status: null,
+    demo_url: null,
+    local_run_guide: null,
+    code_path: null,
+  } as const;
+}
 
 export function createSeedData(): DatabaseSnapshot {
   const petProjectId = SEED_IDS.petProject;
@@ -25,7 +41,7 @@ export function createSeedData(): DatabaseSnapshot {
   const petIterationId = SEED_IDS.petIter;
   const controllerIterationId = SEED_IDS.controllerIter;
 
-  const petReqs: SeedRequirement[] = [
+  const petReqs: Requirement[] = [
     {
       id: SEED_IDS.petReqHome,
       project_id: petProjectId,
@@ -79,7 +95,7 @@ export function createSeedData(): DatabaseSnapshot {
     },
   ];
 
-  const controllerReqs: SeedRequirement[] = [
+  const controllerReqs: Requirement[] = [
     {
       id: SEED_IDS.ctrlReqMask,
       project_id: controllerProjectId,
@@ -118,7 +134,7 @@ export function createSeedData(): DatabaseSnapshot {
 
   const petTasks: RoleTask[] = [
     {
-      id: "task-pet-ui-home",
+      id: "d1000001-0001-4001-8001-000000000001",
       requirement_id: petReqs[0].id,
       role: "ui",
       assignee: "游春梅",
@@ -133,7 +149,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-pet-fe-home",
+      id: "d1000001-0001-4001-8001-000000000002",
       requirement_id: petReqs[0].id,
       role: "frontend",
       assignee: "陈伟平",
@@ -148,7 +164,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-pet-be-banner",
+      id: "d1000001-0001-4001-8001-000000000003",
       requirement_id: petReqs[1].id,
       role: "backend",
       assignee: "李德堂",
@@ -163,7 +179,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-pet-fe-banner",
+      id: "d1000001-0001-4001-8001-000000000004",
       requirement_id: petReqs[1].id,
       role: "frontend",
       assignee: "陈伟平",
@@ -178,7 +194,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-pet-be-push",
+      id: "d1000001-0001-4001-8001-000000000005",
       requirement_id: petReqs[2].id,
       role: "backend",
       assignee: "李德堂",
@@ -196,7 +212,7 @@ export function createSeedData(): DatabaseSnapshot {
 
   const controllerTasks: RoleTask[] = [
     {
-      id: "task-ctrl-be-mask",
+      id: "d1000001-0001-4001-8001-000000000006",
       requirement_id: controllerReqs[0].id,
       role: "backend",
       assignee: "谢鑫",
@@ -211,7 +227,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-ctrl-fe-mask",
+      id: "d1000001-0001-4001-8001-000000000007",
       requirement_id: controllerReqs[0].id,
       role: "frontend",
       assignee: "陈伟平",
@@ -226,7 +242,7 @@ export function createSeedData(): DatabaseSnapshot {
       updated_at: SEED_TIME,
     },
     {
-      id: "task-ctrl-be-migrate",
+      id: "d1000001-0001-4001-8001-000000000008",
       requirement_id: controllerReqs[1].id,
       role: "backend",
       assignee: "谢鑫",
@@ -244,7 +260,7 @@ export function createSeedData(): DatabaseSnapshot {
 
   const acceptanceItems: AcceptanceItem[] = [
     {
-      id: "acc-pet-home",
+      id: "c1000001-0001-4001-8001-000000000001",
       requirement_id: petReqs[0].id,
       description: `${petReqs[0].title} - 功能符合 PRD`,
       passed: null,
@@ -252,7 +268,7 @@ export function createSeedData(): DatabaseSnapshot {
       sort_order: 1,
     },
     {
-      id: "acc-pet-banner",
+      id: "c1000001-0001-4001-8001-000000000002",
       requirement_id: petReqs[1].id,
       description: `${petReqs[1].title} - 功能符合 PRD`,
       passed: false,
@@ -260,7 +276,7 @@ export function createSeedData(): DatabaseSnapshot {
       sort_order: 1,
     },
     {
-      id: "acc-pet-push",
+      id: "c1000001-0001-4001-8001-000000000003",
       requirement_id: petReqs[2].id,
       description: `${petReqs[2].title} - 功能符合 PRD`,
       passed: null,
@@ -268,7 +284,7 @@ export function createSeedData(): DatabaseSnapshot {
       sort_order: 1,
     },
     {
-      id: "acc-ctrl-mask",
+      id: "c1000001-0001-4001-8001-000000000004",
       requirement_id: controllerReqs[0].id,
       description: `${controllerReqs[0].title} - 验收标准达成`,
       passed: null,
@@ -276,7 +292,7 @@ export function createSeedData(): DatabaseSnapshot {
       sort_order: 1,
     },
     {
-      id: "acc-ctrl-migrate",
+      id: "c1000001-0001-4001-8001-000000000005",
       requirement_id: controllerReqs[1].id,
       description: `${controllerReqs[1].title} - 验收标准达成`,
       passed: null,
@@ -285,9 +301,9 @@ export function createSeedData(): DatabaseSnapshot {
     },
   ];
 
-  const frontendToken = "star-share-frontend-dev";
-  const backendToken = "star-share-backend-dev";
-  const testToken = "star-share-test-dev";
+  const frontendToken = generateShareToken();
+  const backendToken = generateShareToken();
+  const testToken = generateShareToken();
 
   return {
     projects: [
@@ -296,16 +312,16 @@ export function createSeedData(): DatabaseSnapshot {
         name: "AI 宠物",
         slug: "ai-pet",
         description: "宠物 App 优化需求管理",
-        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
+        ...emptyProjectGitFields(),
       },
       {
         id: controllerProjectId,
         name: "AI 控制器",
         slug: "ai-controller",
         description: "元井 AI 控制器优化需求管理",
-        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
+        ...emptyProjectGitFields(),
       },
     ],
     iterations: [
@@ -325,14 +341,14 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     modules: [],
-    requirements: [...petReqs, ...controllerReqs].map((r) => ({ ...REQUIREMENT_POOL_DEFAULTS, ...r })),
+    requirements: [...petReqs, ...controllerReqs],
     acceptance_items: acceptanceItems,
     role_tasks: [...petTasks, ...controllerTasks],
     test_records: [],
     acceptance_records: [],
     share_links: [
       {
-        id: "link-pet-frontend",
+        id: "f1000001-0001-4001-8001-000000000001",
         project_id: petProjectId,
         role: "frontend",
         label: "前端协作链接",
@@ -342,7 +358,7 @@ export function createSeedData(): DatabaseSnapshot {
         plain_token: frontendToken,
       },
       {
-        id: "link-pet-backend",
+        id: "f1000001-0001-4001-8001-000000000002",
         project_id: petProjectId,
         role: "backend",
         label: "后端协作链接",
@@ -352,7 +368,7 @@ export function createSeedData(): DatabaseSnapshot {
         plain_token: backendToken,
       },
       {
-        id: "link-pet-test",
+        id: "f1000001-0001-4001-8001-000000000003",
         project_id: petProjectId,
         role: "test",
         label: "测试协作链接",
@@ -363,11 +379,10 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     prototypes: [],
-    prototype_annotations: [],
     bugs: [],
     notifications: [
       {
-        id: "notif-pet-acceptance",
+        id: "e1000001-0001-4001-8001-000000000001",
         project_id: petProjectId,
         recipient_name: "产品",
         type: "acceptance_pending",
@@ -379,7 +394,7 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     activity_logs: [],
-    project_members: [],
-    pool_column_defs: [],
+    comments: [],
+    git_activities: [],
   };
 }

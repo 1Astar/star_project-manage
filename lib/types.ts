@@ -19,27 +19,41 @@ export type RoleType =
 
 export type EstimateLevel = "module" | "requirement";
 
+export type DeployStatus = "ready" | "building" | "error";
+
 export interface Project {
   id: string;
   name: string;
   slug: string;
   description: string | null;
-  pool_tag_options: string[];
   created_at: string;
+  repo_full_name: string | null;
+  repo_branch: string | null;
+  repo_url: string | null;
+  last_commit_sha: string | null;
+  last_commit_message: string | null;
+  last_commit_at: string | null;
+  last_git_synced_at: string | null;
+  vercel_project_id: string | null;
+  vercel_deployment_url: string | null;
+  last_deploy_status: DeployStatus | null;
+  demo_url: string | null;
+  local_run_guide: string | null;
+  code_path: string | null;
 }
 
-export type PoolColumnType = "text" | "number" | "date" | "checkbox" | "select" | "url";
-
-export interface PoolColumnDef {
+export interface GitActivity {
   id: string;
   project_id: string;
-  key: string;
-  label: string;
-  column_type: PoolColumnType;
-  options: string[];
-  sort_order: number;
-  is_active: boolean;
-  created_at: string;
+  repo_full_name: string;
+  branch: string;
+  commit_sha: string;
+  short_sha: string;
+  message: string;
+  author: string;
+  committed_at: string;
+  url: string;
+  synced_at: string;
 }
 
 export interface Iteration {
@@ -75,86 +89,9 @@ export interface Requirement {
   status: TaskStatus;
   blocker_reason: string | null;
   sort_order: number;
-  in_pool: boolean;
-  category: string | null;
-  stage_type: string | null;
-  optimization_notes: string | null;
-  known_issues: string | null;
-  submitted_at: string | null;
-  due_date: string | null;
-  difficulty_notes: string | null;
-  scenario: string | null;
-  needs_discussion: boolean;
-  prd_link: string | null;
-  prototype_link: string | null;
-  product_estimate_hours: number | null;
-  tags: string[];
-  custom_fields: Record<string, string | number | boolean | null>;
   created_at: string;
   updated_at: string;
 }
-
-export const REQUIREMENT_POOL_DEFAULTS: Pick<
-  Requirement,
-  | "in_pool"
-  | "category"
-  | "stage_type"
-  | "optimization_notes"
-  | "known_issues"
-  | "submitted_at"
-  | "due_date"
-  | "difficulty_notes"
-  | "scenario"
-  | "needs_discussion"
-  | "prd_link"
-  | "prototype_link"
-  | "product_estimate_hours"
-  | "tags"
-  | "custom_fields"
-> = {
-  in_pool: false,
-  category: null,
-  stage_type: null,
-  optimization_notes: null,
-  known_issues: null,
-  submitted_at: null,
-  due_date: null,
-  difficulty_notes: null,
-  scenario: null,
-  needs_discussion: false,
-  prd_link: null,
-  prototype_link: null,
-  product_estimate_hours: null,
-  tags: [],
-  custom_fields: {},
-};
-
-/** Server-side partial updates; nullable fields accept null to clear values. */
-export type RequirementUpdates = Partial<{
-  title: string | null;
-  sub_function: string | null;
-  detail_work: string | null;
-  acceptance_criteria: string | null;
-  priority: string | null;
-  status: TaskStatus;
-  category: string | null;
-  stage_type: string | null;
-  optimization_notes: string | null;
-  known_issues: string | null;
-  sort_order: number;
-  module_l1_id: string | null;
-  module_l2_id: string | null;
-  submitted_at: string | null;
-  due_date: string | null;
-  difficulty_notes: string | null;
-  scenario: string | null;
-  needs_discussion: boolean;
-  prd_link: string | null;
-  prototype_link: string | null;
-  product_estimate_hours: number | null;
-  tags: string[];
-  custom_fields: Record<string, string | number | boolean | null>;
-}>;
 
 export interface AcceptanceItem {
   id: string;
@@ -235,32 +172,6 @@ export interface Prototype {
   created_at: string;
 }
 
-/** PinMark 标注快照，可绑定到验收项 */
-export interface PrototypeAnnotation {
-  id: string;
-  project_id: string;
-  pinmark_id: string;
-  acceptance_item_id: string | null;
-  requirement_id: string | null;
-  title: string | null;
-  description: string | null;
-  annotation_type: string | null;
-  shape: "point" | "rect" | null;
-  payload: Record<string, unknown>;
-  updated_at: string;
-}
-
-export type PinmarkAnnotationPayload = {
-  id: string;
-  type?: string;
-  title?: string;
-  description?: string;
-  shape?: "point" | "rect";
-  starPmAcceptanceItemId?: string | null;
-  starPmRequirementId?: string | null;
-  [key: string]: unknown;
-};
-
 export interface NotificationItem {
   id: string;
   project_id: string;
@@ -286,12 +197,13 @@ export interface ActivityLog {
   created_at: string;
 }
 
-export interface ProjectMember {
+export interface RequirementComment {
   id: string;
   project_id: string;
-  name: string;
-  role: RoleType | null;
-  is_active: boolean;
+  requirement_id: string;
+  author_name: string;
+  author_role: string | null;
+  body: string;
   created_at: string;
 }
 

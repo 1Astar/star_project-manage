@@ -6,33 +6,24 @@ const PUBLIC_PREFIXES = [
   "/share",
   "/ui-preview",
   "/api/cron",
-  "/api/health",
   "/_next",
   "/favicon",
   "/prototypes",
 ];
 
 export function middleware(request: NextRequest) {
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-pathname", request.nextUrl.pathname);
-
-  const withPathname = () =>
-    NextResponse.next({
-      request: { headers: requestHeaders },
-    });
-
   if (process.env.REQUIRE_AUTH === "false") {
-    return withPathname();
+    return NextResponse.next();
   }
 
   const { pathname } = request.nextUrl;
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return withPathname();
+    return NextResponse.next();
   }
 
   const token = request.cookies.get("star-pm-session")?.value;
   if (token && token.includes(".")) {
-    return withPathname();
+    return NextResponse.next();
   }
 
   if (pathname.startsWith("/api/")) {

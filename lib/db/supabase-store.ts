@@ -1,16 +1,40 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { DatabaseSnapshot } from "@/lib/db/types";
-import type { PrototypeAnnotation } from "@/lib/types";
+import type { GitActivity, Project } from "@/lib/types";
 
 function client() {
   const sb = createServiceClient();
-  if (!sb) throw new Error("Supabase 未配置：需要 NEXT_PUBLIC_SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY");
+  if (!sb) {
+    throw new Error("Supabase 未配置：需要 NEXT_PUBLIC_SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY");
+  }
   return sb;
 }
 
 function throwOnError<T>(result: { data: T | null; error: { message: string } | null }, label: string): T {
   if (result.error) throw new Error(`${label}: ${result.error.message}`);
   return (result.data ?? []) as T;
+}
+
+async function loadComments(sb: ReturnType<typeof client>) {
+  const result = await sb
+    .from("requirement_comments")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (result.error?.message.includes("requirement_comments")) {
+    return [];
+  }
+  return throwOnError(result, "requirement_comments");
+}
+
+async function loadGitActivities(sb: ReturnType<typeof client>) {
+  const result = await sb
+    .from("git_activities")
+    .select("*")
+    .order("committed_at", { ascending: false });
+  if (result.error?.message.includes("git_activities")) {
+    return [];
+  }
+  return throwOnError(result, "git_activities");
 }
 
 export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
@@ -26,12 +50,9 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     acceptance_records,
     share_links,
     prototypes,
-    prototype_annotations,
     bugs,
     notifications,
     activity_logs,
-    project_members,
-    pool_column_defs,
   ] = await Promise.all([
     sb.from("projects").select("*"),
     sb.from("iterations").select("*"),
@@ -43,50 +64,30 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     sb.from("acceptance_records").select("*"),
     sb.from("share_links").select("*"),
     sb.from("prototypes").select("*"),
-    sb.from("prototype_annotations").select("*"),
     sb.from("bugs").select("*"),
     sb.from("notifications").select("*").order("created_at", { ascending: false }),
     sb.from("activity_logs").select("*").order("created_at", { ascending: false }),
-    sb.from("project_members").select("*"),
-    sb.from("pool_column_defs").select("*"),
   ]);
 
+  const comments = await loadComments(sb);
+  const git_activities = await loadGitActivities(sb);
+
   return {
-    projects: (throwOnError(projects, "projects") as DatabaseSnapshot["projects"]).map((p) => ({
-      ...p,
-      pool_tag_options: p.pool_tag_options?.length ? p.pool_tag_options : ["硬件", "软件", "体验"],
-    })),
+    projects: throwOnError(projects, "projects"),
     iterations: throwOnError(iterations, "iterations"),
     modules: throwOnError(modules, "modules"),
-    requirements: (throwOnError(requirements, "requirements") as DatabaseSnapshot["requirements"]).map(
-      (row) => ({
-        ...row,
-        tags: row.tags ?? [],
-        custom_fields: (row.custom_fields ?? {}) as Record<string, string | number | boolean | null>,
-      })
-    ),
+    requirements: throwOnError(requirements, "requirements"),
     acceptance_items: throwOnError(acceptance_items, "acceptance_items"),
     role_tasks: throwOnError(role_tasks, "role_tasks"),
     test_records: throwOnError(test_records, "test_records"),
     acceptance_records: throwOnError(acceptance_records, "acceptance_records"),
     share_links: throwOnError(share_links, "share_links"),
     prototypes: throwOnError(prototypes, "prototypes"),
-    prototype_annotations: (throwOnError(prototype_annotations, "prototype_annotations") as PrototypeAnnotation[]).map(
-      (row) => ({
-        ...row,
-        payload: (row.payload ?? {}) as Record<string, unknown>,
-      })
-    ),
     bugs: throwOnError(bugs, "bugs"),
     notifications: throwOnError(notifications, "notifications"),
     activity_logs: throwOnError(activity_logs, "activity_logs"),
-    project_members: throwOnError(project_members, "project_members"),
-    pool_column_defs: (throwOnError(pool_column_defs, "pool_column_defs") as DatabaseSnapshot["pool_column_defs"]).map(
-      (row) => ({
-        ...row,
-        options: Array.isArray(row.options) ? row.options : [],
-      })
-    ),
+    comments,
+    git_activities,
   };
 }
 
@@ -100,7 +101,10 @@ async function upsertRows<T extends object>(table: string, rows: T[]) {
 async function deleteMissing(table: string, keepIds: string[]) {
   const sb = client();
   const { data, error } = await sb.from(table).select("id");
-  if (error) throw new Error(`${table} select: ${error.message}`);
+  if (error) {
+    if (table === "requirement_comments" || table === "git_activities") return;
+    throw new Error(`${table} select: ${error.message}`);
+  }
   const removeIds = (data ?? [])
     .map((row) => row.id as string)
     .filter((id) => !keepIds.includes(id));
@@ -122,25 +126,21 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await upsertRows("acceptance_records", snapshot.acceptance_records);
   await upsertRows("share_links", stripPlainToken);
   await upsertRows("prototypes", snapshot.prototypes);
-  await upsertRows(
-    "prototype_annotations",
-    snapshot.prototype_annotations.map((row) => ({
-      ...row,
-      payload: row.payload ?? {},
-    }))
-  );
   await upsertRows("bugs", snapshot.bugs);
   await upsertRows("notifications", snapshot.notifications);
   await upsertRows("activity_logs", snapshot.activity_logs);
-  await upsertRows("project_members", snapshot.project_members);
-  await upsertRows("pool_column_defs", snapshot.pool_column_defs);
+  if ((snapshot.comments ?? []).length) {
+    await upsertRows("requirement_comments", snapshot.comments ?? []);
+  }
+  if ((snapshot.git_activities ?? []).length) {
+    await upsertRows("git_activities", snapshot.git_activities ?? []);
+  }
 
+  await deleteMissing("git_activities", (snapshot.git_activities ?? []).map((r) => r.id));
+  await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
-  await deleteMissing("pool_column_defs", snapshot.pool_column_defs.map((r) => r.id));
-  await deleteMissing("project_members", snapshot.project_members.map((r) => r.id));
   await deleteMissing("notifications", snapshot.notifications.map((r) => r.id));
   await deleteMissing("bugs", snapshot.bugs.map((r) => r.id));
-  await deleteMissing("prototype_annotations", snapshot.prototype_annotations.map((r) => r.id));
   await deleteMissing("prototypes", snapshot.prototypes.map((r) => r.id));
   await deleteMissing("share_links", snapshot.share_links.map((r) => r.id));
   await deleteMissing("acceptance_records", snapshot.acceptance_records.map((r) => r.id));
@@ -156,9 +156,7 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
 export async function pingSupabase(): Promise<{ ok: boolean; projectCount: number; error?: string }> {
   try {
     const sb = client();
-    const { count, error } = await sb
-      .from("projects")
-      .select("*", { count: "exact", head: true });
+    const { count, error } = await sb.from("projects").select("*", { count: "exact", head: true });
     if (error) return { ok: false, projectCount: 0, error: error.message };
     return { ok: true, projectCount: count ?? 0 };
   } catch (error) {
@@ -168,4 +166,24 @@ export async function pingSupabase(): Promise<{ ok: boolean; projectCount: numbe
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export async function updateProjectById(
+  projectId: string,
+  fields: Partial<Project>
+): Promise<Project> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("projects")
+    .update(fields)
+    .eq("id", projectId)
+    .select("*")
+    .single();
+  if (error) throw new Error(`projects update: ${error.message}`);
+  return data as Project;
+}
+
+export async function upsertGitActivities(rows: GitActivity[]) {
+  if (!rows.length) return;
+  await upsertRows("git_activities", rows);
 }

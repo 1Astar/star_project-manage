@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseWorkbookPreview } from "@/lib/excel/parser";
 import { importSheetToProject } from "@/lib/excel/importer";
-import { getProjectById } from "@/lib/db";
+import { getProjectById } from "@/lib/db/local-store";
 
 export async function POST(
   request: Request,

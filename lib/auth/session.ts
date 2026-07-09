@@ -55,10 +55,17 @@ export async function clearAdminSession(): Promise<void> {
   jar.delete(COOKIE_NAME);
 }
 
-export function validateAdminCredentials(email: string, password: string): boolean {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@star.local";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "star-pm-dev";
-  return email === adminEmail && password === adminPassword;
+export function validateAdminCredentials(account: string, password: string): boolean {
+  const adminAccount =
+    process.env.ADMIN_USERNAME ??
+    process.env.ADMIN_EMAIL ??
+    "admin";
+
+  const adminPassword =
+    process.env.ADMIN_PASSWORD ??
+    "1567@";
+
+  return account === adminAccount && password === adminPassword;
 }
 
 export function isAuthRequired(): boolean {

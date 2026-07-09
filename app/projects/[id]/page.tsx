@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
-import { AppShell, StatCard } from "@/components/ui";
-import { ProjectNavLoader } from "@/components/project-nav-loader";
+import { ProjectGitPanel } from "@/components/project-git-panel";
+import { AppShell, ProjectNav, StatCard } from "@/components/ui";
 import { calcProjectStats } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
@@ -23,7 +23,7 @@ export default async function ProjectOverviewPage({
     <AppShell
       title={bundle.project.name}
       subtitle={bundle.iterations[0]?.name ?? "当前迭代"}
-      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="整体进度" value={`${stats.progressPercent}%`} />
@@ -33,20 +33,12 @@ export default async function ProjectOverviewPage({
         <StatCard label="已完成" value={stats.doneTasks} tone="success" />
       </div>
 
-      <section className="mt-6">
-        <Link
-          href={`/projects/${bundle.project.slug}/pool`}
-          className="card flex flex-col gap-1 border-violet-200 bg-violet-50 p-4 hover:border-violet-300 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <div className="font-semibold text-violet-900">需求池</div>
-            <p className="text-sm text-violet-700">
-              产品规划专用：录入功能点、导入 Notion CSV，成熟后再加入迭代看板。
-            </p>
-          </div>
-          <span className="text-sm font-medium text-violet-800">进入需求池 →</span>
-        </Link>
-      </section>
+      <div className="mt-8">
+        <ProjectGitPanel
+          project={bundle.project}
+          activities={bundle.git_activities}
+        />
+      </div>
 
       <section className="mt-8">
         <div className="mb-4 flex items-center justify-between">

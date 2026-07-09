@@ -2,8 +2,7 @@ import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { KanbanBoard } from "@/components/task-board";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { AppShell } from "@/components/ui";
-import { ProjectNavLoader } from "@/components/project-nav-loader";
+import { AppShell, ProjectNav } from "@/components/ui";
 
 export default async function ProjectBoardPage({
   params,
@@ -18,7 +17,7 @@ export default async function ProjectBoardPage({
     <AppShell
       title={`${bundle.project.name} · 需求看板`}
       subtitle="开发更新进度后，此处与原型侧栏实时同步"
-      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
       <RealtimeRefresh />
       <KanbanBoard

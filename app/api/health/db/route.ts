@@ -1,39 +1,36 @@
 import { NextResponse } from "next/server";
-import { isSupabaseConfigured, getSupabasePublicConfig } from "@/lib/supabase/config";
 import { pingSupabase } from "@/lib/db/supabase-store";
-import { getProjects } from "@/lib/db";
+import { getSupabasePublicConfig, isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function GET() {
-  const publicConfig = getSupabasePublicConfig();
+  const supabaseConfig = getSupabasePublicConfig();
 
   if (!isSupabaseConfigured()) {
-    const projects = await getProjects();
     return NextResponse.json({
-      backend: "local",
       ok: true,
-      projectCount: projects.length,
+      storage: process.env.VERCEL === "1" ? "vercel-memory" : "local-file",
       supabase: {
-        urlSet: Boolean(publicConfig.url),
-        anonKeySet: Boolean(publicConfig.anonKey),
-        serviceRoleSet: publicConfig.serviceRoleConfigured,
-        message: "未启用 Supabase，使用本地 JSON 存储",
+        urlConfigured: Boolean(supabaseConfig.url),
+        anonKeyConfigured: Boolean(supabaseConfig.anonKey),
+        serviceRoleConfigured: supabaseConfig.serviceRoleConfigured,
       },
+      hint: "未启用 Supabase：需在环境变量中设置 NEXT_PUBLIC_SUPABASE_URL 与 SUPABASE_SERVICE_ROLE_KEY",
     });
   }
 
-  const ping = await pingSupabase();
+  const result = await pingSupabase();
   return NextResponse.json({
-    backend: "supabase",
-    ok: ping.ok,
-    projectCount: ping.projectCount,
-    error: ping.error ?? null,
+    ok: result.ok,
+    storage: "supabase",
+    projectCount: result.projectCount,
+    error: result.error,
     supabase: {
-      urlSet: Boolean(publicConfig.url),
-      anonKeySet: Boolean(publicConfig.anonKey),
-      serviceRoleSet: publicConfig.serviceRoleConfigured,
-      message: ping.ok
-        ? "Supabase 已连接，数据持久化生效"
-        : "环境变量已填但连接失败，请检查 Key 与是否已执行 SQL 迁移",
+      urlConfigured: true,
+      anonKeyConfigured: Boolean(supabaseConfig.anonKey),
+      serviceRoleConfigured: true,
     },
+    hint: result.ok
+      ? undefined
+      : "Supabase 已配置但连接失败：检查 Key 是否正确，并在 SQL Editor 依次执行 001_init.sql、005_git.sql、007_studio.sql",
   });
 }

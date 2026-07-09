@@ -3,15 +3,14 @@ import type {
   AcceptanceRecord,
   ActivityLog,
   Bug,
+  GitActivity,
   Iteration,
   ModuleNode,
   NotificationItem,
-  PoolColumnDef,
   Project,
-  ProjectMember,
   Prototype,
-  PrototypeAnnotation,
   Requirement,
+  RequirementComment,
   RoleTask,
   ShareLink,
   TestRecord,
@@ -28,10 +27,9 @@ export interface DatabaseSnapshot {
   acceptance_records: AcceptanceRecord[];
   share_links: Array<ShareLink & { plain_token?: string }>;
   prototypes: Prototype[];
-  prototype_annotations: PrototypeAnnotation[];
   bugs: Bug[];
   notifications: NotificationItem[];
   activity_logs: ActivityLog[];
-  project_members: ProjectMember[];
-  pool_column_defs: PoolColumnDef[];
+  comments: RequirementComment[];
+  git_activities: GitActivity[];
 }

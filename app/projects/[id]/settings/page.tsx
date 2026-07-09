@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
+import { ProjectGitSettings } from "@/components/project-git-settings";
 import { SettingsClient } from "@/components/settings-client";
-import { DbStatusBanner } from "@/components/db-status";
-import { AppShell } from "@/components/ui";
-import { ProjectNavLoader } from "@/components/project-nav-loader";
+import { AppShell, ProjectNav } from "@/components/ui";
 
 export default async function ProjectSettingsPage({
   params,
@@ -18,17 +17,16 @@ export default async function ProjectSettingsPage({
     <AppShell
       title={`${bundle.project.name} · 项目设置`}
       subtitle="角色分享链接、原型来源与导入入口"
-      nav={<ProjectNavLoader projectId={bundle.project.id} slug={bundle.project.slug} />}
+      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
     >
-      <div className="mb-6">
-        <DbStatusBanner />
-      </div>
       <SettingsClient
         projectId={bundle.project.id}
         projectSlug={bundle.project.slug}
         shareLinks={bundle.share_links}
-        members={bundle.project_members}
       />
+      <div className="mt-8">
+        <ProjectGitSettings project={bundle.project} />
+      </div>
     </AppShell>
   );
 }

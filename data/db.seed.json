@@ -1,31 +1,57 @@
 {
   "projects": [
     {
-      "id": "proj-ai-pet",
+      "id": "a1000001-0001-4001-8001-000000000001",
       "name": "AI 宠物",
       "slug": "ai-pet",
       "description": "宠物 App 优化需求管理",
-      "created_at": "2026-06-22T00:00:00.000Z"
+      "created_at": "2026-06-22T00:00:00.000Z",
+      "repo_full_name": null,
+      "repo_branch": null,
+      "repo_url": null,
+      "last_commit_sha": null,
+      "last_commit_message": null,
+      "last_commit_at": null,
+      "last_git_synced_at": null,
+      "vercel_project_id": null,
+      "vercel_deployment_url": null,
+      "last_deploy_status": null,
+      "demo_url": null,
+      "local_run_guide": null,
+      "code_path": null
     },
     {
-      "id": "proj-ai-controller",
+      "id": "a1000001-0001-4001-8001-000000000002",
       "name": "AI 控制器",
       "slug": "ai-controller",
       "description": "元井 AI 控制器优化需求管理",
-      "created_at": "2026-06-22T00:00:00.000Z"
+      "created_at": "2026-06-22T00:00:00.000Z",
+      "repo_full_name": null,
+      "repo_branch": null,
+      "repo_url": null,
+      "last_commit_sha": null,
+      "last_commit_message": null,
+      "last_commit_at": null,
+      "last_git_synced_at": null,
+      "vercel_project_id": null,
+      "vercel_deployment_url": null,
+      "last_deploy_status": null,
+      "demo_url": null,
+      "local_run_guide": null,
+      "code_path": null
     }
   ],
   "iterations": [
     {
-      "id": "iter-ai-pet-202606",
-      "project_id": "proj-ai-pet",
+      "id": "a2000001-0001-4001-8001-000000000001",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
       "name": "20260610 优化版本",
       "sort_order": 1,
       "created_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "iter-ai-controller-202604",
-      "project_id": "proj-ai-controller",
+      "id": "a2000001-0001-4001-8001-000000000002",
+      "project_id": "a1000001-0001-4001-8001-000000000002",
       "name": "20260417 元井AI控制器",
       "sort_order": 1,
       "created_at": "2026-06-22T00:00:00.000Z"
@@ -34,9 +60,9 @@
   "modules": [],
   "requirements": [
     {
-      "id": "req-pet-home",
-      "project_id": "proj-ai-pet",
-      "iteration_id": "iter-ai-pet-202606",
+      "id": "b1000001-0001-4001-8001-000000000001",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
+      "iteration_id": "a2000001-0001-4001-8001-000000000001",
       "module_l1_id": null,
       "module_l2_id": null,
       "title": "主页页面整体结构优化",
@@ -51,9 +77,9 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "req-pet-banner",
-      "project_id": "proj-ai-pet",
-      "iteration_id": "iter-ai-pet-202606",
+      "id": "b1000001-0001-4001-8001-000000000002",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
+      "iteration_id": "a2000001-0001-4001-8001-000000000001",
       "module_l1_id": null,
       "module_l2_id": null,
       "title": "安静状态下的陪伴专注横幅",
@@ -68,9 +94,9 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "req-pet-push",
-      "project_id": "proj-ai-pet",
-      "iteration_id": "iter-ai-pet-202606",
+      "id": "b1000001-0001-4001-8001-000000000003",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
+      "iteration_id": "a2000001-0001-4001-8001-000000000001",
       "module_l1_id": null,
       "module_l2_id": null,
       "title": "推送模块（推送/勿扰/喝水）",
@@ -85,9 +111,9 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "req-ctrl-mask",
-      "project_id": "proj-ai-controller",
-      "iteration_id": "iter-ai-controller-202604",
+      "id": "b1000001-0001-4001-8001-000000000004",
+      "project_id": "a1000001-0001-4001-8001-000000000002",
+      "iteration_id": "a2000001-0001-4001-8001-000000000002",
       "module_l1_id": null,
       "module_l2_id": null,
       "title": "下控遮罩等待界面",
@@ -102,9 +128,9 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "req-ctrl-migrate",
-      "project_id": "proj-ai-controller",
-      "iteration_id": "iter-ai-controller-202604",
+      "id": "b1000001-0001-4001-8001-000000000005",
+      "project_id": "a1000001-0001-4001-8001-000000000002",
+      "iteration_id": "a2000001-0001-4001-8001-000000000002",
       "module_l1_id": null,
       "module_l2_id": null,
       "title": "设备归属和批量迁移",
@@ -121,40 +147,40 @@
   ],
   "acceptance_items": [
     {
-      "id": "acc-pet-home",
-      "requirement_id": "req-pet-home",
+      "id": "c1000001-0001-4001-8001-000000000001",
+      "requirement_id": "b1000001-0001-4001-8001-000000000001",
       "description": "主页页面整体结构优化 - 功能符合 PRD",
       "passed": null,
       "note": null,
       "sort_order": 1
     },
     {
-      "id": "acc-pet-banner",
-      "requirement_id": "req-pet-banner",
+      "id": "c1000001-0001-4001-8001-000000000002",
+      "requirement_id": "b1000001-0001-4001-8001-000000000002",
       "description": "安静状态下的陪伴专注横幅 - 功能符合 PRD",
       "passed": false,
       "note": "横幅在横屏下位置偏移",
       "sort_order": 1
     },
     {
-      "id": "acc-pet-push",
-      "requirement_id": "req-pet-push",
+      "id": "c1000001-0001-4001-8001-000000000003",
+      "requirement_id": "b1000001-0001-4001-8001-000000000003",
       "description": "推送模块（推送/勿扰/喝水） - 功能符合 PRD",
       "passed": null,
       "note": null,
       "sort_order": 1
     },
     {
-      "id": "acc-ctrl-mask",
-      "requirement_id": "req-ctrl-mask",
+      "id": "c1000001-0001-4001-8001-000000000004",
+      "requirement_id": "b1000001-0001-4001-8001-000000000004",
       "description": "下控遮罩等待界面 - 验收标准达成",
       "passed": null,
       "note": null,
       "sort_order": 1
     },
     {
-      "id": "acc-ctrl-migrate",
-      "requirement_id": "req-ctrl-migrate",
+      "id": "c1000001-0001-4001-8001-000000000005",
+      "requirement_id": "b1000001-0001-4001-8001-000000000005",
       "description": "设备归属和批量迁移 - 验收标准达成",
       "passed": null,
       "note": null,
@@ -163,8 +189,8 @@
   ],
   "role_tasks": [
     {
-      "id": "task-pet-ui-home",
-      "requirement_id": "req-pet-home",
+      "id": "d1000001-0001-4001-8001-000000000001",
+      "requirement_id": "b1000001-0001-4001-8001-000000000001",
       "role": "ui",
       "assignee": "游春梅",
       "estimate_hours": null,
@@ -178,8 +204,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-pet-fe-home",
-      "requirement_id": "req-pet-home",
+      "id": "d1000001-0001-4001-8001-000000000002",
+      "requirement_id": "b1000001-0001-4001-8001-000000000001",
       "role": "frontend",
       "assignee": "陈伟平",
       "estimate_hours": null,
@@ -193,8 +219,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-pet-be-banner",
-      "requirement_id": "req-pet-banner",
+      "id": "d1000001-0001-4001-8001-000000000003",
+      "requirement_id": "b1000001-0001-4001-8001-000000000002",
       "role": "backend",
       "assignee": "李德堂",
       "estimate_hours": 16,
@@ -208,8 +234,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-pet-fe-banner",
-      "requirement_id": "req-pet-banner",
+      "id": "d1000001-0001-4001-8001-000000000004",
+      "requirement_id": "b1000001-0001-4001-8001-000000000002",
       "role": "frontend",
       "assignee": "陈伟平",
       "estimate_hours": 24,
@@ -223,8 +249,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-pet-be-push",
-      "requirement_id": "req-pet-push",
+      "id": "d1000001-0001-4001-8001-000000000005",
+      "requirement_id": "b1000001-0001-4001-8001-000000000003",
       "role": "backend",
       "assignee": "李德堂",
       "estimate_hours": 40,
@@ -238,8 +264,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-ctrl-be-mask",
-      "requirement_id": "req-ctrl-mask",
+      "id": "d1000001-0001-4001-8001-000000000006",
+      "requirement_id": "b1000001-0001-4001-8001-000000000004",
       "role": "backend",
       "assignee": "谢鑫",
       "estimate_hours": 12,
@@ -253,8 +279,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-ctrl-fe-mask",
-      "requirement_id": "req-ctrl-mask",
+      "id": "d1000001-0001-4001-8001-000000000007",
+      "requirement_id": "b1000001-0001-4001-8001-000000000004",
       "role": "frontend",
       "assignee": "陈伟平",
       "estimate_hours": 4,
@@ -268,8 +294,8 @@
       "updated_at": "2026-06-22T00:00:00.000Z"
     },
     {
-      "id": "task-ctrl-be-migrate",
-      "requirement_id": "req-ctrl-migrate",
+      "id": "d1000001-0001-4001-8001-000000000008",
+      "requirement_id": "b1000001-0001-4001-8001-000000000005",
       "role": "backend",
       "assignee": "谢鑫",
       "estimate_hours": 8,
@@ -287,43 +313,42 @@
   "acceptance_records": [],
   "share_links": [
     {
-      "id": "link-pet-frontend",
-      "project_id": "proj-ai-pet",
+      "id": "f1000001-0001-4001-8001-000000000001",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
       "role": "frontend",
       "label": "前端协作链接",
-      "token_hash": "b06fad2bf3b89a8d6ac70d84e1160983b4c55796799928aa14b87dafc3f8f730",
+      "token_hash": "75b550d24d2cd7fbaad75a782acfb4125c3013c730ff262a3ae0e5189a27b57a",
       "is_active": true,
       "created_at": "2026-06-22T00:00:00.000Z",
-      "plain_token": "star-share-frontend-dev"
+      "plain_token": "r1DJVsDe9A_uNbnOOP8_NG2uRThbAwyOs13NIlLLkes"
     },
     {
-      "id": "link-pet-backend",
-      "project_id": "proj-ai-pet",
+      "id": "f1000001-0001-4001-8001-000000000002",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
       "role": "backend",
       "label": "后端协作链接",
-      "token_hash": "aa0db3115fb89b3174acad9c15ac511d946e1b3d0ac88e6bf4bd2898b84bc758",
+      "token_hash": "379e160505d96ed5c0c0e98dd0f7fde9b2003b1e4fd347b750f598444aacea05",
       "is_active": true,
       "created_at": "2026-06-22T00:00:00.000Z",
-      "plain_token": "star-share-backend-dev"
+      "plain_token": "_NHLoQqhZoYYubaVKpHs75rznbhA_yaW3jY7EN-7X-E"
     },
     {
-      "id": "link-pet-test",
-      "project_id": "proj-ai-pet",
+      "id": "f1000001-0001-4001-8001-000000000003",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
       "role": "test",
       "label": "测试协作链接",
-      "token_hash": "20839ed163534ced5ac7f1d4d0390531ba98af2be37b99a13492ba40eba3eaba",
+      "token_hash": "f9833d8ffbb070603ffb76504908bf6301dfd09d8e4311adcae1782e2e1d0ba5",
       "is_active": true,
       "created_at": "2026-06-22T00:00:00.000Z",
-      "plain_token": "star-share-test-dev"
+      "plain_token": "NE6Ne8wMs3JxK9mUHqEQ6IP-8a1aJRvZZ_DwuY9tWZ8"
     }
   ],
   "prototypes": [],
-  "prototype_annotations": [],
   "bugs": [],
   "notifications": [
     {
-      "id": "notif-pet-acceptance",
-      "project_id": "proj-ai-pet",
+      "id": "e1000001-0001-4001-8001-000000000001",
+      "project_id": "a1000001-0001-4001-8001-000000000001",
       "recipient_name": "产品",
       "type": "acceptance_pending",
       "title": "2 条需求待产品验收",
@@ -333,5 +358,7 @@
       "created_at": "2026-06-22T00:00:00.000Z"
     }
   ],
-  "activity_logs": []
+  "activity_logs": [],
+  "comments": [],
+  "git_activities": []
 }

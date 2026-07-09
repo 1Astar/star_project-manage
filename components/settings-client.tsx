@@ -3,9 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createShareLinkAction, toggleShareLinkAction } from "@/lib/actions";
-import type { ShareLink, RoleType, ProjectMember } from "@/lib/types";
+import type { ShareLink, RoleType } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
-import { MembersRoster } from "@/components/members-roster";
 
 type ShareLinkWithToken = ShareLink & { plain_token?: string };
 
@@ -13,12 +12,10 @@ export function SettingsClient({
   projectId,
   projectSlug,
   shareLinks,
-  members,
 }: {
   projectId: string;
   projectSlug: string;
   shareLinks: ShareLinkWithToken[];
-  members: ProjectMember[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -26,9 +23,17 @@ export function SettingsClient({
   const [externalUrl, setExternalUrl] = useState("");
   const [protoName, setProtoName] = useState("原型");
 
-  function createLink(role: RoleType) {
+  function createLink(role: ShareLink["role"]) {
+    const label =
+      role === "readonly"
+        ? "只读链接"
+        : role === "test"
+          ? "测试链接"
+          : role === "admin"
+            ? "管理员链接"
+            : `${ROLE_LABELS[role as RoleType]}链接`;
     startTransition(async () => {
-      await createShareLinkAction(projectId, role, `${ROLE_LABELS[role]}链接`);
+      await createShareLinkAction(projectId, role, label);
       router.refresh();
     });
   }
@@ -77,12 +82,6 @@ export function SettingsClient({
 
   return (
     <div className="space-y-8">
-      <MembersRoster
-        projectId={projectId}
-        projectSlug={projectSlug}
-        members={members}
-      />
-
       <section className="card p-5">
         <h2 className="font-semibold">原型来源</h2>
         <form onSubmit={uploadPrototype} className="mt-4 space-y-3">
@@ -133,10 +132,10 @@ export function SettingsClient({
       <section className="card p-5">
         <h2 className="font-semibold">角色分享链接（免登录）</h2>
         <p className="mt-1 text-sm text-slate-500">
-          成员首次访问填写显示名，只能更新对应角色任务。Token 仅创建时显示一次。
+          成员免登录访问。测试链接可勾选验收项；所有角色可在项目内评论。Token 仅创建时显示一次。
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(["frontend", "backend", "embedded", "test"] as const).map((role) => (
+          {(["frontend", "backend", "embedded", "test", "product", "readonly"] as ShareLink["role"][]).map((role) => (
             <button
               key={role}
               type="button"
@@ -144,7 +143,7 @@ export function SettingsClient({
               onClick={() => createLink(role)}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
             >
-              生成{ROLE_LABELS[role]}链接
+              生成{role === "readonly" ? "只读" : role === "test" ? "测试" : role === "admin" ? "管理员" : ROLE_LABELS[role as RoleType]}链接
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { saveRoleTaskAction, updateTaskStatusAction } from "@/lib/actions";
 import { ROLE_LABELS, TASK_STATUS_FLOW, TASK_STATUS_LABELS } from "@/lib/types";
 import type { Requirement, RoleTask, TaskStatus } from "@/lib/types";
@@ -62,7 +63,18 @@ export function TaskCard({
             {ROLE_LABELS[task.role]}
             {task.assignee ? ` · ${task.assignee}` : ""}
           </div>
-          <div className="mt-1 font-medium text-slate-900">{requirement.title}</div>
+          <div className="mt-1 font-medium text-slate-900">
+            {shareToken ? (
+              <Link
+                href={`/share/${shareToken}/items/${requirement.id}`}
+                className="hover:text-blue-600 hover:underline"
+              >
+                {requirement.title}
+              </Link>
+            ) : (
+              requirement.title
+            )}
+          </div>
         </div>
         <StatusBadge status={task.status} />
       </div>

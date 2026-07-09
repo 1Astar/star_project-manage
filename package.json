@@ -1,13 +1,13 @@
 {
   "name": "star-pm",
-  "version": "0.1.0",
+  "version": "1.1.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:seed": "node scripts/generate-seed.mjs",
+    "db:check": "tsx --env-file=.env.local scripts/db-check.ts",
     "db:types": "echo 'Run supabase gen types after linking project'"
   },
   "dependencies": {
@@ -32,6 +32,7 @@
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.3",
     "tailwindcss": "^4.1.8",
+    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
 }

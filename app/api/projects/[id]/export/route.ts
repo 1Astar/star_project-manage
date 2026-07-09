@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
-import { getProjectBundle } from "@/lib/db";
+import { getProjectBundle } from "@/lib/db/local-store";
 import { ROLE_LABELS, TASK_STATUS_LABELS } from "@/lib/types";
 
 export async function GET(
