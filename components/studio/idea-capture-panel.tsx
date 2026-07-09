@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { OpenAiSettingsPanel } from "@/components/studio/openai-settings-panel";
 import { StudioBadge } from "@/components/studio/shell";
+import { loadOpenAiSettings } from "@/lib/studio/ai/openai-settings";
 import {
   EMOTION_LABELS,
   IDEA_TYPE_LABELS,
@@ -57,6 +59,7 @@ export function IdeaCapturePanel({ projects, ideas }: IdeaCapturePanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<AnalysisPayload | null>(null);
   const [syncToProject, setSyncToProject] = useState(true);
+  const [settingsReady, setSettingsReady] = useState(() => !!loadOpenAiSettings());
 
   const linkOptions = useMemo(() => {
     if (linkMode === "project") return projects;
@@ -68,6 +71,12 @@ export function IdeaCapturePanel({ projects, ideas }: IdeaCapturePanelProps) {
     const text = rawInput.trim();
     if (!text) {
       setError("先写下你的灵感");
+      return;
+    }
+
+    const aiSettings = loadOpenAiSettings();
+    if (!aiSettings) {
+      setError("请先在下方配置 OpenAI API Key");
       return;
     }
 
@@ -83,6 +92,8 @@ export function IdeaCapturePanel({ projects, ideas }: IdeaCapturePanelProps) {
           rawInput: text,
           relatedProjectId: linkMode === "project" && linkId ? linkId : null,
           relatedIdeaId: linkMode === "idea" && linkId ? linkId : null,
+          openAiApiKey: aiSettings.apiKey,
+          openAiModel: aiSettings.model,
         }),
       });
       const data = await res.json();
@@ -158,6 +169,14 @@ export function IdeaCapturePanel({ projects, ideas }: IdeaCapturePanelProps) {
       <p className="mt-1 text-xs text-sky-700/80">
         随便写一段话，可选关联项目或已有灵感；AI 会定 P0–P3 并拆出子任务。
       </p>
+
+      <div className="mt-3">
+        <OpenAiSettingsPanel onSaved={() => setSettingsReady(true)} />
+      </div>
+
+      {!settingsReady ? (
+        <p className="mt-2 text-xs text-amber-700">配置 OpenAI Key 后才能使用 AI 拆解。</p>
+      ) : null}
 
       <textarea
         value={rawInput}

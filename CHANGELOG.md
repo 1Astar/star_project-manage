@@ -10,6 +10,12 @@
 
 ---
 
+## v1.1.4 · 2026-07-09
+
+- OpenAI 配置改为**网页自主配置**：`/studio/inbox` 内展开「OpenAI 配置」
+- API Key / 模型保存在浏览器 **localStorage**（`star-pm:openai-settings:v1`），不再依赖 Vercel 环境变量
+- AI 拆解请求由前端携带 Key，服务端仅转发 OpenAI，不落库
+
 ## v1.1.3 · 2026-07-09
 
 - 灵感收件箱：**发送灵感 · AI 拆解优先级**（OpenAI 结构化 JSON）

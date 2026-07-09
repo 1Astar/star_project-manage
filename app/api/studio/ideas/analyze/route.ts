@@ -6,6 +6,8 @@ type AnalyzeBody = {
   rawInput?: string;
   relatedProjectId?: string | null;
   relatedIdeaId?: string | null;
+  openAiApiKey?: string;
+  openAiModel?: string;
 };
 
 export async function POST(request: Request) {
@@ -48,7 +50,10 @@ export async function POST(request: Request) {
       };
     }
 
-    const analysis = await analyzeIdeaWithOpenAi(context);
+    const analysis = await analyzeIdeaWithOpenAi(context, {
+      apiKey: body?.openAiApiKey ?? "",
+      model: body?.openAiModel,
+    });
     return studioOk({ analysis });
   } catch (error) {
     return mapStudioError(error);

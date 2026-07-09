@@ -30,6 +30,11 @@ export const ideaAnalysisSchema = z.object({
 
 export type IdeaAnalysisResult = z.infer<typeof ideaAnalysisSchema>;
 
+export type OpenAiCredentials = {
+  apiKey: string;
+  model?: string;
+};
+
 export type AnalyzeIdeaContext = {
   rawInput: string;
   relatedProject?: {
@@ -42,12 +47,12 @@ export type AnalyzeIdeaContext = {
   relatedIdea?: Pick<Idea, "title" | "oneLineIdea" | "whyItMatters" | "priority" | "type"> | null;
 };
 
-function getOpenAiConfig() {
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey) throw new Error("OPENAI_API_KEY 未配置");
+function resolveOpenAiCredentials(credentials: OpenAiCredentials) {
+  const apiKey = credentials.apiKey?.trim();
+  if (!apiKey) throw new Error("请先在页面配置 OpenAI API Key");
   return {
     apiKey,
-    model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
+    model: credentials.model?.trim() || "gpt-4o-mini",
   };
 }
 
@@ -107,8 +112,11 @@ function parseJsonContent(content: string): unknown {
   return JSON.parse(payload);
 }
 
-export async function analyzeIdeaWithOpenAi(context: AnalyzeIdeaContext): Promise<IdeaAnalysisResult> {
-  const { apiKey, model } = getOpenAiConfig();
+export async function analyzeIdeaWithOpenAi(
+  context: AnalyzeIdeaContext,
+  credentials: OpenAiCredentials
+): Promise<IdeaAnalysisResult> {
+  const { apiKey, model } = resolveOpenAiCredentials(credentials);
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
