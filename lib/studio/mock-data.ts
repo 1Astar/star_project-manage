@@ -15,6 +15,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: "cd E:\\projects\\moonpie\npnpm dev",
     codePath: "E:\\projects\\moonpie",
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: "https://app.notion.com/p/Moonpie-395a86f50915810a9bf2da9551d6e782",
     portfolioValue: "作品集核心项目：手势交互 + 文化学习 + 情绪叙事",
     body: {
@@ -50,6 +54,10 @@ export const mockProjects: Project[] = [
     demoUrl: "https://star-project-manage.vercel.app",
     localRunGuide: "cd star-pm\nnpm run dev",
     codePath: "E:\\文档\\star\\工具\\private\\工具\\star-pm",
+    githubRepo: "1Astar/star_project-manage",
+    vercelUrl: "https://star-project-manage.vercel.app",
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "展示产品全流程管理能力 + 技术全栈",
     body: {
@@ -78,6 +86,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: null,
     codePath: null,
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "商业产品实战经验",
     body: {
@@ -106,6 +118,10 @@ export const mockProjects: Project[] = [
     demoUrl: null,
     localRunGuide: null,
     codePath: null,
+    githubRepo: null,
+    vercelUrl: null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "教育 + 文化赛道探索",
     body: {
@@ -253,7 +269,14 @@ export const mockIdeas: Idea[] = [
     status: "parked",
     createdAt: "2026-06-25T11:00:00.000Z",
   },
-];
+].map((idea) => ({
+  suggestedNextStep: "",
+  githubIssueNumber: null,
+  githubIssueUrl: null,
+  githubLabels: [] as string[],
+  updatedAt: idea.createdAt,
+  ...idea,
+})) as Idea[];
 
 export const mockEvolutionLogs: EvolutionLog[] = [
   {
@@ -334,6 +357,11 @@ export const mockTasks: StudioTask[] = [
     workload: "2d",
     blocker: null,
     dueDate: "2026-07-12",
+    progressNote: "层级草图已定，待补动效",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   },
   {
     id: "task-002",
@@ -344,6 +372,11 @@ export const mockTasks: StudioTask[] = [
     workload: "0.5d",
     blocker: null,
     dueDate: "2026-07-10",
+    progressNote: "",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   },
   {
     id: "task-003",
@@ -354,6 +387,11 @@ export const mockTasks: StudioTask[] = [
     workload: "1d",
     blocker: null,
     dueDate: "2026-07-08",
+    progressNote: "Dashboard + 收件箱已上线",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   },
   {
     id: "task-004",
@@ -364,6 +402,11 @@ export const mockTasks: StudioTask[] = [
     workload: "0.5d",
     blocker: "等待后端排期",
     dueDate: "2026-07-15",
+    progressNote: "",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   },
   {
     id: "task-005",
@@ -374,6 +417,11 @@ export const mockTasks: StudioTask[] = [
     workload: "1d",
     blocker: "结果页优先",
     dueDate: null,
+    progressNote: "",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   },
 ];
 

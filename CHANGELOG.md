@@ -10,6 +10,38 @@
 
 ---
 
+## v1.3.0 · 2026-07-09
+
+- **信息架构统一**：Star PM 与 Idea Studio 合并为一套「个人项目操作台」导航（今日工作台 / 项目库 / 灵感收件箱 / 我的待办 / 演进记录 / 资料·链接 / 密钥索引 / 设置）
+- **项目详情 6 Tab**：项目恢复 · 需求与任务 · 原型与验收 · 进度排期 · 迭代记录 · 资料链接；Excel 导入与项目设置收入「更多操作」
+- **今日工作台驾驶舱**：今日焦点 / 主线 / 待处理提醒 + 项目库卡片 + 最近灵感 / 演进 / Git 更新
+- **视觉统一**：背景 `#F7F8FA`、靛蓝主色、12px 圆角；旧 `/studio/*` 路由重定向至新路径
+- 顶栏 **「退出」改为「返回」**（按层级回到项目恢复 / 项目库 / 工作台）
+
+## v1.2.2 · 2026-07-09
+
+- 灵感收件箱 / 停车场新增 **「转成项目」** 按钮（调用已有 `POST /api/studio/ideas/[id]/convert`）
+- 一键：创建 Project · 初始演进记录 · 状态改 converted · 回填 relatedProjectId
+
+## v1.2.1 · 2026-07-09
+
+- Studio 首页顶部 **「+ 捕捉一个想法」** 弹窗：原始想法 / 为什么 / 关联项目 / 情绪 / 停车场
+- AI 评估 **实现性 + 竞争力**（1–5 分）并拆解需求任务，可同步写入项目任务列表
+- 项目详情 **需求任务板**：优先级、手动完成、Git commit 检测、进度备注（`010_studio_task_progress.sql`）
+
+## v1.2.0 · 2026-07-09
+
+- **AI 灵感收件箱 + GitHub Issue 中转**：`POST /api/ideas/capture` 创建 Issue，不直接写库
+- **定时/手动同步**：`GET /api/github/sync-ideas`、`POST /api/studio/ideas/sync`、`/api/cron/sync-ideas`
+- 收件箱新增 **AI Capture 模板**（结构化粘贴 + 同步按钮）
+- Idea 转 Project 时自动写入 **演进记录**（初始想法）
+- **项目恢复卡**扩展：GitHub / Vercel / 最近 Git 更新 / 暂时不做
+
+## v1.1.5 · 2026-07-09
+
+- 修复 Vercel 构建：恢复**需求池**相关 actions / db / types 导出（`fetchPoolData`、`ensurePoolIteration` 等）
+- 合并 pool 页面与组件；Supabase 读取补 `project_members`、`pool_column_defs`
+
 ## v1.1.4 · 2026-07-09
 
 - OpenAI 配置改为**网页自主配置**：`/studio/inbox` 内展开「OpenAI 配置」

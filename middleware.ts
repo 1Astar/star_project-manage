@@ -6,6 +6,8 @@ const PUBLIC_PREFIXES = [
   "/share",
   "/ui-preview",
   "/api/cron",
+  "/api/ideas",
+  "/api/github/sync-ideas",
   "/_next",
   "/favicon",
   "/prototypes",

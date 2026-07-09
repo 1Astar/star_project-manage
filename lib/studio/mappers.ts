@@ -33,6 +33,10 @@ export interface StudioProjectRow {
   demo_url: string | null;
   local_run_guide: string | null;
   code_path: string | null;
+  github_repo: string | null;
+  vercel_url: string | null;
+  last_commit_message: string | null;
+  last_commit_at: string | null;
   related_page_url: string | null;
   portfolio_value: string;
   body: ProjectBody | Record<string, string>;
@@ -54,7 +58,12 @@ export interface StudioIdeaRow {
   related_idea_id: string | null;
   subtasks: IdeaSubtask[] | unknown;
   status: string;
+  suggested_next_step: string;
+  github_issue_number: number | null;
+  github_issue_url: string | null;
+  github_labels: string[] | unknown;
   created_at: string;
+  updated_at: string;
 }
 
 export interface StudioEvolutionRow {
@@ -78,6 +87,11 @@ export interface StudioTaskRow {
   workload: string;
   blocker: string | null;
   due_date: string | null;
+  progress_note?: string;
+  completion_source?: string | null;
+  git_commit_sha?: string | null;
+  git_commit_message?: string | null;
+  source_idea_id?: string | null;
   created_at: string;
 }
 
@@ -135,6 +149,10 @@ export function projectToRow(project: Project): StudioProjectRow {
     demo_url: project.demoUrl,
     local_run_guide: project.localRunGuide,
     code_path: project.codePath,
+    github_repo: project.githubRepo,
+    vercel_url: project.vercelUrl,
+    last_commit_message: project.lastCommitMessage,
+    last_commit_at: project.lastCommitAt,
     related_page_url: project.relatedPageUrl,
     portfolio_value: project.portfolioValue,
     body: project.body,
@@ -156,6 +174,10 @@ export function rowToProject(row: StudioProjectRow): Project {
     demoUrl: row.demo_url,
     localRunGuide: row.local_run_guide,
     codePath: row.code_path,
+    githubRepo: row.github_repo ?? null,
+    vercelUrl: row.vercel_url ?? null,
+    lastCommitMessage: row.last_commit_message ?? null,
+    lastCommitAt: row.last_commit_at ?? null,
     relatedPageUrl: row.related_page_url,
     portfolioValue: row.portfolio_value,
     body: normalizeBody(row.body),
@@ -179,7 +201,12 @@ export function ideaToRow(idea: Idea): StudioIdeaRow {
     related_idea_id: idea.relatedIdeaId,
     subtasks: idea.subtasks,
     status: idea.status,
+    suggested_next_step: idea.suggestedNextStep,
+    github_issue_number: idea.githubIssueNumber,
+    github_issue_url: idea.githubIssueUrl,
+    github_labels: idea.githubLabels,
     created_at: idea.createdAt,
+    updated_at: idea.updatedAt,
   };
 }
 
@@ -198,7 +225,12 @@ export function rowToIdea(row: StudioIdeaRow): Idea {
     relatedIdeaId: row.related_idea_id ?? null,
     subtasks: normalizeSubtasks(row.subtasks),
     status: row.status as Idea["status"],
+    suggestedNextStep: row.suggested_next_step ?? "",
+    githubIssueNumber: row.github_issue_number ?? null,
+    githubIssueUrl: row.github_issue_url ?? null,
+    githubLabels: Array.isArray(row.github_labels) ? row.github_labels.map(String) : [],
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
   };
 }
 
@@ -240,6 +272,11 @@ export function taskToRow(task: StudioTask): StudioTaskRow {
     workload: task.workload,
     blocker: task.blocker,
     due_date: task.dueDate,
+    progress_note: task.progressNote,
+    completion_source: task.completionSource,
+    git_commit_sha: task.gitCommitSha,
+    git_commit_message: task.gitCommitMessage,
+    source_idea_id: task.sourceIdeaId,
     created_at: new Date().toISOString(),
   };
 }
@@ -254,6 +291,11 @@ export function rowToTask(row: StudioTaskRow): StudioTask {
     workload: row.workload,
     blocker: row.blocker,
     dueDate: row.due_date,
+    progressNote: row.progress_note ?? "",
+    completionSource: (row.completion_source as StudioTask["completionSource"]) ?? null,
+    gitCommitSha: row.git_commit_sha ?? null,
+    gitCommitMessage: row.git_commit_message ?? null,
+    sourceIdeaId: row.source_idea_id ?? null,
   };
 }
 

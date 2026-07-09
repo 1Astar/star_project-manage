@@ -4,16 +4,37 @@ import { revalidatePath } from "next/cache";
 import {
   addRequirementComment,
   addTestRecordWithPermission,
+  claimShareAssignee,
+  createPoolColumnDef,
+  createPoolRequirement,
+  createProjectMember,
   createShareLink,
+  deletePoolColumnDef,
+  deletePoolRequirement,
+  deleteProjectMember,
+  getPoolBundle,
   getProjectBundle,
   getProjects,
   getShareLinkByToken,
+  promotePoolRequirement,
   toggleShareLink,
+  updateAcceptanceItem,
   updateAcceptanceItemWithPermission,
+  updatePoolRequirement,
   updateProjectGitSettings,
+  updateProjectMember,
+  updateProjectPoolTagOptions,
+  updateRequirement,
   updateRoleTaskWithPermission,
 } from "@/lib/db/local-store";
-import type { RoleTask, ShareLink, TaskStatus } from "@/lib/types";
+import type {
+  PoolColumnType,
+  RequirementUpdates,
+  RoleTask,
+  RoleType,
+  ShareLink,
+  TaskStatus,
+} from "@/lib/types";
 import { calcProjectStats } from "@/lib/utils";
 
 export async function fetchDashboardData() {
@@ -36,6 +57,162 @@ export async function fetchDashboardData() {
 
 export async function fetchProjectBoard(projectId: string) {
   return getProjectBundle(projectId);
+}
+
+export async function fetchPoolData(projectId: string) {
+  return getPoolBundle(projectId);
+}
+
+export async function savePoolRequirementAction(input: {
+  requirementId: string;
+  projectSlug: string;
+  updates: RequirementUpdates;
+}) {
+  await updatePoolRequirement(input.requirementId, input.updates, {
+    name: "产品",
+    role: "admin",
+  });
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function saveRequirementMetaAction(input: {
+  requirementId: string;
+  projectSlug: string;
+  updates: Pick<
+    RequirementUpdates,
+    "prd_link" | "prototype_link" | "product_estimate_hours" | "tags" | "custom_fields"
+  >;
+}) {
+  await updateRequirement(input.requirementId, input.updates, {
+    name: "产品",
+    role: "admin",
+  });
+  revalidatePath(`/projects/${input.projectSlug}/requirements/${input.requirementId}`);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/board`);
+}
+
+export async function createPoolColumnAction(input: {
+  projectId: string;
+  projectSlug: string;
+  label: string;
+  columnType: PoolColumnType;
+  options?: string[];
+}) {
+  await createPoolColumnDef({
+    project_id: input.projectId,
+    label: input.label,
+    column_type: input.columnType,
+    options: input.options,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function deletePoolColumnAction(defId: string, projectSlug: string) {
+  await deletePoolColumnDef(defId);
+  revalidatePath(`/projects/${projectSlug}/pool`);
+}
+
+export async function savePoolTagOptionsAction(input: {
+  projectId: string;
+  projectSlug: string;
+  tagOptions: string[];
+}) {
+  await updateProjectPoolTagOptions(input.projectId, input.tagOptions);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function createPoolRequirementAction(projectSlug: string, projectId: string) {
+  await createPoolRequirement(projectId, { title: "新功能点" });
+  revalidatePath(`/projects/${projectSlug}/pool`);
+}
+
+export async function deletePoolRequirementAction(
+  requirementId: string,
+  projectSlug: string
+) {
+  await deletePoolRequirement(requirementId);
+  revalidatePath(`/projects/${projectSlug}/pool`);
+}
+
+export async function promotePoolRequirementAction(input: {
+  requirementId: string;
+  iterationId: string;
+  projectSlug: string;
+}) {
+  await promotePoolRequirement(input.requirementId, input.iterationId, {
+    name: "产品",
+    role: "admin",
+  });
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/board`);
+  revalidatePath(`/projects/${input.projectSlug}`);
+}
+
+export async function createMemberAction(input: {
+  projectId: string;
+  projectSlug: string;
+  name: string;
+  role?: RoleType | null;
+}) {
+  await createProjectMember({
+    project_id: input.projectId,
+    name: input.name,
+    role: input.role,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/settings`);
+}
+
+export async function toggleMemberAction(input: {
+  memberId: string;
+  isActive: boolean;
+  projectSlug: string;
+}) {
+  await updateProjectMember(input.memberId, { is_active: input.isActive });
+  revalidatePath(`/projects/${input.projectSlug}/settings`);
+}
+
+export async function deleteMemberAction(input: {
+  memberId: string;
+  projectSlug: string;
+  clearAssignees?: boolean;
+}) {
+  await deleteProjectMember(input.memberId, input.clearAssignees ?? false);
+  revalidatePath(`/projects/${input.projectSlug}/settings`);
+}
+
+export async function claimShareIdentityAction(input: {
+  shareToken: string;
+  displayName: string;
+}) {
+  return claimShareAssignee(input.shareToken, input.displayName);
+}
+
+export async function saveRequirementNoteAction(input: {
+  requirementId: string;
+  note: string;
+  projectId: string;
+  projectSlug: string;
+}) {
+  const bundle = await getProjectBundle(input.projectId);
+  const acceptanceItem = bundle?.acceptance_items.find(
+    (a) => a.requirement_id === input.requirementId
+  );
+  if (acceptanceItem) {
+    await updateAcceptanceItem(
+      acceptanceItem.id,
+      { note: input.note || null },
+      { name: "产品", role: "admin" }
+    );
+  } else {
+    await updateRequirement(
+      input.requirementId,
+      { detail_work: input.note || null },
+      { name: "产品", role: "admin" }
+    );
+  }
+  revalidatePath(`/projects/${input.projectSlug}/prototype`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements/${input.requirementId}`);
 }
 
 export async function saveRoleTaskAction(input: {

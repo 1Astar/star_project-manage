@@ -1,9 +1,12 @@
 import { analyzeIdeaWithOpenAi, type AnalyzeIdeaContext } from "@/lib/studio/ai/analyze-idea";
 import { getAllIdeas, getProjectById } from "@/lib/studio/data";
 import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studio/route-utils";
-
+import type { EmotionLevel } from "@/lib/studio/types";
 type AnalyzeBody = {
   rawInput?: string;
+  whyThought?: string;
+  emotionLevel?: string;
+  preferPark?: boolean;
   relatedProjectId?: string | null;
   relatedIdeaId?: string | null;
   openAiApiKey?: string;
@@ -23,8 +26,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const context: AnalyzeIdeaContext = { rawInput };
-
+    const context: AnalyzeIdeaContext = {
+      rawInput,
+      whyThought: body?.whyThought?.trim(),
+      emotionLevel: body?.emotionLevel as EmotionLevel | undefined,
+      preferPark: body?.preferPark === true,
+    };
     if (relatedProjectId) {
       const project = await getProjectById(relatedProjectId);
       if (!project) return studioErr("关联项目不存在", 404);

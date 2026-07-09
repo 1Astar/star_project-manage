@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { ProjectGitSettings } from "@/components/project-git-settings";
 import { SettingsClient } from "@/components/settings-client";
-import { AppShell, ProjectNav } from "@/components/ui";
+import { resolveProjectRoute } from "@/lib/project-bridge";
 
 export default async function ProjectSettingsPage({
   params,
@@ -10,15 +10,13 @@ export default async function ProjectSettingsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const bundle = await fetchProjectBoard(id);
+  const ctx = await resolveProjectRoute(id);
+  const slug = ctx.pmSlug ?? id;
+  const bundle = await fetchProjectBoard(slug);
   if (!bundle) notFound();
 
   return (
-    <AppShell
-      title={`${bundle.project.name} · 项目设置`}
-      subtitle="角色分享链接、原型来源与导入入口"
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
-    >
+    <>
       <SettingsClient
         projectId={bundle.project.id}
         projectSlug={bundle.project.slug}
@@ -27,6 +25,6 @@ export default async function ProjectSettingsPage({
       <div className="mt-8">
         <ProjectGitSettings project={bundle.project} />
       </div>
-    </AppShell>
+    </>
   );
 }

@@ -1,6 +1,6 @@
 export type IdeaType = "product" | "feature" | "ui" | "content" | "tech" | "business";
 export type EmotionLevel = "normal" | "like" | "excited";
-export type IdeaStatus = "inbox" | "converted" | "parked" | "archived";
+export type IdeaStatus = "inbox" | "reviewing" | "converted" | "parked" | "archived";
 
 export type ProjectStatus = "mainline" | "active" | "demo" | "parking" | "archived";
 export type ProjectPriority = "P0" | "P1" | "P2" | "P3";
@@ -46,7 +46,12 @@ export interface Idea {
   relatedIdeaId: string | null;
   subtasks: IdeaSubtask[];
   status: IdeaStatus;
+  suggestedNextStep: string;
+  githubIssueNumber: number | null;
+  githubIssueUrl: string | null;
+  githubLabels: string[];
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProjectBody {
@@ -73,6 +78,10 @@ export interface Project {
   demoUrl: string | null;
   localRunGuide: string | null;
   codePath: string | null;
+  githubRepo: string | null;
+  vercelUrl: string | null;
+  lastCommitMessage: string | null;
+  lastCommitAt: string | null;
   relatedPageUrl: string | null;
   portfolioValue: string;
   body: ProjectBody;
@@ -92,6 +101,8 @@ export interface EvolutionLog {
   createdAt: string;
 }
 
+export type TaskCompletionSource = "manual" | "git";
+
 export interface StudioTask {
   id: string;
   title: string;
@@ -101,6 +112,11 @@ export interface StudioTask {
   workload: string;
   blocker: string | null;
   dueDate: string | null;
+  progressNote: string;
+  completionSource: TaskCompletionSource | null;
+  gitCommitSha: string | null;
+  gitCommitMessage: string | null;
+  sourceIdeaId: string | null;
 }
 
 export interface Asset {
@@ -124,16 +140,30 @@ export const IDEA_TYPE_LABELS: Record<IdeaType, string> = {
 };
 
 export const EMOTION_LABELS: Record<EmotionLevel, string> = {
-  normal: "一般",
+  normal: "普通",
   like: "喜欢",
-  excited: "啊啊啊好想做",
+  excited: "很想做",
 };
 
 export const IDEA_STATUS_LABELS: Record<IdeaStatus, string> = {
   inbox: "收件箱",
+  reviewing: "审阅中",
   converted: "已转项目",
   parked: "停车场",
   archived: "已归档",
+};
+
+export const IDEA_SOURCE_OPTIONS = ["ChatGPT", "手动", "GitHub", "Notion"] as const;
+export type IdeaSource = (typeof IDEA_SOURCE_OPTIONS)[number];
+
+export const IDEA_TYPE_CAPTURE_LABELS: Record<string, IdeaType> = {
+  产品想法: "product",
+  功能想法: "feature",
+  UI想法: "ui",
+  技术想法: "tech",
+  内容想法: "content",
+  商业想法: "business",
+  作品集想法: "business",
 };
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {

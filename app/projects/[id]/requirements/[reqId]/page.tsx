@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { RequirementCollabPanel } from "@/components/requirement-collab";
-import { AppShell, ProjectNav, StatusBadge } from "@/components/ui";
+import { StatusBadge } from "@/components/ui";
 import { ROLE_LABELS } from "@/lib/types";
+import { resolveProjectRoute } from "@/lib/project-bridge";
 
 export default async function RequirementDetailPage({
   params,
@@ -11,7 +12,9 @@ export default async function RequirementDetailPage({
   params: Promise<{ id: string; reqId: string }>;
 }) {
   const { id, reqId } = await params;
-  const bundle = await fetchProjectBoard(id);
+  const ctx = await resolveProjectRoute(id);
+  const slug = ctx.pmSlug ?? id;
+  const bundle = await fetchProjectBoard(slug);
   if (!bundle) notFound();
 
   const requirement = bundle.requirements.find((r) => r.id === reqId);
@@ -24,16 +27,21 @@ export default async function RequirementDetailPage({
   const comments = (bundle.comments ?? []).filter((c) => c.requirement_id === reqId);
 
   return (
-    <AppShell
-      title={requirement.title}
-      subtitle={requirement.sub_function ?? bundle.iterations[0]?.name}
-      nav={<ProjectNav projectId={bundle.project.id} slug={bundle.project.slug} />}
-      actions={<StatusBadge status={requirement.status} />}
-    >
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">{requirement.title}</h2>
+          <p className="text-sm text-slate-500">
+            {requirement.sub_function ?? bundle.iterations[0]?.name}
+          </p>
+        </div>
+        <StatusBadge status={requirement.status} />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
-          <section className="card p-5 space-y-3">
-            <h2 className="font-semibold">需求信息</h2>
+          <section className="rounded-xl border border-slate-200 bg-white p-6 space-y-3">
+            <h3 className="font-semibold">需求信息</h3>
             {requirement.detail_work ? (
               <p className="text-sm text-slate-600">{requirement.detail_work}</p>
             ) : null}
@@ -46,9 +54,9 @@ export default async function RequirementDetailPage({
           </section>
 
           <section className="space-y-3">
-            <h2 className="font-semibold">角色任务</h2>
+            <h3 className="font-semibold">角色任务</h3>
             {tasks.map((task) => (
-              <div key={task.id} className="card p-4">
+              <div key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between">
                   <div className="font-medium">
                     {ROLE_LABELS[task.role]}
@@ -77,11 +85,14 @@ export default async function RequirementDetailPage({
         />
       </div>
 
-      <div className="mt-6">
-        <Link href={`/projects/${bundle.project.slug}/board`} className="text-sm text-blue-600">
-          ← 返回看板
+      <div>
+        <Link
+          href={`/projects/${ctx.routeId}/tasks`}
+          className="text-sm text-indigo-600 hover:underline"
+        >
+          ← 返回需求与任务
         </Link>
       </div>
-    </AppShell>
+    </div>
   );
 }

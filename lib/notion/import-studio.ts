@@ -67,6 +67,8 @@ const PRIORITY_MAP: Record<string, ProjectPriority> = {
 const IDEA_STATUS_MAP: Record<string, IdeaStatus> = {
   收件箱: "inbox",
   inbox: "inbox",
+  审阅中: "reviewing",
+  reviewing: "reviewing",
   已转项目: "converted",
   converted: "converted",
   停车: "parked",
@@ -216,6 +218,10 @@ async function mapNotionPageToProject(
     demoUrl: getPropertyText(page, "展示链接", "Demo", "demoUrl") || null,
     localRunGuide: getPropertyText(page, "本地启动", "启动命令") || null,
     codePath: getPropertyText(page, "代码目录", "代码路径") || null,
+    githubRepo: getPropertyText(page, "GitHub", "仓库", "github") || null,
+    vercelUrl: getPropertyText(page, "Vercel", "部署链接") || null,
+    lastCommitMessage: null,
+    lastCommitAt: null,
     relatedPageUrl: page.url ?? notionPageUrl(page.id),
     portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
     body,
@@ -263,7 +269,12 @@ function mapIdeaPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
     relatedIdeaId: null,
     subtasks: [],
     status: matchSelect(getPropertyText(page, "状态", "Status"), IDEA_STATUS_MAP, "inbox"),
+    suggestedNextStep: getPropertyText(page, "下一步", "下一步建议"),
+    githubIssueNumber: null,
+    githubIssueUrl: null,
+    githubLabels: [],
     createdAt: page.created_time || new Date().toISOString(),
+    updatedAt: page.last_edited_time || page.created_time || new Date().toISOString(),
   };
 }
 
@@ -309,6 +320,11 @@ function mapTaskPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
     workload: getPropertyText(page, "工作量", "Workload"),
     blocker: getPropertyText(page, "阻塞", "Blocker") || null,
     dueDate: getPropertyText(page, "截止日期", "Due") || null,
+    progressNote: getPropertyText(page, "进度备注", "备注") || "",
+    completionSource: null,
+    gitCommitSha: null,
+    gitCommitMessage: null,
+    sourceIdeaId: null,
   };
 }
 
@@ -386,6 +402,10 @@ function mapDatabasePages(
         demoUrl: getPropertyText(page, "展示链接", "Demo") || null,
         localRunGuide: getPropertyText(page, "本地启动") || null,
         codePath: getPropertyText(page, "代码目录") || null,
+        githubRepo: getPropertyText(page, "GitHub", "仓库", "github") || null,
+        vercelUrl: getPropertyText(page, "Vercel", "部署链接") || null,
+        lastCommitMessage: null,
+        lastCommitAt: null,
         relatedPageUrl: page.url ?? notionPageUrl(page.id),
         portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
         body: {
