@@ -257,7 +257,11 @@ function mapIdeaPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
       "normal"
     ),
     type: matchSelect(getPropertyText(page, "类型", "Type"), IDEA_TYPE_MAP, "product"),
+    priority: matchSelect(getPropertyText(page, "优先级", "Priority"), PRIORITY_MAP, "P2"),
+    rawInput: "",
     relatedProjectId,
+    relatedIdeaId: null,
+    subtasks: [],
     status: matchSelect(getPropertyText(page, "状态", "Status"), IDEA_STATUS_MAP, "inbox"),
     createdAt: page.created_time || new Date().toISOString(),
   };

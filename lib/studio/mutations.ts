@@ -20,7 +20,9 @@ import type {
   EvolutionLog,
   EvolutionLogType,
   Idea,
+  IdeaPriority,
   IdeaStatus,
+  IdeaSubtask,
   IdeaType,
   Project,
   ProjectBody,
@@ -92,8 +94,13 @@ export type CreateIdeaInput = {
   triggerSource?: string;
   emotionLevel?: EmotionLevel;
   type?: IdeaType;
+  priority?: IdeaPriority;
+  rawInput?: string;
   relatedProjectId?: string | null;
+  relatedIdeaId?: string | null;
+  subtasks?: IdeaSubtask[];
   status?: IdeaStatus;
+  syncSubtasksToProject?: boolean;
 };
 
 export type UpdateIdeaInput = Partial<CreateIdeaInput>;
@@ -275,6 +282,23 @@ export async function deleteStudioProject(id: string): Promise<void> {
 
 export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
   if (!input.title?.trim()) throw new Error("title 必填");
+  if (input.relatedProjectId && input.relatedIdeaId) {
+    throw new Error("只能关联项目或灵感其中之一");
+  }
+
+  const snapshot = await getStudioSnapshot();
+  if (input.relatedProjectId && !snapshot.projects.some((p) => p.id === input.relatedProjectId)) {
+    throw new Error("关联项目不存在");
+  }
+  if (input.relatedIdeaId && !snapshot.ideas.some((i) => i.id === input.relatedIdeaId)) {
+    throw new Error("关联灵感不存在");
+  }
+
+  const subtasks = (input.subtasks ?? []).map((item) => ({
+    title: item.title.trim(),
+    priority: item.priority ?? "P2",
+    rationale: item.rationale?.trim() ?? "",
+  })).filter((item) => item.title.length > 0);
 
   const idea: Idea = {
     id: studioId("idea-"),
@@ -284,12 +308,16 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
     triggerSource: input.triggerSource ?? "",
     emotionLevel: input.emotionLevel ?? "normal",
     type: input.type ?? "product",
+    priority: input.priority ?? "P2",
+    rawInput: input.rawInput ?? "",
     relatedProjectId: input.relatedProjectId ?? null,
+    relatedIdeaId: input.relatedIdeaId ?? null,
+    subtasks,
     status: input.status ?? "inbox",
     createdAt: nowIso(),
   };
 
-  return writeSupabase(
+  const created = await writeSupabase(
     async () => {
       const { error } = await sb().from("studio_ideas").insert(ideaToRow(idea));
       if (error) throw new Error(error.message);
@@ -302,6 +330,21 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
       return idea;
     }
   );
+
+  if (input.syncSubtasksToProject && created.relatedProjectId && created.subtasks.length > 0) {
+    await Promise.all(
+      created.subtasks.map((subtask) =>
+        createStudioTask({
+          title: subtask.title,
+          projectId: created.relatedProjectId!,
+          priority: subtask.priority,
+          workload: subtask.rationale,
+        })
+      )
+    );
+  }
+
+  return created;
 }
 
 export async function updateStudioIdea(id: string, patch: UpdateIdeaInput): Promise<Idea> {
@@ -313,8 +356,13 @@ export async function updateStudioIdea(id: string, patch: UpdateIdeaInput): Prom
     ...existing,
     ...patch,
     title: patch.title?.trim() ?? existing.title,
+    subtasks: patch.subtasks ?? existing.subtasks,
     createdAt: existing.createdAt,
   };
+
+  if (idea.relatedProjectId && idea.relatedIdeaId) {
+    throw new Error("只能关联项目或灵感其中之一");
+  }
 
   return writeSupabase(
     async () => {

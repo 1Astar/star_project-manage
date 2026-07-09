@@ -9,6 +9,7 @@ import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studi
 type CreateIdeaBody = CreateIdeaInput & {
   action?: "convert";
   project?: CreateProjectInput;
+  syncSubtasksToProject?: boolean;
 };
 
 export async function POST(request: Request) {

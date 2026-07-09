@@ -16,6 +16,13 @@ export type EvolutionLogType =
 
 export type TaskStatus = "todo" | "in_progress" | "done" | "paused";
 export type TaskPriority = "P0" | "P1" | "P2" | "P3";
+export type IdeaPriority = TaskPriority;
+
+export interface IdeaSubtask {
+  title: string;
+  priority: TaskPriority;
+  rationale: string;
+}
 
 export type AssetType =
   | "competitor"
@@ -33,7 +40,11 @@ export interface Idea {
   triggerSource: string;
   emotionLevel: EmotionLevel;
   type: IdeaType;
+  priority: IdeaPriority;
+  rawInput: string;
   relatedProjectId: string | null;
+  relatedIdeaId: string | null;
+  subtasks: IdeaSubtask[];
   status: IdeaStatus;
   createdAt: string;
 }

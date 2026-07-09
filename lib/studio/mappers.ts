@@ -2,9 +2,11 @@ import type {
   Asset,
   EvolutionLog,
   Idea,
+  IdeaSubtask,
   Project,
   ProjectBody,
   StudioTask,
+  TaskPriority,
 } from "@/lib/studio/types";
 
 const EMPTY_BODY: ProjectBody = {
@@ -46,7 +48,11 @@ export interface StudioIdeaRow {
   trigger_source: string;
   emotion_level: string;
   type: string;
+  priority: string;
+  raw_input: string;
   related_project_id: string | null;
+  related_idea_id: string | null;
+  subtasks: IdeaSubtask[] | unknown;
   status: string;
   created_at: string;
 }
@@ -102,6 +108,20 @@ function normalizeBody(body: ProjectBody | Record<string, string> | null | undef
   };
 }
 
+function normalizeSubtasks(value: IdeaSubtask[] | unknown): IdeaSubtask[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map((item) => ({
+      title: String(item.title ?? "").trim(),
+      priority: (["P0", "P1", "P2", "P3"].includes(String(item.priority))
+        ? String(item.priority)
+        : "P2") as TaskPriority,
+      rationale: String(item.rationale ?? "").trim(),
+    }))
+    .filter((item) => item.title.length > 0);
+}
+
 export function projectToRow(project: Project): StudioProjectRow {
   return {
     id: project.id,
@@ -153,7 +173,11 @@ export function ideaToRow(idea: Idea): StudioIdeaRow {
     trigger_source: idea.triggerSource,
     emotion_level: idea.emotionLevel,
     type: idea.type,
+    priority: idea.priority,
+    raw_input: idea.rawInput,
     related_project_id: idea.relatedProjectId,
+    related_idea_id: idea.relatedIdeaId,
+    subtasks: idea.subtasks,
     status: idea.status,
     created_at: idea.createdAt,
   };
@@ -168,7 +192,11 @@ export function rowToIdea(row: StudioIdeaRow): Idea {
     triggerSource: row.trigger_source,
     emotionLevel: row.emotion_level as Idea["emotionLevel"],
     type: row.type as Idea["type"],
+    priority: (row.priority as Idea["priority"]) ?? "P2",
+    rawInput: row.raw_input ?? "",
     relatedProjectId: row.related_project_id,
+    relatedIdeaId: row.related_idea_id ?? null,
+    subtasks: normalizeSubtasks(row.subtasks),
     status: row.status as Idea["status"],
     createdAt: row.created_at,
   };

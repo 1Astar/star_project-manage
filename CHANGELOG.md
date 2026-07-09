@@ -10,6 +10,14 @@
 
 ---
 
+## v1.1.3 · 2026-07-09
+
+- 灵感收件箱：**发送灵感 · AI 拆解优先级**（OpenAI 结构化 JSON）
+- 可选关联**项目**或**已有灵感**；AI 定 P0–P3 并拆 2–8 条子任务
+- 关联项目时可勾选将子任务同步写入 `studio_tasks`
+- Supabase：`008_studio_idea_ai.sql`（priority / raw_input / related_idea_id / subtasks）
+- API：`POST /api/studio/ideas/analyze`
+
 ## v1.1.2 · 2026-07-09
 
 - 全站展示版本号 `v1.1.2 · 2026-07-09` 与版权 **© 刘星雨 Starry Product Lab**
