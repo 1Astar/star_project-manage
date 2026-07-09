@@ -1,5 +1,5 @@
 import type { ParsePreview, ParsedRequirementRow } from "@/lib/excel/parser";
-import type { EstimateLevel, RoleType, TaskStatus } from "@/lib/types";
+import { REQUIREMENT_POOL_DEFAULTS, type EstimateLevel, type RoleType, type TaskStatus } from "@/lib/types";
 import {
   readDb,
   writeDb,
@@ -164,6 +164,7 @@ export async function importSheetToProject(
       "未命名需求";
 
     const requirement = {
+      ...REQUIREMENT_POOL_DEFAULTS,
       id: uid("req-"),
       project_id: project.id,
       iteration_id: iteration.id,

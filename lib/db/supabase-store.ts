@@ -26,6 +26,14 @@ async function loadComments(sb: ReturnType<typeof client>) {
   return throwOnError(result, "requirement_comments");
 }
 
+async function loadOptionalTable(sb: ReturnType<typeof client>, table: string) {
+  const result = await sb.from(table).select("*");
+  if (result.error?.message.includes(table)) {
+    return [];
+  }
+  return throwOnError(result, table);
+}
+
 async function loadGitActivities(sb: ReturnType<typeof client>) {
   const result = await sb
     .from("git_activities")
@@ -71,6 +79,8 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
 
   const comments = await loadComments(sb);
   const git_activities = await loadGitActivities(sb);
+  const project_members = await loadOptionalTable(sb, "project_members");
+  const pool_column_defs = await loadOptionalTable(sb, "pool_column_defs");
 
   return {
     projects: throwOnError(projects, "projects"),
@@ -88,6 +98,8 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     activity_logs: throwOnError(activity_logs, "activity_logs"),
     comments,
     git_activities,
+    project_members,
+    pool_column_defs,
   };
 }
 
@@ -102,7 +114,14 @@ async function deleteMissing(table: string, keepIds: string[]) {
   const sb = client();
   const { data, error } = await sb.from(table).select("id");
   if (error) {
-    if (table === "requirement_comments" || table === "git_activities") return;
+    if (
+      table === "requirement_comments" ||
+      table === "git_activities" ||
+      table === "project_members" ||
+      table === "pool_column_defs"
+    ) {
+      return;
+    }
     throw new Error(`${table} select: ${error.message}`);
   }
   const removeIds = (data ?? [])
@@ -135,8 +154,16 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   if ((snapshot.git_activities ?? []).length) {
     await upsertRows("git_activities", snapshot.git_activities ?? []);
   }
+  if ((snapshot.project_members ?? []).length) {
+    await upsertRows("project_members", snapshot.project_members ?? []);
+  }
+  if ((snapshot.pool_column_defs ?? []).length) {
+    await upsertRows("pool_column_defs", snapshot.pool_column_defs ?? []);
+  }
 
   await deleteMissing("git_activities", (snapshot.git_activities ?? []).map((r) => r.id));
+  await deleteMissing("pool_column_defs", (snapshot.pool_column_defs ?? []).map((r) => r.id));
+  await deleteMissing("project_members", (snapshot.project_members ?? []).map((r) => r.id));
   await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
   await deleteMissing("notifications", snapshot.notifications.map((r) => r.id));

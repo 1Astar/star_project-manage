@@ -7,7 +7,9 @@ import type {
   Iteration,
   ModuleNode,
   NotificationItem,
+  PoolColumnDef,
   Project,
+  ProjectMember,
   Prototype,
   Requirement,
   RequirementComment,
@@ -32,4 +34,6 @@ export interface DatabaseSnapshot {
   activity_logs: ActivityLog[];
   comments: RequirementComment[];
   git_activities: GitActivity[];
+  project_members: ProjectMember[];
+  pool_column_defs: PoolColumnDef[];
 }

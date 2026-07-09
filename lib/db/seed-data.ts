@@ -1,5 +1,5 @@
 import { generateShareToken, hashToken } from "@/lib/utils";
-import type { AcceptanceItem, Requirement, RoleTask } from "@/lib/types";
+import { REQUIREMENT_POOL_DEFAULTS, type AcceptanceItem, type Requirement, type RoleTask } from "@/lib/types";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 
 /** 固定 UUID，与 supabase/migrations/003_seed.sql 一致 */
@@ -41,7 +41,7 @@ export function createSeedData(): DatabaseSnapshot {
   const petIterationId = SEED_IDS.petIter;
   const controllerIterationId = SEED_IDS.controllerIter;
 
-  const petReqs: Requirement[] = [
+  const petReqs = [
     {
       id: SEED_IDS.petReqHome,
       project_id: petProjectId,
@@ -95,7 +95,7 @@ export function createSeedData(): DatabaseSnapshot {
     },
   ];
 
-  const controllerReqs: Requirement[] = [
+  const controllerReqs = [
     {
       id: SEED_IDS.ctrlReqMask,
       project_id: controllerProjectId,
@@ -312,6 +312,7 @@ export function createSeedData(): DatabaseSnapshot {
         name: "AI 宠物",
         slug: "ai-pet",
         description: "宠物 App 优化需求管理",
+        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
         ...emptyProjectGitFields(),
       },
@@ -320,6 +321,7 @@ export function createSeedData(): DatabaseSnapshot {
         name: "AI 控制器",
         slug: "ai-controller",
         description: "元井 AI 控制器优化需求管理",
+        pool_tag_options: ["硬件", "软件", "体验"],
         created_at: SEED_TIME,
         ...emptyProjectGitFields(),
       },
@@ -341,7 +343,12 @@ export function createSeedData(): DatabaseSnapshot {
       },
     ],
     modules: [],
-    requirements: [...petReqs, ...controllerReqs],
+    requirements: [...petReqs, ...controllerReqs].map((r) => ({
+      ...REQUIREMENT_POOL_DEFAULTS,
+      ...r,
+      tags: [],
+      custom_fields: {},
+    })) as Requirement[],
     acceptance_items: acceptanceItems,
     role_tasks: [...petTasks, ...controllerTasks],
     test_records: [],
@@ -396,5 +403,7 @@ export function createSeedData(): DatabaseSnapshot {
     activity_logs: [],
     comments: [],
     git_activities: [],
+    project_members: [],
+    pool_column_defs: [],
   };
 }

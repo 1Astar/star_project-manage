@@ -10,6 +10,11 @@
 
 ---
 
+## v1.1.5 · 2026-07-09
+
+- 修复 Vercel 构建：恢复**需求池**相关 actions / db / types 导出（`fetchPoolData`、`ensurePoolIteration` 等）
+- 合并 pool 页面与组件；Supabase 读取补 `project_members`、`pool_column_defs`
+
 ## v1.1.4 · 2026-07-09
 
 - OpenAI 配置改为**网页自主配置**：`/studio/inbox` 内展开「OpenAI 配置」
