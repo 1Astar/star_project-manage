@@ -3,6 +3,7 @@ import { StudioShell, StudioBadge } from "@/components/studio/shell";
 import { IdeaCapturePanel } from "@/components/studio/idea-capture-panel";
 import { StructuredCapturePanel } from "@/components/studio/structured-capture-panel";
 import { InboxSyncButton } from "@/components/studio/inbox-sync-button";
+import { ConvertIdeaButton } from "@/components/studio/convert-idea-button";
 import { getAllIdeas, getAllProjects, getProjectTitle } from "@/lib/studio/data";
 import {
   IDEA_TYPE_LABELS,
@@ -60,6 +61,7 @@ export default async function InboxPage() {
               <th className="px-4 py-3 font-medium">来源</th>
               <th className="px-4 py-3 font-medium">Issue</th>
               <th className="px-4 py-3 font-medium">关联</th>
+              <th className="px-4 py-3 font-medium">操作</th>
               <th className="px-4 py-3 font-medium">创建时间</th>
             </tr>
           </thead>
@@ -112,6 +114,14 @@ export default async function InboxPage() {
                   ) : (
                     "—"
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <ConvertIdeaButton
+                    ideaId={idea.id}
+                    ideaTitle={idea.title}
+                    status={idea.status}
+                    relatedProjectId={idea.relatedProjectId}
+                  />
                 </td>
                 <td className="px-4 py-3 text-stone-400">
                   {new Date(idea.createdAt).toLocaleDateString("zh-CN")}

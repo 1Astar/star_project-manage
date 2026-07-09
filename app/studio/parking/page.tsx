@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StudioShell, StudioBadge } from "@/components/studio/shell";
+import { ConvertIdeaButton } from "@/components/studio/convert-idea-button";
 import { getParkedIdeas, getParkedProjects } from "@/lib/studio/data";
 import { IDEA_TYPE_LABELS, PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 
@@ -27,8 +28,14 @@ export default async function ParkingPage() {
               >
                 <div className="font-medium text-stone-800">{idea.title}</div>
                 <p className="mt-1 text-sm text-stone-500">{idea.oneLineIdea}</p>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <StudioBadge>{IDEA_TYPE_LABELS[idea.type]}</StudioBadge>
+                  <ConvertIdeaButton
+                    ideaId={idea.id}
+                    ideaTitle={idea.title}
+                    status={idea.status}
+                    relatedProjectId={idea.relatedProjectId}
+                  />
                   {idea.relatedProjectId ? (
                     <Link
                       href={`/studio/projects/${idea.relatedProjectId}`}
