@@ -123,3 +123,65 @@ export async function getGitActivitiesForProject(projectId: string, limit = 5) {
     .sort((a, b) => b.committed_at.localeCompare(a.committed_at))
     .slice(0, limit);
 }
+
+export interface ProjectGitSyncItem {
+  projectId: string;
+  slug: string;
+  name: string;
+  ok: boolean;
+  newCount?: number;
+  error?: string;
+}
+
+export interface SyncAllProjectsGitResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  results: ProjectGitSyncItem[];
+}
+
+export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResult> {
+  const db = await readDb();
+  const bound = db.projects.filter(
+    (p) => p.repo_full_name?.trim() && p.repo_branch?.trim()
+  );
+
+  if (bound.length === 0) {
+    return { total: 0, succeeded: 0, failed: 0, skipped: 0, results: [] };
+  }
+
+  const results: ProjectGitSyncItem[] = [];
+
+  for (const project of bound) {
+    try {
+      const result = await syncProjectGit(project.id);
+      results.push({
+        projectId: project.id,
+        slug: project.slug,
+        name: project.name,
+        ok: true,
+        newCount: result.newCount,
+      });
+    } catch (error) {
+      results.push({
+        projectId: project.id,
+        slug: project.slug,
+        name: project.name,
+        ok: false,
+        error: error instanceof Error ? error.message : "同步失败",
+      });
+    }
+  }
+
+  const succeeded = results.filter((r) => r.ok).length;
+  const failed = results.filter((r) => !r.ok).length;
+
+  return {
+    total: bound.length,
+    succeeded,
+    failed,
+    skipped: 0,
+    results,
+  };
+}

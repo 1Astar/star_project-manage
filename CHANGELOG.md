@@ -10,6 +10,10 @@
 
 ---
 
+## v1.3.2 · 2026-07-13
+
+- **每日 Git 同步 Cron**：新增 `/api/cron/sync-git`，每天 11:00 自动拉取所有已绑定 `repo_full_name` + `repo_branch` 的项目的最近 commit
+
 ## v1.3.1 · 2026-07-09
 
 - **修复 Vercel 部署失败**：`sync-ideas` Cron 从每 15 分钟改为每日 10:00（Hobby 套餐仅支持每日 Cron）；收件箱仍可手动同步

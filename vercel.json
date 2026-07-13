@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/sync-ideas",
       "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/sync-git",
+      "schedule": "0 11 * * *"
     }
   ]
 }

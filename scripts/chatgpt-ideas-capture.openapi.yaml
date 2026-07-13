@@ -1,0 +1,191 @@
+openapi: 3.1.0
+info:
+  title: Star PM Idea Capture
+  description: |
+    将产品灵感提交到 Star PM 的 GitHub Issue 中转层。
+    成功后会创建带标签的 Issue，需在 Star PM「灵感收件箱」点击「同步 GitHub 灵感」进入收件箱。
+  version: 1.0.0
+servers:
+  - url: https://star-project-manage.vercel.app
+paths:
+  /api/ideas/capture:
+    post:
+      operationId: captureIdea
+      summary: 提交一条灵感到 GitHub Issue 中转
+      description: |
+        创建一条灵感 Issue。title 必填。
+        成功后返回 issueNumber 与 issueUrl，不会直接写入 Star PM 数据库。
+      security:
+        - IdeasCaptureSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdeaCapturePayload"
+            examples:
+              featureIdea:
+                summary: 功能灵感
+                value:
+                  title: "AI 宠物：增加情绪记忆"
+                  rawThought: "用户希望宠物能记住上次对话情绪，下次见面时延续状态"
+                  summary: "给宠物加短期情绪记忆层"
+                  why: "提升连续对话时的陪伴感"
+                  type: "功能想法"
+                  source: "ChatGPT"
+                  status: "inbox"
+                  emotionLevel: "很想做"
+                  suggestedNextStep: "先写一版 PRD 边界"
+      responses:
+        "200":
+          description: Issue 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaptureSuccess"
+        "400":
+          description: 参数错误或 GitHub 拒绝（如 Label 未预建）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: 未授权（IDEAS_CAPTURE_SECRET 不匹配）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: 服务端未配置 GITHUB_TOKEN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  securitySchemes:
+    IdeasCaptureSecret:
+      type: apiKey
+      in: header
+      name: x-ideas-capture-secret
+      description: |
+        与 Vercel 环境变量 IDEAS_CAPTURE_SECRET 一致。
+        也可使用 Authorization: Bearer <secret>（在 GPT Action 里通常配 API Key）。
+  schemas:
+    IdeaCapturePayload:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          description: 灵感标题（必填）
+        rawThought:
+          type: string
+          description: 原始想法全文
+        rawInput:
+          type: string
+          description: rawThought 的别名
+        summary:
+          type: string
+          description: 一句话摘要
+        oneLineIdea:
+          type: string
+          description: summary 的别名
+        why:
+          type: string
+          description: 为什么重要
+        whyItMatters:
+          type: string
+          description: why 的别名
+        type:
+          type: string
+          description: 想法类型
+          enum:
+            - 产品想法
+            - 功能想法
+            - UI想法
+            - 技术想法
+            - 内容想法
+            - 商业想法
+            - 作品集想法
+            - product
+            - feature
+            - ui
+            - content
+            - tech
+            - business
+          default: 产品想法
+        source:
+          type: string
+          description: 触发来源
+          enum:
+            - ChatGPT
+            - 手动
+            - GitHub
+            - Notion
+          default: ChatGPT
+        status:
+          type: string
+          description: 灵感状态
+          enum:
+            - inbox
+            - reviewing
+            - converted
+            - parked
+            - archived
+            - 灵感收件箱
+            - 收件箱
+            - 审阅中
+            - 已转项目
+            - 停车场
+            - 已归档
+          default: inbox
+        emotionLevel:
+          type: string
+          description: 情绪强度
+          enum:
+            - normal
+            - like
+            - excited
+            - 普通
+            - 喜欢
+            - 很想做
+          default: 普通
+        relatedProjectId:
+          type: string
+          nullable: true
+          description: 关联 Studio 项目 ID（如 proj-ai-pet）
+        suggestedNextStep:
+          type: string
+          description: 建议下一步
+        priority:
+          type: string
+          description: 优先级（可选，P0–P3）
+          enum:
+            - P0
+            - P1
+            - P2
+            - P3
+    CaptureSuccess:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: 已创建 GitHub Issue，等待同步进入灵感收件箱
+        issueNumber:
+          type: integer
+          example: 42
+        issueUrl:
+          type: string
+          format: uri
+          example: https://github.com/1Astar/star_project-manage/issues/42
+        title:
+          type: string
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
