@@ -6,8 +6,10 @@ import {
   BodySection,
 } from "@/components/studio/shell";
 import { ProjectGitPanel } from "@/components/project-git-panel";
+import { StudioGitPanel } from "@/components/studio/studio-git-panel";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import { getStudioProjectGitPreview } from "@/lib/studio/project-git";
+import { getStudioGitActivities } from "@/lib/studio/git-sync";
 import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 
 export default async function ProjectRecoveryPage({
@@ -20,6 +22,7 @@ export default async function ProjectRecoveryPage({
   if (!ctx.studio && !ctx.pmBundle) notFound();
 
   const gitPreview = ctx.studio ? await getStudioProjectGitPreview(ctx.studio) : null;
+  const studioGitActivities = ctx.studio ? await getStudioGitActivities(ctx.studio.id) : [];
 
   return (
     <div className="space-y-6">
@@ -53,7 +56,9 @@ export default async function ProjectRecoveryPage({
         </>
       ) : null}
 
-      {ctx.pmBundle ? (
+      {ctx.studio ? (
+        <StudioGitPanel project={ctx.studio} activities={studioGitActivities} />
+      ) : ctx.pmBundle ? (
         <ProjectGitPanel project={ctx.pmBundle.project} activities={ctx.pmBundle.git_activities} />
       ) : null}
     </div>

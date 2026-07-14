@@ -1,4 +1,5 @@
 import {
+  completeStudioIdea,
   deleteStudioIdea,
   parkStudioIdea,
   updateStudioIdea,
@@ -7,7 +8,7 @@ import {
 import { getAllIdeas } from "@/lib/studio/data";
 import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studio/route-utils";
 
-type PatchBody = UpdateIdeaInput & { action?: "park" };
+type PatchBody = UpdateIdeaInput & { action?: "park" | "complete" };
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -25,6 +26,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   try {
     if (body.action === "park") {
       const idea = await parkStudioIdea(id);
+      return studioOk({ idea });
+    }
+
+    if (body.action === "complete") {
+      const idea = await completeStudioIdea(id);
       return studioOk({ idea });
     }
 

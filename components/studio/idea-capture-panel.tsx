@@ -94,6 +94,7 @@ export function IdeaCapturePanel({ projects, ideas }: IdeaCapturePanelProps) {
           relatedIdeaId: linkMode === "idea" && linkId ? linkId : null,
           openAiApiKey: aiSettings.apiKey,
           openAiModel: aiSettings.model,
+          openAiBaseUrl: aiSettings.baseUrl,
         }),
       });
       const data = await res.json();

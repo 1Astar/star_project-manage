@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BackButton } from "@/components/back-button";
 import { AppBrandFooter } from "@/components/app-brand-footer";
+import { LogoutButton } from "@/components/logout-button";
 import { appVersionLabel } from "@/lib/app-meta";
 import { cn } from "@/lib/utils";
 
 export const WORKBENCH_NAV = [
   { href: "/", label: "今日工作台", icon: "◉" },
   { href: "/projects", label: "项目库", icon: "▣" },
-  { href: "/inbox", label: "灵感收件箱", icon: "✦" },
+  { href: "/stream", label: "灵感流", icon: "✦" },
   { href: "/todos", label: "我的待办", icon: "☑" },
   { href: "/evolution", label: "演进记录", icon: "↻" },
   { href: "/assets", label: "资料 / 链接", icon: "🔗" },
@@ -69,7 +70,8 @@ export function WorkbenchShell({
             </Link>
           ))}
         </nav>
-        <div className="mt-auto border-t border-slate-200 pt-4 px-2">
+        <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 px-2">
+          <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900" />
           <AppBrandFooter variant="compact" />
         </div>
       </aside>
@@ -89,7 +91,8 @@ export function WorkbenchShell({
           {nav ? <div className="mt-4">{nav}</div> : null}
         </header>
         <main className="px-6 py-6">{children}</main>
-        <div className="px-6 pb-6 md:hidden">
+        <div className="space-y-3 px-6 pb-6 md:hidden">
+          <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50" />
           <AppBrandFooter />
         </div>
       </div>

@@ -34,9 +34,12 @@ export interface StudioProjectRow {
   local_run_guide: string | null;
   code_path: string | null;
   github_repo: string | null;
+  github_branch?: string;
   vercel_url: string | null;
+  last_commit_sha?: string | null;
   last_commit_message: string | null;
   last_commit_at: string | null;
+  last_git_synced_at?: string | null;
   related_page_url: string | null;
   portfolio_value: string;
   body: ProjectBody | Record<string, string>;
@@ -86,7 +89,12 @@ export interface StudioTaskRow {
   priority: string;
   workload: string;
   blocker: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   due_date: string | null;
+  estimate_hours?: number | string | null;
+  actual_hours?: number | string | null;
+  completed_at?: string | null;
   progress_note?: string;
   completion_source?: string | null;
   git_commit_sha?: string | null;
@@ -95,12 +103,20 @@ export interface StudioTaskRow {
   created_at: string;
 }
 
+function parseHours(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export interface StudioAssetRow {
   id: string;
   title: string;
   project_id: string;
   asset_type: string;
   url: string;
+  storage_path?: string | null;
+  mime_type?: string | null;
   note: string;
   takeaway: string;
   risk: string | null;
@@ -150,9 +166,12 @@ export function projectToRow(project: Project): StudioProjectRow {
     local_run_guide: project.localRunGuide,
     code_path: project.codePath,
     github_repo: project.githubRepo,
+    github_branch: project.githubBranch,
     vercel_url: project.vercelUrl,
+    last_commit_sha: project.lastCommitSha,
     last_commit_message: project.lastCommitMessage,
     last_commit_at: project.lastCommitAt,
+    last_git_synced_at: project.lastGitSyncedAt,
     related_page_url: project.relatedPageUrl,
     portfolio_value: project.portfolioValue,
     body: project.body,
@@ -175,9 +194,12 @@ export function rowToProject(row: StudioProjectRow): Project {
     localRunGuide: row.local_run_guide,
     codePath: row.code_path,
     githubRepo: row.github_repo ?? null,
+    githubBranch: row.github_branch ?? "main",
     vercelUrl: row.vercel_url ?? null,
+    lastCommitSha: row.last_commit_sha ?? null,
     lastCommitMessage: row.last_commit_message ?? null,
     lastCommitAt: row.last_commit_at ?? null,
+    lastGitSyncedAt: row.last_git_synced_at ?? null,
     relatedPageUrl: row.related_page_url,
     portfolioValue: row.portfolio_value,
     body: normalizeBody(row.body),
@@ -271,7 +293,12 @@ export function taskToRow(task: StudioTask): StudioTaskRow {
     priority: task.priority,
     workload: task.workload,
     blocker: task.blocker,
+    start_date: task.startDate,
+    end_date: task.endDate,
     due_date: task.dueDate,
+    estimate_hours: task.estimateHours,
+    actual_hours: task.actualHours,
+    completed_at: task.completedAt,
     progress_note: task.progressNote,
     completion_source: task.completionSource,
     git_commit_sha: task.gitCommitSha,
@@ -290,7 +317,12 @@ export function rowToTask(row: StudioTaskRow): StudioTask {
     priority: row.priority as StudioTask["priority"],
     workload: row.workload,
     blocker: row.blocker,
+    startDate: row.start_date ?? null,
+    endDate: row.end_date ?? null,
     dueDate: row.due_date,
+    estimateHours: parseHours(row.estimate_hours),
+    actualHours: parseHours(row.actual_hours),
+    completedAt: row.completed_at ?? null,
     progressNote: row.progress_note ?? "",
     completionSource: (row.completion_source as StudioTask["completionSource"]) ?? null,
     gitCommitSha: row.git_commit_sha ?? null,
@@ -306,6 +338,8 @@ export function assetToRow(asset: Asset): StudioAssetRow {
     project_id: asset.projectId,
     asset_type: asset.assetType,
     url: asset.url,
+    storage_path: asset.storagePath,
+    mime_type: asset.mimeType,
     note: asset.note,
     takeaway: asset.takeaway,
     risk: asset.risk,
@@ -320,6 +354,8 @@ export function rowToAsset(row: StudioAssetRow): Asset {
     projectId: row.project_id,
     assetType: row.asset_type as Asset["assetType"],
     url: row.url,
+    storagePath: row.storage_path ?? null,
+    mimeType: row.mime_type ?? null,
     note: row.note,
     takeaway: row.takeaway,
     risk: row.risk,

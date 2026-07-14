@@ -31,6 +31,7 @@ function mapIssueStatus(issue: GitHubIssue, labels: string[]): IdeaStatus {
     inbox: "inbox",
     reviewing: "reviewing",
     converted: "converted",
+    done: "done",
     parked: "parked",
     archived: "archived",
   };

@@ -1,3 +1,7 @@
+import { DEFAULT_OPENAI_BASE_URL } from "@/lib/studio/ai/openai-client";
+
+export { DEFAULT_OPENAI_BASE_URL };
+
 export const OPENAI_SETTINGS_STORAGE_KEY = "star-pm:openai-settings:v1";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
@@ -12,6 +16,7 @@ export const OPENAI_MODEL_OPTIONS = [
 export type OpenAiSettings = {
   apiKey: string;
   model: string;
+  baseUrl?: string;
 };
 
 function canUseStorage() {
@@ -32,6 +37,7 @@ export function loadOpenAiSettings(): OpenAiSettings | null {
     return {
       apiKey,
       model: parsed.model?.trim() || DEFAULT_OPENAI_MODEL,
+      baseUrl: parsed.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL,
     };
   } catch {
     return null;
@@ -53,6 +59,7 @@ export function saveOpenAiSettings(settings: OpenAiSettings): void {
       JSON.stringify({
         apiKey,
         model: settings.model.trim() || DEFAULT_OPENAI_MODEL,
+        baseUrl: settings.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL,
       } satisfies OpenAiSettings)
     );
   } catch {

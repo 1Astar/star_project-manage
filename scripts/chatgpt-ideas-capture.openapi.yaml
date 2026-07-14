@@ -2,8 +2,8 @@ openapi: 3.1.0
 info:
   title: Star PM Idea Capture
   description: |
-    将产品灵感提交到 Star PM 的 GitHub Issue 中转层。
-    成功后会创建带标签的 Issue，需在 Star PM「灵感收件箱」点击「同步 GitHub 灵感」进入收件箱。
+    将产品灵感直接写入 Star PM 灵感收件箱（studio_ideas）。
+    成功后返回 ideaId，可在 Star PM「灵感收件箱」立即看到。
   version: 1.0.0
 servers:
   - url: https://star-project-manage.vercel.app
@@ -11,10 +11,10 @@ paths:
   /api/ideas/capture:
     post:
       operationId: captureIdea
-      summary: 提交一条灵感到 GitHub Issue 中转
+      summary: 提交一条灵感到 Star PM 收件箱
       description: |
-        创建一条灵感 Issue。title 必填。
-        成功后返回 issueNumber 与 issueUrl，不会直接写入 Star PM 数据库。
+        将灵感写入 Star PM 数据库。title 必填。
+        成功后返回 ideaId，灵感会立刻出现在收件箱，无需手动同步。
       security:
         - IdeasCaptureSecret: []
       requestBody:
@@ -38,7 +38,7 @@ paths:
                   suggestedNextStep: "先写一版 PRD 边界"
       responses:
         "200":
-          description: Issue 创建成功
+          description: 灵感已写入收件箱
           content:
             application/json:
               schema:
@@ -51,12 +51,6 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "401":
           description: 未授权（IDEAS_CAPTURE_SECRET 不匹配）
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: 服务端未配置 GITHUB_TOKEN
           content:
             application/json:
               schema:
@@ -131,12 +125,14 @@ components:
             - inbox
             - reviewing
             - converted
+            - done
             - parked
             - archived
             - 灵感收件箱
             - 收件箱
             - 审阅中
             - 已转项目
+            - 已完成
             - 停车场
             - 已归档
           default: inbox
@@ -174,14 +170,10 @@ components:
           example: true
         message:
           type: string
-          example: 已创建 GitHub Issue，等待同步进入灵感收件箱
-        issueNumber:
-          type: integer
-          example: 42
-        issueUrl:
+          example: 已进入灵感收件箱
+        ideaId:
           type: string
-          format: uri
-          example: https://github.com/1Astar/star_project-manage/issues/42
+          example: idea-abc123
         title:
           type: string
     ErrorResponse:

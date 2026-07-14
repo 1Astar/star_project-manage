@@ -27,7 +27,9 @@ export async function syncProjectTasksFromGit(project: Project) {
     throw new Error("项目未配置 GitHub 仓库");
   }
 
-  const commits = await fetchRecentCommits(project.githubRepo, "main", 30);
+  const branch = project.githubBranch || "main";
+  const path = project.codePath?.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  const commits = await fetchRecentCommits(project.githubRepo, branch, 30, path || undefined);
   const { tasks } = await getStudioSnapshot();
   const openTasks = tasks.filter((t) => t.projectId === project.id && t.status !== "done");
 
@@ -42,6 +44,7 @@ export async function syncProjectTasksFromGit(project: Project) {
       completionSource: "git",
       gitCommitSha: match.sha,
       gitCommitMessage: match.commit.message.split("\n")[0],
+      completedAt: match.commit.author?.date ?? undefined,
     });
 
     updated.push({

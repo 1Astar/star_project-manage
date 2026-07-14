@@ -6,6 +6,7 @@ import type { Project as StudioProject } from "@/lib/studio/types";
 const STUDIO_TO_PM_SLUG: Record<string, string> = {
   "proj-ai-pet": "ai-pet",
   "proj-ai-controller": "ai-controller",
+  "proj-star-pm": "star-pm",
 };
 
 const PM_TO_STUDIO_ID: Record<string, string> = Object.fromEntries(

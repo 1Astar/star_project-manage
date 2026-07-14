@@ -1,5 +1,6 @@
 import { fetchRecentCommits, buildRepoUrl } from "@/lib/github/client";
 import { readDb, persistGitSyncResult } from "@/lib/db/local-store";
+import { syncAllStudioBoundProjectsGit } from "@/lib/studio/git-sync";
 import type { GitActivity, Project } from "@/lib/types";
 
 export interface GitSyncResult {
@@ -147,10 +148,6 @@ export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResul
     (p) => p.repo_full_name?.trim() && p.repo_branch?.trim()
   );
 
-  if (bound.length === 0) {
-    return { total: 0, succeeded: 0, failed: 0, skipped: 0, results: [] };
-  }
-
   const results: ProjectGitSyncItem[] = [];
 
   for (const project of bound) {
@@ -174,11 +171,24 @@ export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResul
     }
   }
 
+  const studioResult = await syncAllStudioBoundProjectsGit();
+  for (const item of studioResult.results) {
+    results.push({
+      projectId: String(item.projectId),
+      slug: String(item.projectId),
+      name: String(item.name),
+      ok: Boolean(item.ok),
+      newCount: typeof item.newCount === "number" ? item.newCount : undefined,
+      error: typeof item.error === "string" ? item.error : undefined,
+    });
+  }
+
+  const total = bound.length + studioResult.total;
   const succeeded = results.filter((r) => r.ok).length;
   const failed = results.filter((r) => !r.ok).length;
 
   return {
-    total: bound.length,
+    total,
     succeeded,
     failed,
     skipped: 0,

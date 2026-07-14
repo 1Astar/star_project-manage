@@ -1,6 +1,6 @@
 {
   "name": "star-pm",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,16 +8,20 @@
     "start": "next start",
     "lint": "next lint",
     "db:check": "tsx --env-file=.env.local scripts/db-check.ts",
-    "db:types": "echo 'Run supabase gen types after linking project'"
+    "db:types": "echo 'Run supabase gen types after linking project'",
+    "mcp:stdio": "tsx --env-file=.env.local mcp/stdio.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
+    "@upstash/redis": "^1.38.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "lucide-react": "^0.511.0",
+    "mcp-handler": "^1.1.0",
     "next": "^15.3.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

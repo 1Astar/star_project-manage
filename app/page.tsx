@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { WorkbenchShell } from "@/components/workbench-shell";
 import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
+import { IdeaStarMap } from "@/components/studio/idea-star-map";
 import { ProjectLibraryCard } from "@/components/project-library-card";
 import { StudioBadge } from "@/components/studio/shell";
+import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
 import {
   getTodayFocus,
   getMainlineProject,
   getRecentIdeas,
   getRecentEvolution,
   getAllProjects,
+  getAllIdeas,
   getProjectTitle,
   getPendingAlerts,
   getRecentGitUpdates,
@@ -26,6 +29,7 @@ export default async function WorkbenchPage() {
     recentIdeas,
     recentEvolution,
     allProjects,
+    allIdeas,
     alerts,
     gitUpdates,
   ] = await Promise.all([
@@ -34,9 +38,12 @@ export default async function WorkbenchPage() {
     getRecentIdeas(5),
     getRecentEvolution(5),
     getAllProjects(),
+    getAllIdeas(),
     getPendingAlerts(),
     getRecentGitUpdates(5),
   ]);
+
+  const starMapLayout = buildStarMapLayout(allIdeas, allProjects);
 
   const evolutionWithTitles = await Promise.all(
     recentEvolution.map(async (log) => ({
@@ -55,6 +62,10 @@ export default async function WorkbenchPage() {
   return (
     <WorkbenchShell title="今日工作台" subtitle="灵感 · 项目 · 任务 · 恢复现场">
       <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
+
+      <div className="mt-6">
+        <IdeaStarMap layout={starMapLayout} />
+      </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-6">
@@ -103,7 +114,7 @@ export default async function WorkbenchPage() {
           <ul className="mt-3 space-y-2 text-sm text-slate-600">
             <li>
               收件箱新灵感：
-              <Link href="/inbox" className="ml-1 font-medium text-indigo-600 hover:underline">
+              <Link href="/stream" className="ml-1 font-medium text-indigo-600 hover:underline">
                 {alerts.inboxCount} 条
               </Link>
             </li>
@@ -142,7 +153,7 @@ export default async function WorkbenchPage() {
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-500">最近灵感</h2>
-            <Link href="/inbox" className="text-xs text-indigo-600 hover:underline">
+            <Link href="/stream" className="text-xs text-indigo-600 hover:underline">
               收件箱
             </Link>
           </div>

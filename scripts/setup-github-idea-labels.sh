@@ -59,6 +59,7 @@ labels=(
   "status:inbox|C5DEF5|灵感收件箱"
   "status:reviewing|FEF2C0|审阅中"
   "status:converted|BFD4F2|已转项目"
+  "status:done|B4E1C5|已完成"
   "status:parked|D4C5F9|停车场"
   "status:archived|E4E669|已归档"
   "idea-type:product|0075CA|产品想法"

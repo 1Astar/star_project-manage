@@ -81,6 +81,7 @@ export type CreateProjectInput = {
   localRunGuide?: string | null;
   codePath?: string | null;
   githubRepo?: string | null;
+  githubBranch?: string;
   vercelUrl?: string | null;
   relatedPageUrl?: string | null;
   portfolioValue?: string;
@@ -132,7 +133,12 @@ export type CreateTaskInput = {
   priority?: TaskPriority;
   workload?: string;
   blocker?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   dueDate?: string | null;
+  estimateHours?: number | null;
+  actualHours?: number | null;
+  completedAt?: string | null;
   progressNote?: string;
   completionSource?: StudioTask["completionSource"];
   gitCommitSha?: string | null;
@@ -147,6 +153,8 @@ export type CreateAssetInput = {
   projectId: string;
   assetType?: AssetType;
   url?: string;
+  storagePath?: string | null;
+  mimeType?: string | null;
   note?: string;
   takeaway?: string;
   risk?: string | null;
@@ -191,9 +199,12 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
       input.localRunGuide !== undefined ? input.localRunGuide : (existing?.localRunGuide ?? null),
     codePath: input.codePath !== undefined ? input.codePath : (existing?.codePath ?? null),
     githubRepo: input.githubRepo !== undefined ? input.githubRepo : (existing?.githubRepo ?? null),
+    githubBranch: input.githubBranch ?? existing?.githubBranch ?? "main",
     vercelUrl: input.vercelUrl !== undefined ? input.vercelUrl : (existing?.vercelUrl ?? null),
+    lastCommitSha: existing?.lastCommitSha ?? null,
     lastCommitMessage: existing?.lastCommitMessage ?? null,
     lastCommitAt: existing?.lastCommitAt ?? null,
+    lastGitSyncedAt: existing?.lastGitSyncedAt ?? null,
     relatedPageUrl:
       input.relatedPageUrl !== undefined ? input.relatedPageUrl : (existing?.relatedPageUrl ?? null),
     portfolioValue: input.portfolioValue ?? existing?.portfolioValue ?? "",
@@ -505,6 +516,23 @@ export async function deleteStudioEvolution(id: string): Promise<void> {
   );
 }
 
+function applyTaskPatch(existing: StudioTask, patch: UpdateTaskInput): StudioTask {
+  const task: StudioTask = {
+    ...existing,
+    ...patch,
+    title: patch.title?.trim() ?? existing.title,
+  };
+
+  if (patch.status === "done" && !task.completedAt) {
+    task.completedAt = patch.completedAt ?? nowIso();
+  }
+  if (patch.status && patch.status !== "done") {
+    task.completedAt = null;
+  }
+
+  return task;
+}
+
 export async function createStudioTask(input: CreateTaskInput): Promise<StudioTask> {
   if (!input.title?.trim()) throw new Error("title 必填");
   if (!input.projectId) throw new Error("projectId 必填");
@@ -520,7 +548,13 @@ export async function createStudioTask(input: CreateTaskInput): Promise<StudioTa
     priority: input.priority ?? "P2",
     workload: input.workload ?? "",
     blocker: input.blocker ?? null,
+    startDate: input.startDate ?? null,
+    endDate: input.endDate ?? null,
     dueDate: input.dueDate ?? null,
+    estimateHours: input.estimateHours ?? null,
+    actualHours: input.actualHours ?? null,
+    completedAt:
+      input.completedAt ?? (input.status === "done" ? nowIso() : null),
     progressNote: input.progressNote ?? "",
     completionSource: input.completionSource ?? null,
     gitCommitSha: input.gitCommitSha ?? null,
@@ -552,7 +586,7 @@ export async function updateStudioTask(id: string, patch: UpdateTaskInput): Prom
     throw new Error("关联项目不存在");
   }
 
-  const task: StudioTask = { ...existing, ...patch, title: patch.title?.trim() ?? existing.title };
+  const task = applyTaskPatch(existing, patch);
 
   return writeSupabase(
     async () => {
@@ -600,6 +634,8 @@ export async function createStudioAsset(input: CreateAssetInput): Promise<Asset>
     projectId: input.projectId,
     assetType: input.assetType ?? "inspiration",
     url: input.url ?? "",
+    storagePath: input.storagePath ?? null,
+    mimeType: input.mimeType ?? null,
     note: input.note ?? "",
     takeaway: input.takeaway ?? "",
     risk: input.risk ?? null,
@@ -666,6 +702,10 @@ export async function deleteStudioAsset(id: string): Promise<void> {
 
 export async function parkStudioIdea(id: string): Promise<Idea> {
   return updateStudioIdea(id, { status: "parked" });
+}
+
+export async function completeStudioIdea(id: string): Promise<Idea> {
+  return updateStudioIdea(id, { status: "done" });
 }
 
 export type UpsertIdeaFromGitHubInput = {

@@ -15,7 +15,13 @@ const EMOTION_OPTIONS = Object.keys(EMOTION_LABELS) as EmotionLevel[];
 
 type LinkOption = { id: string; label: string };
 
-export function StructuredCapturePanel({ projects }: { projects: LinkOption[] }) {
+export function StructuredCapturePanel({
+  projects,
+  defaultProjectId,
+}: {
+  projects: LinkOption[];
+  defaultProjectId?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -26,7 +32,7 @@ export function StructuredCapturePanel({ projects }: { projects: LinkOption[] })
   const [source, setSource] = useState<(typeof IDEA_SOURCE_OPTIONS)[number]>("ChatGPT");
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("灵感收件箱");
   const [emotionLevel, setEmotionLevel] = useState<EmotionLevel>("normal");
-  const [relatedProjectId, setRelatedProjectId] = useState("");
+  const [relatedProjectId, setRelatedProjectId] = useState(defaultProjectId ?? "");
   const [suggestedNextStep, setSuggestedNextStep] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -80,7 +86,7 @@ export function StructuredCapturePanel({ projects }: { projects: LinkOption[] })
         onClick={() => setOpen(true)}
         className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50"
       >
-        + 粘贴 ChatGPT 结构化灵感
+        + {defaultProjectId ? "记一条灵感" : "粘贴 ChatGPT 结构化灵感"}
       </button>
     );
   }

@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { fetchProjectBoard } from "@/lib/actions";
 import { KanbanBoard } from "@/components/task-board";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { ProjectIdeasSection } from "@/components/studio/project-ideas-section";
 import { ProjectTaskBoard } from "@/components/studio/project-task-board";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { getProjectTasks } from "@/lib/studio/data";
+import { getProjectIdeas, getProjectTasks } from "@/lib/studio/data";
 
 export default async function ProjectTasksPage({
   params,
@@ -18,13 +19,22 @@ export default async function ProjectTasksPage({
 
   const pmBundle = ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : ctx.pmBundle;
   const studioTasks = ctx.studio ? await getProjectTasks(ctx.studio.id) : [];
+  const ideas = ctx.studio ? await getProjectIdeas(ctx.studio.id) : [];
 
   return (
     <div className="space-y-8">
+      {ctx.studio ? (
+        <ProjectIdeasSection
+          projectId={ctx.studio.id}
+          projectTitle={ctx.studio.title}
+          ideas={ideas}
+        />
+      ) : null}
+
       {pmBundle ? (
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">需求看板</h2>
+            <h2 className="text-sm font-semibold text-slate-700">PM 需求看板</h2>
             <Link
               href={`/projects/${ctx.pmSlug ?? id}/pool`}
               className="text-sm text-indigo-600 hover:underline"

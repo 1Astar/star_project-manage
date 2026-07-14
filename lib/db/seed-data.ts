@@ -6,13 +6,18 @@ import type { DatabaseSnapshot } from "@/lib/db/types";
 export const SEED_IDS = {
   petProject: "a1000001-0001-4001-8001-000000000001",
   controllerProject: "a1000001-0001-4001-8001-000000000002",
+  starPmProject: "a1000001-0001-4001-8001-000000000003",
   petIter: "a2000001-0001-4001-8001-000000000001",
   controllerIter: "a2000001-0001-4001-8001-000000000002",
+  starPmIter: "a2000001-0001-4001-8001-000000000003",
   petReqHome: "b1000001-0001-4001-8001-000000000001",
   petReqBanner: "b1000001-0001-4001-8001-000000000002",
   petReqPush: "b1000001-0001-4001-8001-000000000003",
   ctrlReqMask: "b1000001-0001-4001-8001-000000000004",
   ctrlReqMigrate: "b1000001-0001-4001-8001-000000000005",
+  starPmReqBridge: "b1000001-0001-4001-8001-000000000006",
+  starPmReqTasks: "b1000001-0001-4001-8001-000000000007",
+  starPmReqGit: "b1000001-0001-4001-8001-000000000008",
 } as const;
 
 const SEED_TIME = "2026-06-22T00:00:00.000Z";
@@ -38,8 +43,10 @@ function emptyProjectGitFields() {
 export function createSeedData(): DatabaseSnapshot {
   const petProjectId = SEED_IDS.petProject;
   const controllerProjectId = SEED_IDS.controllerProject;
+  const starPmProjectId = SEED_IDS.starPmProject;
   const petIterationId = SEED_IDS.petIter;
   const controllerIterationId = SEED_IDS.controllerIter;
+  const starPmIterationId = SEED_IDS.starPmIter;
 
   const petReqs = [
     {
@@ -127,6 +134,60 @@ export function createSeedData(): DatabaseSnapshot {
       status: "testing",
       blocker_reason: null,
       sort_order: 2,
+      created_at: SEED_TIME,
+      updated_at: SEED_TIME,
+    },
+  ];
+
+  const starPmReqs = [
+    {
+      id: SEED_IDS.starPmReqBridge,
+      project_id: starPmProjectId,
+      iteration_id: starPmIterationId,
+      module_l1_id: null,
+      module_l2_id: null,
+      title: "Star PM 桥接 Studio 项目",
+      sub_function: "proj-star-pm ↔ star-pm",
+      detail_work: "PM 需求看板 + Studio 任务同页展示",
+      acceptance_criteria: "打开 /projects/proj-star-pm 可见上下双轨任务区",
+      priority: "P0",
+      status: "in_progress",
+      blocker_reason: null,
+      sort_order: 1,
+      created_at: SEED_TIME,
+      updated_at: SEED_TIME,
+    },
+    {
+      id: SEED_IDS.starPmReqTasks,
+      project_id: starPmProjectId,
+      iteration_id: starPmIterationId,
+      module_l1_id: null,
+      module_l2_id: null,
+      title: "任务页整合灵感 + Notion 式表格",
+      sub_function: "关联灵感 / PM 看板 / Studio 任务",
+      detail_work: null,
+      acceptance_criteria: "tasks 页按顺序展示三块区域，表格可展开备注",
+      priority: "P0",
+      status: "in_progress",
+      blocker_reason: null,
+      sort_order: 2,
+      created_at: SEED_TIME,
+      updated_at: SEED_TIME,
+    },
+    {
+      id: SEED_IDS.starPmReqGit,
+      project_id: starPmProjectId,
+      iteration_id: starPmIterationId,
+      module_l1_id: null,
+      module_l2_id: null,
+      title: "全项目 Git 绑定（总仓 + code_path）",
+      sub_function: "Studio Git + Cron 同步 + PM 镜像",
+      detail_work: "默认总仓 1Astar/star_project-manage，monorepo 按 path 过滤",
+      acceptance_criteria: "Recovery 页可配置仓库/分支/目录，Cron 同步 commit",
+      priority: "P1",
+      status: "testing",
+      blocker_reason: null,
+      sort_order: 3,
       created_at: SEED_TIME,
       updated_at: SEED_TIME,
     },
@@ -258,6 +319,54 @@ export function createSeedData(): DatabaseSnapshot {
     },
   ];
 
+  const starPmTasks: RoleTask[] = [
+    {
+      id: "d1000001-0001-4001-8001-000000000009",
+      requirement_id: starPmReqs[0].id,
+      role: "frontend",
+      assignee: "产品",
+      estimate_hours: 8,
+      actual_hours: 6,
+      start_date: "2026-07-10",
+      end_date: "2026-07-13",
+      status: "in_progress",
+      notes: "桥接 + tasks 页布局",
+      blocker_reason: null,
+      progress_percent: 75,
+      updated_at: SEED_TIME,
+    },
+    {
+      id: "d1000001-0001-4001-8001-000000000010",
+      requirement_id: starPmReqs[1].id,
+      role: "frontend",
+      assignee: "产品",
+      estimate_hours: 6,
+      actual_hours: null,
+      start_date: "2026-07-11",
+      end_date: "2026-07-14",
+      status: "in_progress",
+      notes: "灵感表格 + capture 默认项目",
+      blocker_reason: null,
+      progress_percent: 60,
+      updated_at: SEED_TIME,
+    },
+    {
+      id: "d1000001-0001-4001-8001-000000000011",
+      requirement_id: starPmReqs[2].id,
+      role: "backend",
+      assignee: "产品",
+      estimate_hours: 4,
+      actual_hours: null,
+      start_date: null,
+      end_date: null,
+      status: "testing",
+      notes: "013 迁移 + sync API",
+      blocker_reason: null,
+      progress_percent: 90,
+      updated_at: SEED_TIME,
+    },
+  ];
+
   const acceptanceItems: AcceptanceItem[] = [
     {
       id: "c1000001-0001-4001-8001-000000000001",
@@ -299,6 +408,30 @@ export function createSeedData(): DatabaseSnapshot {
       note: null,
       sort_order: 1,
     },
+    {
+      id: "c1000001-0001-4001-8001-000000000006",
+      requirement_id: starPmReqs[0].id,
+      description: `${starPmReqs[0].title} - 双轨页面可访问`,
+      passed: null,
+      note: null,
+      sort_order: 1,
+    },
+    {
+      id: "c1000001-0001-4001-8001-000000000007",
+      requirement_id: starPmReqs[1].id,
+      description: `${starPmReqs[1].title} - 三块区域顺序正确`,
+      passed: null,
+      note: null,
+      sort_order: 1,
+    },
+    {
+      id: "c1000001-0001-4001-8001-000000000008",
+      requirement_id: starPmReqs[2].id,
+      description: `${starPmReqs[2].title} - Git 同步可用`,
+      passed: null,
+      note: null,
+      sort_order: 1,
+    },
   ];
 
   const frontendToken = generateShareToken();
@@ -325,6 +458,27 @@ export function createSeedData(): DatabaseSnapshot {
         created_at: SEED_TIME,
         ...emptyProjectGitFields(),
       },
+      {
+        id: starPmProjectId,
+        name: "Star PM",
+        slug: "star-pm",
+        description: "轻量原型项目管理 + Idea Studio",
+        pool_tag_options: ["产品", "Studio", "Git"],
+        created_at: SEED_TIME,
+        repo_full_name: "1Astar/star_project-manage",
+        repo_branch: "main",
+        repo_url: "https://github.com/1Astar/star_project-manage",
+        last_commit_sha: null,
+        last_commit_message: null,
+        last_commit_at: null,
+        last_git_synced_at: null,
+        vercel_project_id: null,
+        vercel_deployment_url: "https://star-project-manage.vercel.app",
+        last_deploy_status: null,
+        demo_url: "https://star-project-manage.vercel.app",
+        local_run_guide: "cd star-pm\nnpm run dev",
+        code_path: "工具/private/工具/star-pm",
+      },
     ],
     iterations: [
       {
@@ -341,16 +495,23 @@ export function createSeedData(): DatabaseSnapshot {
         sort_order: 1,
         created_at: SEED_TIME,
       },
+      {
+        id: starPmIterationId,
+        project_id: starPmProjectId,
+        name: "202607 V1.2 Studio 整合",
+        sort_order: 1,
+        created_at: SEED_TIME,
+      },
     ],
     modules: [],
-    requirements: [...petReqs, ...controllerReqs].map((r) => ({
+    requirements: [...petReqs, ...controllerReqs, ...starPmReqs].map((r) => ({
       ...REQUIREMENT_POOL_DEFAULTS,
       ...r,
       tags: [],
       custom_fields: {},
     })) as Requirement[],
     acceptance_items: acceptanceItems,
-    role_tasks: [...petTasks, ...controllerTasks],
+    role_tasks: [...petTasks, ...controllerTasks, ...starPmTasks],
     test_records: [],
     acceptance_records: [],
     share_links: [

@@ -10,6 +10,15 @@
 
 ---
 
+## v1.4.0 · 2026-07-14
+
+- **灵感流 `/stream`**：时间线 / 表格双视图；底部 Enter 快记；项目标签筛选；`/inbox` 重定向
+- **整理今日脑暴**：`POST /api/studio/ideas/digest` + 确认执行路由（转项目 / 转任务 / 观察 / 丢弃）
+- **创造宇宙星图**：工作台首页 Canvas 星空（灵感星 / 落地星球 / 废弃流星）
+- **灵感状态 `done`**：可不拆任务直接标完成；MCP `update_idea` / `list_ideas` 支持；与 `converted`（转新项目）区分
+- **侧栏退出登录**：`WorkbenchShell` 底部恢复「退出登录」
+- **014 种子 SQL**：补齐 `projects` Git 列后再插入，避免未跑 005 时报缺列
+
 ## v1.3.2 · 2026-07-13
 
 - **每日 Git 同步 Cron**：新增 `/api/cron/sync-git`，每天 11:00 自动拉取所有已绑定 `repo_full_name` + `repo_branch` 的项目的最近 commit

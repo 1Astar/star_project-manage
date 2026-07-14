@@ -29,12 +29,16 @@ export function parseRepoFullName(repoFullName: string): { owner: string; repo: 
 export async function fetchRecentCommits(
   repoFullName: string,
   branch: string,
-  perPage = 10
+  perPage = 10,
+  path?: string
 ): Promise<GitHubCommit[]> {
   const { owner, repo } = parseRepoFullName(repoFullName);
   const url = new URL(`https://api.github.com/repos/${owner}/${repo}/commits`);
   url.searchParams.set("sha", branch);
   url.searchParams.set("per_page", String(perPage));
+  if (path?.trim()) {
+    url.searchParams.set("path", path.trim().replace(/\\/g, "/"));
+  }
 
   const res = await fetch(url.toString(), {
     headers: {

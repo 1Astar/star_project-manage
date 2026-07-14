@@ -53,6 +53,12 @@ export function ProjectMoreMenu({ routeId, pmSlug }: { routeId: string; pmSlug: 
         更多操作
       </summary>
       <div className="absolute right-0 z-10 mt-1 min-w-[160px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+        <a
+          href={`/projects/${routeId}/secrets`}
+          className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+        >
+          项目密钥
+        </a>
         {pmSlug ? (
           <>
             <a

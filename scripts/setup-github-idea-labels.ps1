@@ -24,6 +24,7 @@ $labels = @(
   @{ name = "status:inbox"; color = "C5DEF5"; description = "灵感收件箱" },
   @{ name = "status:reviewing"; color = "FEF2C0"; description = "审阅中" },
   @{ name = "status:converted"; color = "BFD4F2"; description = "已转项目" },
+  @{ name = "status:done"; color = "B4E1C5"; description = "已完成" },
   @{ name = "status:parked"; color = "D4C5F9"; description = "停车场" },
   @{ name = "status:archived"; color = "E4E669"; description = "已归档" },
 

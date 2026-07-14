@@ -117,6 +117,7 @@ export function QuickCaptureModal({ projects }: QuickCaptureModalProps) {
           relatedProjectId: relatedProjectId || null,
           openAiApiKey: aiSettings.apiKey,
           openAiModel: aiSettings.model,
+          openAiBaseUrl: aiSettings.baseUrl,
         }),
       });
       const data = await res.json();

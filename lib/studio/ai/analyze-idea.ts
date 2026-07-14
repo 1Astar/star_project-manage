@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resolveOpenAiCredentials, type OpenAiCredentials } from "@/lib/studio/ai/openai-client";
 import type { Idea, IdeaSubtask, IdeaType, EmotionLevel, IdeaPriority } from "@/lib/studio/types";
 
 const prioritySchema = z.enum(["P0", "P1", "P2", "P3"]);
@@ -37,10 +38,7 @@ export const ideaAnalysisSchema = z.object({
 
 export type IdeaAnalysisResult = z.infer<typeof ideaAnalysisSchema>;
 
-export type OpenAiCredentials = {
-  apiKey: string;
-  model?: string;
-};
+export type { OpenAiCredentials };
 
 export type AnalyzeIdeaContext = {
   rawInput: string;
@@ -56,15 +54,6 @@ export type AnalyzeIdeaContext = {
   } | null;
   relatedIdea?: Pick<Idea, "title" | "oneLineIdea" | "whyItMatters" | "priority" | "type"> | null;
 };
-
-function resolveOpenAiCredentials(credentials: OpenAiCredentials) {
-  const apiKey = credentials.apiKey?.trim();
-  if (!apiKey) throw new Error("请先在页面配置 OpenAI API Key");
-  return {
-    apiKey,
-    model: credentials.model?.trim() || "gpt-4o-mini",
-  };
-}
 
 function buildContextBlock(context: AnalyzeIdeaContext): string {
   const lines: string[] = [];
@@ -140,8 +129,8 @@ export async function analyzeIdeaWithOpenAi(
   context: AnalyzeIdeaContext,
   credentials: OpenAiCredentials
 ): Promise<IdeaAnalysisResult> {
-  const { apiKey, model } = resolveOpenAiCredentials(credentials);
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const { apiKey, model, baseUrl } = resolveOpenAiCredentials(credentials);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,

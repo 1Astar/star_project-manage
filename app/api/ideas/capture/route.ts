@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { captureIdeaViaGitHubIssue } from "@/lib/github/sync-ideas";
+import { captureIdea } from "@/lib/studio/capture-idea";
 import type { IdeaCapturePayload } from "@/lib/studio/idea-capture";
 
 function verifyCaptureSecret(request: Request): boolean {
@@ -20,15 +20,15 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as IdeaCapturePayload;
-    const result = await captureIdeaViaGitHubIssue(body);
+    const result = await captureIdea(body);
     return NextResponse.json({
       ok: true,
-      message: "已创建 GitHub Issue，等待同步进入灵感收件箱",
+      message: "已进入灵感收件箱",
       ...result,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "提交失败";
-    const status = message.includes("未配置") ? 503 : 400;
+    const status = 400;
     return NextResponse.json({ error: message }, { status });
   }
 }

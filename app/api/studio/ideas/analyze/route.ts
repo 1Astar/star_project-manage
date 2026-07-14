@@ -11,6 +11,7 @@ type AnalyzeBody = {
   relatedIdeaId?: string | null;
   openAiApiKey?: string;
   openAiModel?: string;
+  openAiBaseUrl?: string;
 };
 
 export async function POST(request: Request) {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
     const analysis = await analyzeIdeaWithOpenAi(context, {
       apiKey: body?.openAiApiKey ?? "",
       model: body?.openAiModel,
+      baseUrl: body?.openAiBaseUrl,
     });
     return studioOk({ analysis });
   } catch (error) {

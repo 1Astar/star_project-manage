@@ -1,6 +1,12 @@
 export type IdeaType = "product" | "feature" | "ui" | "content" | "tech" | "business";
 export type EmotionLevel = "normal" | "like" | "excited";
-export type IdeaStatus = "inbox" | "reviewing" | "converted" | "parked" | "archived";
+export type IdeaStatus =
+  | "inbox"
+  | "reviewing"
+  | "converted"
+  | "done"
+  | "parked"
+  | "archived";
 
 export type ProjectStatus = "mainline" | "active" | "demo" | "parking" | "archived";
 export type ProjectPriority = "P0" | "P1" | "P2" | "P3";
@@ -79,9 +85,12 @@ export interface Project {
   localRunGuide: string | null;
   codePath: string | null;
   githubRepo: string | null;
+  githubBranch: string;
   vercelUrl: string | null;
+  lastCommitSha: string | null;
   lastCommitMessage: string | null;
   lastCommitAt: string | null;
+  lastGitSyncedAt: string | null;
   relatedPageUrl: string | null;
   portfolioValue: string;
   body: ProjectBody;
@@ -111,7 +120,12 @@ export interface StudioTask {
   priority: TaskPriority;
   workload: string;
   blocker: string | null;
+  startDate: string | null;
+  endDate: string | null;
   dueDate: string | null;
+  estimateHours: number | null;
+  actualHours: number | null;
+  completedAt: string | null;
   progressNote: string;
   completionSource: TaskCompletionSource | null;
   gitCommitSha: string | null;
@@ -125,6 +139,8 @@ export interface Asset {
   projectId: string;
   assetType: AssetType;
   url: string;
+  storagePath: string | null;
+  mimeType: string | null;
   note: string;
   takeaway: string;
   risk: string | null;
@@ -149,6 +165,7 @@ export const IDEA_STATUS_LABELS: Record<IdeaStatus, string> = {
   inbox: "收件箱",
   reviewing: "审阅中",
   converted: "已转项目",
+  done: "已完成",
   parked: "停车场",
   archived: "已归档",
 };

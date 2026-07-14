@@ -1,4 +1,4 @@
-import { captureIdeaViaGitHubIssue } from "@/lib/github/sync-ideas";
+import { captureIdea } from "@/lib/studio/capture-idea";
 import { mapStudioError, readStudioBody, studioOk } from "@/lib/studio/route-utils";
 import type { IdeaCapturePayload } from "@/lib/studio/idea-capture";
 
@@ -9,9 +9,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await captureIdeaViaGitHubIssue(body);
+    const result = await captureIdea(body);
     return studioOk({
-      message: "已提交到 GitHub Issue 中转，请同步收件箱",
+      message: "已进入灵感收件箱",
       ...result,
     });
   } catch (error) {
