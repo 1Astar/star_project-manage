@@ -1,4 +1,5 @@
 import { fetchRecentCommits, type GitHubCommit } from "@/lib/github/client";
+import { resolveProjectGitScope } from "@/lib/studio/git-utils";
 import { updateStudioTask } from "@/lib/studio/mutations";
 import { getStudioSnapshot } from "@/lib/studio/store";
 import type { Project, StudioTask } from "@/lib/studio/types";
@@ -22,14 +23,15 @@ function commitMatchesTask(commit: GitHubCommit, task: StudioTask): boolean {
   return hits.length >= Math.min(2, keywords.length);
 }
 
+/**
+ * 仅在「项目分支 +（可选）code_path 影响目录」的提交里匹配任务。
+ * 不再写死 main；未配 branch 会报错。
+ */
 export async function syncProjectTasksFromGit(project: Project) {
-  if (!project.githubRepo) {
-    throw new Error("项目未配置 GitHub 仓库");
-  }
+  const { repoFullName, branch, path } = resolveProjectGitScope(project);
 
-  const branch = project.githubBranch || "main";
-  const path = project.codePath?.trim().replace(/\\/g, "/").replace(/^\/+/, "");
-  const commits = await fetchRecentCommits(project.githubRepo, branch, 30, path || undefined);
+  // path 有值 → GitHub 只返回改动过该目录的 commit
+  const commits = await fetchRecentCommits(repoFullName, branch, 30, path);
   const { tasks } = await getStudioSnapshot();
   const openTasks = tasks.filter((t) => t.projectId === project.id && t.status !== "done");
 
@@ -54,5 +56,9 @@ export async function syncProjectTasksFromGit(project: Project) {
     });
   }
 
-  return { matched: updated.length, updated };
+  return {
+    matched: updated.length,
+    updated,
+    scope: { branch, path: path ?? null },
+  };
 }

@@ -9,13 +9,32 @@ export type IdeaCapturePayload = {
   oneLineIdea?: string;
   why?: string;
   whyItMatters?: string;
+  /** AI 补充 */
+  aiSupplement?: string;
+  /** 聊天主题 */
+  chatTopic?: string;
   type?: string;
   source?: string;
+  /** 来源聊天 */
+  sourceChat?: string;
+  /** 来源方式 */
+  sourceMethod?: string;
   status?: string;
   emotionLevel?: string;
   relatedProjectId?: string | null;
+  relatedIdeaId?: string | null;
+  relatedModule?: string;
   suggestedNextStep?: string;
+  decisionNotes?: string;
+  evolutionNotes?: string;
+  relatedAssetsNote?: string;
   priority?: string;
+  /** 灵感发生时间 ISO */
+  occurredAt?: string | null;
+  /** 查重命中时仍强制新建 */
+  force?: boolean;
+  /** 关闭自动挂父 Idea */
+  skipParentAuto?: boolean;
 };
 
 const STATUS_MAP: Record<string, IdeaStatus> = {
@@ -27,7 +46,10 @@ const STATUS_MAP: Record<string, IdeaStatus> = {
   archived: "archived",
   灵感收件箱: "inbox",
   收件箱: "inbox",
+  灵感池: "inbox",
   审阅中: "reviewing",
+  验证中: "reviewing",
+  开发中: "reviewing",
   已转项目: "converted",
   已完成: "done",
   完成: "done",
@@ -58,7 +80,7 @@ export function normalizeCapturePayload(body: IdeaCapturePayload) {
       ? (typeLabel as IdeaType)
       : "product");
 
-  const source = (body.source ?? "ChatGPT").trim();
+  const sourceMethod = (body.sourceMethod ?? body.source ?? "ChatGPT").trim();
   const statusKey = (body.status ?? "inbox").trim();
   const status = STATUS_MAP[statusKey] ?? STATUS_MAP[statusKey.toLowerCase()] ?? "inbox";
   const emotionKey = (body.emotionLevel ?? "普通").trim();
@@ -70,14 +92,24 @@ export function normalizeCapturePayload(body: IdeaCapturePayload) {
     rawThought,
     summary,
     whyItMatters,
+    aiSupplement: (body.aiSupplement ?? "").trim(),
+    chatTopic: (body.chatTopic ?? "").trim(),
     type,
     typeLabel,
-    source,
+    source: sourceMethod,
+    sourceChat: (body.sourceChat ?? "").trim(),
+    sourceMethod,
     status,
     emotionLevel,
     relatedProjectId: body.relatedProjectId ?? null,
+    relatedIdeaId: body.relatedIdeaId ?? null,
+    relatedModule: (body.relatedModule ?? "").trim(),
     suggestedNextStep: body.suggestedNextStep?.trim() ?? "",
+    decisionNotes: (body.decisionNotes ?? "").trim(),
+    evolutionNotes: (body.evolutionNotes ?? "").trim(),
+    relatedAssetsNote: (body.relatedAssetsNote ?? "").trim(),
     priority: body.priority,
+    occurredAt: body.occurredAt?.trim() || null,
   };
 }
 
@@ -94,6 +126,14 @@ export function buildIdeaIssueBody(fields: ReturnType<typeof normalizeCapturePay
     `status: ${fields.status}`,
     `emotionLevel: ${fields.emotionLevel}`,
   ];
+  if (fields.chatTopic) lines.push(`chatTopic: ${fields.chatTopic}`);
+  if (fields.aiSupplement) lines.push(`aiSupplement: ${fields.aiSupplement}`);
+  if (fields.sourceChat) lines.push(`sourceChat: ${fields.sourceChat}`);
+  if (fields.relatedModule) lines.push(`relatedModule: ${fields.relatedModule}`);
+  if (fields.relatedIdeaId) lines.push(`relatedIdeaId: ${fields.relatedIdeaId}`);
+  if (fields.decisionNotes) lines.push(`decisionNotes: ${fields.decisionNotes}`);
+  if (fields.evolutionNotes) lines.push(`evolutionNotes: ${fields.evolutionNotes}`);
+  if (fields.relatedAssetsNote) lines.push(`relatedAssetsNote: ${fields.relatedAssetsNote}`);
   if (fields.suggestedNextStep) {
     lines.push(`suggestedNextStep: ${fields.suggestedNextStep}`);
   }

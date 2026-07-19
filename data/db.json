@@ -1,0 +1,336 @@
+{
+  "projects": [
+    {
+      "id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "name": "AI 宠物",
+      "slug": "ai-pet",
+      "description": "宠物 App 优化需求管理",
+      "created_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "proj-ca96a413-59f2-44c4-8ba4-adf7af520ef4",
+      "name": "AI 控制器",
+      "slug": "ai-controller",
+      "description": "元井 AI 控制器优化需求管理",
+      "created_at": "2026-06-23T00:39:57.777Z"
+    }
+  ],
+  "iterations": [
+    {
+      "id": "iter-f7860fd6-7231-49b9-b699-99b220f66772",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "name": "20260610 优化版本",
+      "sort_order": 1,
+      "created_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "iter-bf026d8d-bcb7-40fa-bc9c-1193b2787d86",
+      "project_id": "proj-ca96a413-59f2-44c4-8ba4-adf7af520ef4",
+      "name": "20260417 元井AI控制器",
+      "sort_order": 1,
+      "created_at": "2026-06-23T00:39:57.777Z"
+    }
+  ],
+  "modules": [],
+  "requirements": [
+    {
+      "id": "req-e362aabf-6855-4ccc-b03e-0031afe565d5",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "iteration_id": "iter-f7860fd6-7231-49b9-b699-99b220f66772",
+      "module_l1_id": null,
+      "module_l2_id": null,
+      "title": "主页页面整体结构优化",
+      "sub_function": null,
+      "detail_work": null,
+      "acceptance_criteria": "主页结构符合设计稿，导航与模块分区清晰",
+      "priority": null,
+      "status": "in_progress",
+      "blocker_reason": null,
+      "sort_order": 1,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "req-232a50cb-6bc4-4d45-9609-f8b06051f8eb",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "iteration_id": "iter-f7860fd6-7231-49b9-b699-99b220f66772",
+      "module_l1_id": null,
+      "module_l2_id": null,
+      "title": "安静状态下的陪伴专注横幅",
+      "sub_function": "安静状态下的陪伴专注横幅",
+      "detail_work": null,
+      "acceptance_criteria": "安静模式下正确展示专注横幅，交互符合 PRD",
+      "priority": null,
+      "status": "testing",
+      "blocker_reason": null,
+      "sort_order": 2,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "req-a843ad81-05cc-4626-985a-cf4b17fe8ade",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "iteration_id": "iter-f7860fd6-7231-49b9-b699-99b220f66772",
+      "module_l1_id": null,
+      "module_l2_id": null,
+      "title": "推送模块（推送/勿扰/喝水）",
+      "sub_function": null,
+      "detail_work": "后端整体评估 40 小时，覆盖三个子模块",
+      "acceptance_criteria": "推送、勿扰、喝水三条链路均可独立验收",
+      "priority": "P0",
+      "status": "in_progress",
+      "blocker_reason": null,
+      "sort_order": 3,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "req-536c4280-dd33-46f0-9080-3b95ad22db8c",
+      "project_id": "proj-ca96a413-59f2-44c4-8ba4-adf7af520ef4",
+      "iteration_id": "iter-bf026d8d-bcb7-40fa-bc9c-1193b2787d86",
+      "module_l1_id": null,
+      "module_l2_id": null,
+      "title": "下控遮罩等待界面",
+      "sub_function": "下控遮罩等待界面",
+      "detail_work": null,
+      "acceptance_criteria": "下控流程中遮罩等待界面展示正确，超时处理符合规范",
+      "priority": "P0",
+      "status": "acceptance",
+      "blocker_reason": null,
+      "sort_order": 1,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "req-83ed9a18-93e3-4ca1-9cc8-4d8bb99e7282",
+      "project_id": "proj-ca96a413-59f2-44c4-8ba4-adf7af520ef4",
+      "iteration_id": "iter-bf026d8d-bcb7-40fa-bc9c-1193b2787d86",
+      "module_l1_id": null,
+      "module_l2_id": null,
+      "title": "设备归属和批量迁移",
+      "sub_function": "设备归属和批量迁移",
+      "detail_work": null,
+      "acceptance_criteria": "批量迁移后设备归属关系正确，日志可追溯",
+      "priority": "P0",
+      "status": "testing",
+      "blocker_reason": null,
+      "sort_order": 2,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    }
+  ],
+  "acceptance_items": [
+    {
+      "id": "acc-3dbc002b-80c9-4273-89ad-e405c9a2c886",
+      "requirement_id": "req-e362aabf-6855-4ccc-b03e-0031afe565d5",
+      "description": "主页页面整体结构优化 - 功能符合 PRD",
+      "passed": null,
+      "note": null,
+      "sort_order": 1
+    },
+    {
+      "id": "acc-5eecf4ef-fcb0-47ea-b49c-3eb3f78d656b",
+      "requirement_id": "req-232a50cb-6bc4-4d45-9609-f8b06051f8eb",
+      "description": "安静状态下的陪伴专注横幅 - 功能符合 PRD",
+      "passed": false,
+      "note": "横幅在横屏下位置偏移",
+      "sort_order": 1
+    },
+    {
+      "id": "acc-2eb4786e-54cb-4cd5-9453-3e6b106c4f5c",
+      "requirement_id": "req-a843ad81-05cc-4626-985a-cf4b17fe8ade",
+      "description": "推送模块（推送/勿扰/喝水） - 功能符合 PRD",
+      "passed": null,
+      "note": null,
+      "sort_order": 1
+    },
+    {
+      "id": "acc-bdd4d933-7e0e-4894-a7ea-312095acec35",
+      "requirement_id": "req-536c4280-dd33-46f0-9080-3b95ad22db8c",
+      "description": "下控遮罩等待界面 - 验收标准达成",
+      "passed": null,
+      "note": null,
+      "sort_order": 1
+    },
+    {
+      "id": "acc-0ecfb04e-8dc5-449e-8a49-051ac65e2a1b",
+      "requirement_id": "req-83ed9a18-93e3-4ca1-9cc8-4d8bb99e7282",
+      "description": "设备归属和批量迁移 - 验收标准达成",
+      "passed": null,
+      "note": null,
+      "sort_order": 1
+    }
+  ],
+  "role_tasks": [
+    {
+      "id": "task-6332e665-f7e1-4e8e-8347-65615867ff14",
+      "requirement_id": "req-e362aabf-6855-4ccc-b03e-0031afe565d5",
+      "role": "ui",
+      "assignee": "游春梅",
+      "estimate_hours": null,
+      "actual_hours": null,
+      "start_date": null,
+      "end_date": null,
+      "status": "in_progress",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 30,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-682d154b-799f-483a-b009-d84c00ddfbed",
+      "requirement_id": "req-e362aabf-6855-4ccc-b03e-0031afe565d5",
+      "role": "frontend",
+      "assignee": "陈伟平",
+      "estimate_hours": null,
+      "actual_hours": null,
+      "start_date": null,
+      "end_date": null,
+      "status": "pending",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 0,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-23ac302e-06ad-483b-90ce-9d06dc4941f3",
+      "requirement_id": "req-232a50cb-6bc4-4d45-9609-f8b06051f8eb",
+      "role": "backend",
+      "assignee": "李德堂",
+      "estimate_hours": 16,
+      "actual_hours": null,
+      "start_date": "2026-06-01",
+      "end_date": "2026-06-05",
+      "status": "testing",
+      "notes": "已提测",
+      "blocker_reason": null,
+      "progress_percent": 100,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-c64ef2be-8d01-46bd-854b-d1146e85211d",
+      "requirement_id": "req-232a50cb-6bc4-4d45-9609-f8b06051f8eb",
+      "role": "frontend",
+      "assignee": "陈伟平",
+      "estimate_hours": 24,
+      "actual_hours": null,
+      "start_date": "2026-06-03",
+      "end_date": "2026-06-08",
+      "status": "testing",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 100,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-1b41e071-c61d-46b4-92fd-85d73613a982",
+      "requirement_id": "req-a843ad81-05cc-4626-985a-cf4b17fe8ade",
+      "role": "backend",
+      "assignee": "李德堂",
+      "estimate_hours": 40,
+      "actual_hours": null,
+      "start_date": "2026-06-01",
+      "end_date": "2026-06-15",
+      "status": "in_progress",
+      "notes": "模块级工时，覆盖推送/勿扰/喝水",
+      "blocker_reason": null,
+      "progress_percent": 21.32,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-0db3b943-f391-4474-b5e7-f1d0cd745cd5",
+      "requirement_id": "req-536c4280-dd33-46f0-9080-3b95ad22db8c",
+      "role": "backend",
+      "assignee": "谢鑫",
+      "estimate_hours": 12,
+      "actual_hours": null,
+      "start_date": "2026-04-24",
+      "end_date": "2026-05-06",
+      "status": "acceptance",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 100,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-12032e81-889f-4e14-a318-9454030c3569",
+      "requirement_id": "req-536c4280-dd33-46f0-9080-3b95ad22db8c",
+      "role": "frontend",
+      "assignee": "陈伟平",
+      "estimate_hours": 4,
+      "actual_hours": null,
+      "start_date": "2026-04-27",
+      "end_date": "2026-05-15",
+      "status": "acceptance",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 100,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    },
+    {
+      "id": "task-fc7a2079-5379-454f-b0f7-2ed29073fc62",
+      "requirement_id": "req-83ed9a18-93e3-4ca1-9cc8-4d8bb99e7282",
+      "role": "backend",
+      "assignee": "谢鑫",
+      "estimate_hours": 8,
+      "actual_hours": null,
+      "start_date": null,
+      "end_date": null,
+      "status": "testing",
+      "notes": null,
+      "blocker_reason": null,
+      "progress_percent": 100,
+      "updated_at": "2026-06-23T00:39:57.777Z"
+    }
+  ],
+  "test_records": [],
+  "acceptance_records": [],
+  "share_links": [
+    {
+      "id": "link-fbe29c9f-c1f5-4e43-8934-4e75b405a322",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "role": "frontend",
+      "label": "前端协作链接",
+      "token_hash": "220315f268eb68dd358fcfe78f6406370910abcb85da6ab88a5571582cbcd7f0",
+      "is_active": true,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "plain_token": "nFZghBAuIe4I34xc7qiWxzt66PvwoyD-U30mSlAlZWc"
+    },
+    {
+      "id": "link-093e3de2-d70a-431d-a874-fffff27812fc",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "role": "backend",
+      "label": "后端协作链接",
+      "token_hash": "fff56bb0517b6f7255cad93ec8021de90c9334586e82a058d3e707a5c67b3cc9",
+      "is_active": true,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "plain_token": "207v9PSlvhHHNjUc9vJjZE880273VaEM4lRtF01qDEg"
+    },
+    {
+      "id": "link-6b1c5180-ab5b-417d-b4d1-b962ef68fdb7",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "role": "test",
+      "label": "测试协作链接",
+      "token_hash": "35a0cf3d18ec4ed20ea86fbbfd952fbce9e7fd0545960e081fb796fb18913b7e",
+      "is_active": true,
+      "created_at": "2026-06-23T00:39:57.777Z",
+      "plain_token": "avAZij5X7XF5n7_dGzIWlU45snTxEgPXqQpuLfZjbhw"
+    }
+  ],
+  "prototypes": [],
+  "bugs": [],
+  "notifications": [
+    {
+      "id": "notif-ccef8fde-8a5e-4ffc-893c-52a1c5112b2d",
+      "project_id": "proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9",
+      "recipient_name": "产品",
+      "type": "acceptance_pending",
+      "title": "2 条需求待产品验收",
+      "body": "安静状态下的陪伴专注横幅 等需求已进入待验收",
+      "link": "/projects/proj-aefd140a-9d71-464d-bbd2-1bf83122d1a9/board",
+      "is_read": false,
+      "created_at": "2026-06-23T00:39:57.777Z"
+    }
+  ],
+  "activity_logs": []
+}

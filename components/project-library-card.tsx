@@ -3,12 +3,23 @@ import { StudioBadge } from "@/components/studio/shell";
 import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 import type { Project } from "@/lib/studio/types";
 
-export function ProjectLibraryCard({ project }: { project: Project }) {
+export function ProjectLibraryCard({
+  project,
+  nextActionDraft,
+}: {
+  project: Project;
+  nextActionDraft?: string;
+}) {
   const gitLabel = project.githubRepo
     ? `Git: ${project.githubRepo}`
     : project.lastCommitMessage
       ? `Git: ${project.lastCommitMessage.slice(0, 40)}`
       : "Git: 未配置";
+
+  const next =
+    project.nextAction?.trim() || project.body?.nextStep?.trim() || "";
+  const nextEmpty = !next;
+  const showDraft = nextEmpty && !!nextActionDraft;
 
   return (
     <Link
@@ -32,9 +43,14 @@ export function ProjectLibraryCard({ project }: { project: Project }) {
           <span className="text-slate-400">阶段：</span>
           {project.currentStage || "—"}
         </div>
-        <div>
-          <span className="text-slate-400">下一步：</span>
-          {project.nextAction || "—"}
+        <div className={nextEmpty ? "rounded-md bg-amber-50 px-1.5 py-1 text-amber-800/90" : ""}>
+          <span className={nextEmpty ? "text-amber-700/70" : "text-slate-400"}>下一步：</span>
+          {nextEmpty ? "未填写" : next}
+          {showDraft ? (
+            <div className="mt-0.5 truncate text-[11px] text-amber-700/60">
+              任务草稿：{nextActionDraft}
+            </div>
+          ) : null}
         </div>
         {project.demoUrl ? (
           <div className="truncate text-indigo-600">Demo: {project.demoUrl.replace(/^https?:\/\//, "")}</div>

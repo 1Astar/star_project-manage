@@ -2,6 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  fromDatetimeLocalValue,
+  toDatetimeLocalValue,
+} from "@/lib/studio/idea-stream-utils";
 
 type ProjectOption = { id: string; label: string };
 
@@ -15,6 +19,7 @@ export function StreamQuickCapture({
   const router = useRouter();
   const [text, setText] = useState("");
   const [projectId, setProjectId] = useState(defaultProjectId ?? "");
+  const [occurredLocal, setOccurredLocal] = useState(() => toDatetimeLocalValue(new Date().toISOString()));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +31,7 @@ export function StreamQuickCapture({
     setError(null);
 
     try {
+      const occurredAt = fromDatetimeLocalValue(occurredLocal) ?? new Date().toISOString();
       const res = await fetch("/api/studio/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -36,6 +42,7 @@ export function StreamQuickCapture({
           status: "inbox",
           triggerSource: "手动",
           relatedProjectId: projectId || null,
+          occurredAt,
         }),
       });
       const data = await res.json();
@@ -44,6 +51,7 @@ export function StreamQuickCapture({
         return;
       }
       setText("");
+      setOccurredLocal(toDatetimeLocalValue(new Date().toISOString()));
       router.refresh();
     } catch {
       setError("网络错误，请稍后重试");
@@ -70,6 +78,14 @@ export function StreamQuickCapture({
           placeholder="随手记一条灵感，Enter 保存"
           disabled={saving}
           className="min-w-0 flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+        />
+        <input
+          type="datetime-local"
+          value={occurredLocal}
+          onChange={(e) => setOccurredLocal(e.target.value)}
+          title="灵感发生时间"
+          disabled={saving}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 sm:w-48"
         />
         <select
           value={projectId}

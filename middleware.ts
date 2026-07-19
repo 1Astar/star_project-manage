@@ -16,6 +16,8 @@ const PUBLIC_PREFIXES = [
   "/.well-known",
   "/_next",
   "/favicon",
+  "/icon",
+  "/apple-icon",
   "/prototypes",
 ];
 
@@ -44,5 +46,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

@@ -28,8 +28,13 @@ function dateKeyInTz(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function getIdeaDateGroup(createdAt: string, now = new Date()): IdeaDateGroup {
-  const ideaDay = dateKeyInTz(createdAt);
+/** 时间线用：灵感发生时间，缺省回退入库时间 */
+export function ideaOccurredAt(idea: Pick<Idea, "occurredAt" | "createdAt">): string {
+  return idea.occurredAt || idea.createdAt;
+}
+
+export function getIdeaDateGroup(iso: string, now = new Date()): IdeaDateGroup {
+  const ideaDay = dateKeyInTz(iso);
   const today = dateKeyInTz(now.toISOString());
   if (ideaDay === today) return "today";
 
@@ -41,13 +46,24 @@ export function getIdeaDateGroup(createdAt: string, now = new Date()): IdeaDateG
   return "earlier";
 }
 
-export function formatIdeaTime(createdAt: string): string {
+export function formatIdeaTime(iso: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: TZ,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-  }).format(new Date(createdAt));
+  }).format(new Date(iso));
+}
+
+export function formatIdeaDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: TZ,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
 }
 
 export function groupIdeasByDate(ideas: Idea[]): Record<IdeaDateGroup, Idea[]> {
@@ -57,22 +73,53 @@ export function groupIdeasByDate(ideas: Idea[]): Record<IdeaDateGroup, Idea[]> {
     earlier: [],
   };
 
-  const sorted = [...ideas].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const sorted = [...ideas].sort((a, b) =>
+    ideaOccurredAt(b).localeCompare(ideaOccurredAt(a))
+  );
   for (const idea of sorted) {
-    groups[getIdeaDateGroup(idea.createdAt)].push(idea);
+    groups[getIdeaDateGroup(ideaOccurredAt(idea))].push(idea);
   }
   return groups;
 }
 
-export function isIdeaOnDate(createdAt: string, date: "today" | string, now = new Date()): boolean {
+export function isIdeaOnDate(
+  ideaOrIso: Idea | string,
+  date: "today" | string,
+  now = new Date()
+): boolean {
+  const iso = typeof ideaOrIso === "string" ? ideaOrIso : ideaOccurredAt(ideaOrIso);
   if (date === "today") {
-    return getIdeaDateGroup(createdAt, now) === "today";
+    return getIdeaDateGroup(iso, now) === "today";
   }
-  return dateKeyInTz(createdAt) === date;
+  return dateKeyInTz(iso) === date;
 }
 
 export function ideaSummaryLine(idea: Idea): string {
   const line = idea.oneLineIdea?.trim() || idea.whyItMatters?.trim() || idea.rawInput?.trim();
   if (!line) return "—";
   return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+}
+
+/** datetime-local 控件值 ↔ ISO */
+export function toDatetimeLocalValue(iso: string, now = new Date()): string {
+  const d = new Date(iso || now.toISOString());
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+export function fromDatetimeLocalValue(local: string): string | null {
+  const trimmed = local.trim();
+  if (!trimmed) return null;
+  const asShanghai = new Date(`${trimmed}:00+08:00`);
+  if (Number.isNaN(asShanghai.getTime())) return null;
+  return asShanghai.toISOString();
 }

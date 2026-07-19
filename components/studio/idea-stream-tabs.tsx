@@ -49,9 +49,11 @@ export function IdeaStreamTabs({ currentView }: { currentView: StreamView }) {
 export function StreamProjectTags({
   projects,
   currentProject,
+  includePooled,
 }: {
   projects: { id: string; label: string }[];
   currentProject: string | null;
+  includePooled: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,10 +69,24 @@ export function StreamProjectTags({
     router.push(qs ? `/stream?${qs}` : "/stream");
   }
 
-  const tags = [{ id: null as string | null, label: "全部" }, ...projects.map((p) => ({ id: p.id, label: p.label }))];
+  function togglePooled() {
+    const params = new URLSearchParams(searchParams.toString());
+    if (includePooled) {
+      params.delete("pooled");
+    } else {
+      params.set("pooled", "1");
+    }
+    const qs = params.toString();
+    router.push(qs ? `/stream?${qs}` : "/stream");
+  }
+
+  const tags = [
+    { id: null as string | null, label: "全部" },
+    ...projects.map((p) => ({ id: p.id, label: p.label })),
+  ];
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {tags.map((tag) => {
         const active = (currentProject ?? null) === tag.id;
         return (
@@ -89,6 +105,19 @@ export function StreamProjectTags({
           </button>
         );
       })}
+      <button
+        type="button"
+        onClick={togglePooled}
+        title="已同步进需求池的灵感默认隐藏，点此显示"
+        className={cn(
+          "rounded-full border px-3 py-1 text-xs font-medium transition",
+          includePooled
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+        )}
+      >
+        {includePooled ? "含已入池 ✓" : "含已入池"}
+      </button>
     </div>
   );
 }

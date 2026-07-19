@@ -4,7 +4,13 @@ import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
 import { IdeaStarMap } from "@/components/studio/idea-star-map";
 import { ProjectLibraryCard } from "@/components/project-library-card";
 import { StudioBadge } from "@/components/studio/shell";
+import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
+import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
+import {
+  getActiveRequirementsAcrossProjects,
+  getRecentlyCompletedWork,
+} from "@/lib/workbench/progress";
 import {
   getTodayFocus,
   getMainlineProject,
@@ -15,6 +21,7 @@ import {
   getProjectTitle,
   getPendingAlerts,
   getRecentGitUpdates,
+  getNextActionDrafts,
 } from "@/lib/studio/data";
 import {
   IDEA_TYPE_LABELS,
@@ -32,6 +39,9 @@ export default async function WorkbenchPage() {
     allIdeas,
     alerts,
     gitUpdates,
+    activeGroups,
+    completedWork,
+    nextActionDrafts,
   ] = await Promise.all([
     getTodayFocus(),
     getMainlineProject(),
@@ -41,6 +51,9 @@ export default async function WorkbenchPage() {
     getAllIdeas(),
     getPendingAlerts(),
     getRecentGitUpdates(5),
+    getActiveRequirementsAcrossProjects(),
+    getRecentlyCompletedWork(20, 14),
+    getNextActionDrafts(),
   ]);
 
   const starMapLayout = buildStarMapLayout(allIdeas, allProjects);
@@ -67,72 +80,78 @@ export default async function WorkbenchPage() {
         <IdeaStarMap layout={starMapLayout} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-slate-500">今日只做什么</h2>
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="text-xs font-medium text-slate-400">今日只做什么</div>
           {focus ? (
-            <div className="mt-3">
-              <div className="text-lg font-bold text-slate-900">
-                → {focus.project.title}{" "}
-                <StudioBadge tone={focus.project.priority === "P0" ? "p0" : "default"}>
-                  {focus.project.priority}
-                </StudioBadge>
+            <Link href={`/projects/${focus.project.id}`} className="mt-1 block">
+              <div className="truncate text-sm font-semibold text-slate-900">
+                {focus.project.title}
               </div>
-              <p className="mt-2 text-sm text-slate-600">
-                {focus.task?.title ?? focus.project.nextAction}
-              </p>
-              <Link
-                href={`/projects/${focus.project.id}`}
-                className="mt-3 inline-block text-sm text-indigo-600 hover:underline"
-              >
-                打开项目恢复 →
-              </Link>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-400">暂无主线任务</p>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-amber-200 bg-amber-50/40 p-6">
-          <h2 className="text-sm font-semibold text-amber-800">当前主线</h2>
-          {mainline ? (
-            <Link href={`/projects/${mainline.id}`} className="mt-3 block group">
-              <StudioBadge tone="mainline">{PROJECT_STATUS_LABELS.mainline}</StudioBadge>
-              <div className="mt-2 text-lg font-bold text-slate-900 group-hover:text-amber-900">
-                {mainline.title}
-              </div>
-              <p className="mt-1 text-sm text-slate-600">{mainline.positioning}</p>
-              <p className="mt-2 text-sm text-slate-500">下一步：{mainline.nextAction}</p>
+              {(() => {
+                const next =
+                  focus.task?.title?.trim() ||
+                  focus.project.nextAction?.trim() ||
+                  focus.project.body?.nextStep?.trim() ||
+                  "";
+                const draft = nextActionDrafts[focus.project.id];
+                if (next) {
+                  return (
+                    <p className="mt-0.5 truncate text-xs text-slate-500">{next}</p>
+                  );
+                }
+                return (
+                  <p className="mt-0.5 truncate text-xs text-amber-700/80">
+                    未写下一步
+                    {draft ? ` · 可参考：${draft}` : ""}
+                  </p>
+                );
+              })()}
             </Link>
           ) : (
-            <p className="mt-3 text-sm text-slate-400">未设置主线项目</p>
+            <p className="mt-1 text-xs text-slate-400">暂无主线任务</p>
           )}
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-slate-500">待处理提醒</h2>
-          <ul className="mt-3 space-y-2 text-sm text-slate-600">
-            <li>
-              收件箱新灵感：
-              <Link href="/stream" className="ml-1 font-medium text-indigo-600 hover:underline">
-                {alerts.inboxCount} 条
-              </Link>
-            </li>
-            {alerts.blockers.slice(0, 3).map((t) => (
-              <li key={t.id} className="text-red-600">
-                阻塞：{t.title}
-              </li>
-            ))}
-            {alerts.blockers.length === 0 && alerts.inboxCount === 0 ? (
-              <li className="text-slate-400">暂无紧急提醒</li>
-            ) : null}
-            <li>
-              <Link href="/todos" className="text-indigo-600 hover:underline">
-                打开我的待办 →
-              </Link>
-            </li>
-          </ul>
+        <section className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
+          <div className="text-xs font-medium text-amber-700/80">当前主线</div>
+          {mainline ? (
+            <Link href={`/projects/${mainline.id}`} className="mt-1 block">
+              <StudioBadge tone="mainline">{PROJECT_STATUS_LABELS.mainline}</StudioBadge>
+              <div className="mt-1 truncate text-sm font-semibold text-slate-900">
+                {mainline.title}
+              </div>
+            </Link>
+          ) : (
+            <p className="mt-1 text-xs text-slate-400">未设置主线</p>
+          )}
         </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="text-xs font-medium text-slate-400">待处理</div>
+          <p className="mt-1 text-sm text-slate-700">
+            收件箱{" "}
+            <Link href="/stream" className="font-semibold text-indigo-600 hover:underline">
+              {alerts.inboxCount}
+            </Link>
+            {alerts.blockers.length > 0 ? (
+              <span className="ml-2 text-red-600">阻塞 {alerts.blockers.length}</span>
+            ) : null}
+            {alerts.emptyNextActionCount > 0 ? (
+              <Link
+                href="/projects"
+                className="ml-2 text-amber-700/90 hover:underline"
+              >
+                下一步空白 {alerts.emptyNextActionCount}
+              </Link>
+            ) : null}
+          </p>
+        </section>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <WorkbenchActiveRequirements groups={activeGroups} />
+        <WorkbenchCompletedFeed items={completedWork} />
       </div>
 
       <section className="mt-6">
@@ -144,7 +163,11 @@ export default async function WorkbenchPage() {
         </div>
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {libraryProjects.slice(0, 4).map((p) => (
-            <ProjectLibraryCard key={p.id} project={p} />
+            <ProjectLibraryCard
+              key={p.id}
+              project={p}
+              nextActionDraft={nextActionDrafts[p.id]}
+            />
           ))}
         </div>
       </section>

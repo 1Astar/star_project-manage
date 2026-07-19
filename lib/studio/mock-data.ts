@@ -24,6 +24,7 @@ export const mockProjects: Project[] = [
     lastCommitAt: null,
     relatedPageUrl: "https://app.notion.com/p/Moonpie-395a86f50915810a9bf2da9551d6e782",
     portfolioValue: "作品集核心项目：手势交互 + 文化学习 + 情绪叙事",
+    customFields: {},
     body: {
       initialThought:
         "啊啊啊我想做一个塔罗手势抽牌，还能学小六壬和梅花易数！用摄像头识别手势，抽牌过程要有仪式感。",
@@ -66,6 +67,7 @@ export const mockProjects: Project[] = [
     lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "展示产品全流程管理能力 + 技术全栈",
+    customFields: {},
     body: {
       initialThought: "宠物 App 和 AI 控制器的工时表散落在 Excel，需要一个轻量 PM 工具。",
       whyThought: "团队只有 1 个后端，需要免登录分享链接让协作方更新任务。",
@@ -101,6 +103,7 @@ export const mockProjects: Project[] = [
     lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "商业产品实战经验",
+    customFields: {},
     body: {
       initialThought: "优化宠物 App 主页结构、专注横幅、推送模块。",
       whyThought: "公司主线产品，直接影响用户留存。",
@@ -136,6 +139,7 @@ export const mockProjects: Project[] = [
     lastCommitAt: null,
     relatedPageUrl: null,
     portfolioValue: "教育 + 文化赛道探索",
+    customFields: {},
     body: {
       initialThought: "把古诗词做成闯关游戏，配合节气主题。",
       whyThought: "和「随心而行」有文化学习交集，但用户群不同。",
@@ -286,7 +290,17 @@ export const mockIdeas: Idea[] = [
   githubIssueNumber: null,
   githubIssueUrl: null,
   githubLabels: [] as string[],
+  occurredAt: idea.createdAt,
+  completedAt: idea.status === "done" ? idea.createdAt : null,
   updatedAt: idea.createdAt,
+  aiSupplement: "",
+  chatTopic: "",
+  sourceChat: "",
+  sourceMethod: idea.triggerSource ?? "",
+  relatedModule: "",
+  decisionNotes: "",
+  evolutionNotes: "",
+  relatedAssetsNote: "",
   ...idea,
 })) as Idea[];
 
@@ -576,6 +590,8 @@ export function getStudioSeedData() {
     evolutionLogs: mockEvolutionLogs,
     tasks: mockTasks,
     assets: mockAssets,
+    releases: [] as import("@/lib/studio/types").StudioRelease[],
+    projectColumnDefs: [] as import("@/lib/studio/types").StudioProjectColumnDef[],
   };
 }
 
@@ -586,6 +602,8 @@ export function getStudioData() {
     evolutionLogs: mockEvolutionLogs,
     tasks: mockTasks,
     assets: mockAssets,
+    releases: [] as import("@/lib/studio/types").StudioRelease[],
+    projectColumnDefs: [] as import("@/lib/studio/types").StudioProjectColumnDef[],
   };
 }
 

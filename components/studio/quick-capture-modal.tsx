@@ -140,34 +140,41 @@ export function QuickCaptureModal({ projects }: QuickCaptureModalProps) {
     }
   }
 
-  async function saveIdea() {
-    if (!draft) return;
-
-    setSaving(true);
-    setError(null);
-
+  function buildIdeaBody(action?: "convert") {
+    if (!draft) return null;
     const rawInput = [rawThought.trim(), whyThought.trim() ? `\n\n为什么：${whyThought.trim()}` : ""]
       .join("")
       .trim();
+    return {
+      title: draft.title,
+      oneLineIdea: draft.oneLineIdea,
+      whyItMatters: draft.whyItMatters || whyThought.trim(),
+      triggerSource: "手动快速捕捉",
+      emotionLevel: draft.emotionLevel,
+      type: draft.type,
+      priority: draft.priority,
+      rawInput,
+      subtasks: draft.subtasks,
+      suggestedNextStep: draft.subtasks[0]?.title || "",
+      status: action === "convert" ? "inbox" : draft.suggestedAction === "park" ? "parked" : "inbox",
+      relatedProjectId: action === "convert" ? null : relatedProjectId || null,
+      syncSubtasksToProject: action !== "convert" && !!relatedProjectId && syncToProject,
+      ...(action === "convert" ? { action: "convert" as const } : {}),
+    };
+  }
+
+  async function saveIdea() {
+    const body = buildIdeaBody();
+    if (!body) return;
+
+    setSaving(true);
+    setError(null);
 
     try {
       const res = await fetch("/api/studio/ideas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: draft.title,
-          oneLineIdea: draft.oneLineIdea,
-          whyItMatters: draft.whyItMatters || whyThought.trim(),
-          triggerSource: "手动快速捕捉",
-          emotionLevel: draft.emotionLevel,
-          type: draft.type,
-          priority: draft.priority,
-          rawInput,
-          subtasks: draft.subtasks,
-          status: draft.suggestedAction === "park" ? "parked" : "inbox",
-          relatedProjectId: relatedProjectId || null,
-          syncSubtasksToProject: !!relatedProjectId && syncToProject,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -176,6 +183,35 @@ export function QuickCaptureModal({ projects }: QuickCaptureModalProps) {
       }
 
       closeModal();
+      router.refresh();
+    } catch {
+      setError("网络错误，请稍后重试");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveAndConvert() {
+    const body = buildIdeaBody("convert");
+    if (!body) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/studio/ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.project?.id) {
+        setError(data.error ?? "转项目失败");
+        return;
+      }
+
+      closeModal();
+      router.push(`/projects/${data.project.id}`);
       router.refresh();
     } catch {
       setError("网络错误，请稍后重试");
@@ -415,9 +451,17 @@ export function QuickCaptureModal({ projects }: QuickCaptureModalProps) {
                     type="button"
                     onClick={saveIdea}
                     disabled={saving}
+                    className="rounded-md border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    {saving ? "保存中…" : "只存灵感"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveAndConvert}
+                    disabled={saving}
                     className="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-800 disabled:opacity-50"
                   >
-                    {saving ? "保存中…" : "确认保存"}
+                    {saving ? "处理中…" : "保存并转成项目"}
                   </button>
                 </>
               )}

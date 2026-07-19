@@ -11,7 +11,7 @@ export function StudioGitSettings({ project }: { project: Project }) {
   const [error, setError] = useState<string | null>(null);
 
   const [githubRepo, setGithubRepo] = useState(project.githubRepo ?? "");
-  const [githubBranch, setGithubBranch] = useState(project.githubBranch || "main");
+  const [githubBranch, setGithubBranch] = useState(project.githubBranch || "");
   const [codePath, setCodePath] = useState(project.codePath ?? "");
   const [demoUrl, setDemoUrl] = useState(project.demoUrl ?? "");
   const [localRunGuide, setLocalRunGuide] = useState(project.localRunGuide ?? "");
@@ -21,6 +21,10 @@ export function StudioGitSettings({ project }: { project: Project }) {
     e.preventDefault();
     setMessage(null);
     setError(null);
+    if (githubRepo.trim() && !githubBranch.trim()) {
+      setError("填写仓库时必须指定分支（勿默认 main）");
+      return;
+    }
     startTransition(async () => {
       try {
         const res = await fetch(`/api/studio/projects/${project.id}/git`, {
@@ -28,7 +32,7 @@ export function StudioGitSettings({ project }: { project: Project }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             githubRepo: githubRepo || null,
-            githubBranch: githubBranch || "main",
+            githubBranch: githubBranch.trim() || null,
             codePath: codePath || null,
             demoUrl: demoUrl || null,
             localRunGuide: localRunGuide || null,
@@ -52,7 +56,7 @@ export function StudioGitSettings({ project }: { project: Project }) {
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <h2 className="font-semibold text-slate-800">代码仓库</h2>
       <p className="mt-1 text-sm text-slate-500">
-        绑定 GitHub 仓库与分支；填写代码目录则按 monorepo 子路径过滤 commit。
+        绑定仓库与<strong>实际分支</strong>；代码目录填仓库相对路径后，同步/任务匹配只看改动该目录的 commit。
       </p>
       <form onSubmit={handleSave} className="mt-4 space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -70,21 +74,20 @@ export function StudioGitSettings({ project }: { project: Project }) {
             <input
               value={githubBranch}
               onChange={(e) => setGithubBranch(e.target.value)}
-              placeholder="main"
+              placeholder="填写项目实际分支，勿空着默认"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
             />
           </label>
         </div>
-        <label className="block text-sm">
-          <span className="text-slate-500">代码目录（monorepo 可选）</span>
-          <input
-            value={codePath}
-            onChange={(e) => setCodePath(e.target.value)}
-            placeholder="工具/private/工具/star-pm"
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
-          />
-        </label>
-        <label className="block text-sm">
+          <label className="block text-sm">
+            <span className="text-slate-500">代码目录（monorepo 可选，勿填仓库 URL）</span>
+            <input
+              value={codePath}
+              onChange={(e) => setCodePath(e.target.value)}
+              placeholder="例：工具/private/工具/star-pm；整仓则留空"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
+            />
+          </label>        <label className="block text-sm">
           <span className="text-slate-500">展示链接</span>
           <input
             value={demoUrl}

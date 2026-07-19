@@ -12,7 +12,9 @@ import type {
   ProjectMember,
   Prototype,
   Requirement,
+  RequirementAttachment,
   RequirementComment,
+  RequirementLink,
   RoleTask,
   ShareLink,
   TestRecord,
@@ -36,4 +38,6 @@ export interface DatabaseSnapshot {
   git_activities: GitActivity[];
   project_members: ProjectMember[];
   pool_column_defs: PoolColumnDef[];
+  requirement_attachments: RequirementAttachment[];
+  requirement_links: RequirementLink[];
 }

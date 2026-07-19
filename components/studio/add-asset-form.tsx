@@ -3,15 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import type { AssetType } from "@/lib/studio/types";
-import { ASSET_TYPE_LABELS } from "@/lib/studio/types";
+import { ASSET_TYPE_CREATE_OPTIONS, ASSET_TYPE_LABELS } from "@/lib/studio/types";
 
 type AddAssetFormProps = {
   projectId: string;
+  defaultAssetType?: AssetType;
 };
 
-const ASSET_TYPES = Object.keys(ASSET_TYPE_LABELS) as AssetType[];
+const ASSET_TYPES = ASSET_TYPE_CREATE_OPTIONS;
 
-export function AddAssetForm({ projectId }: AddAssetFormProps) {
+export function AddAssetForm({
+  projectId,
+  defaultAssetType = "material",
+}: AddAssetFormProps) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -19,7 +23,7 @@ export function AddAssetForm({ projectId }: AddAssetFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
-  const [assetType, setAssetType] = useState<AssetType>("inspiration");
+  const [assetType, setAssetType] = useState<AssetType>(defaultAssetType);
   const [takeaway, setTakeaway] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
@@ -66,7 +70,7 @@ export function AddAssetForm({ projectId }: AddAssetFormProps) {
 
       setTitle("");
       setUrl("");
-      setAssetType("inspiration");
+      setAssetType(defaultAssetType);
       setTakeaway("");
       if (fileRef.current) fileRef.current.value = "";
       setOpen(false);
@@ -83,7 +87,10 @@ export function AddAssetForm({ projectId }: AddAssetFormProps) {
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setAssetType(defaultAssetType);
+            setOpen(true);
+          }}
           className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
           + 新增链接

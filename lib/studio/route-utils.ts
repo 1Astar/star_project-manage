@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
+import {
+  isStudioDuplicateError,
+  StudioDuplicateError,
+} from "@/lib/studio/entity-dedupe";
+import { CaptureDuplicateError } from "@/lib/studio/capture-relation";
 
 export function studioOk<T>(data: T, status = 200) {
   return NextResponse.json(data, { status });
 }
 
-export function studioErr(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+export function studioErr(
+  message: string,
+  status = 400,
+  extra?: Record<string, unknown>
+) {
+  return NextResponse.json({ error: message, ...extra }, { status });
 }
 
 export async function readStudioBody<T extends Record<string, unknown>>(request: Request): Promise<T | null> {
@@ -18,6 +27,24 @@ export async function readStudioBody<T extends Record<string, unknown>>(request:
 }
 
 export function mapStudioError(error: unknown) {
+  if (error instanceof StudioDuplicateError || isStudioDuplicateError(error)) {
+    const dup = error as StudioDuplicateError;
+    return studioErr(dup.message, 409, {
+      code: "DUPLICATE",
+      kind: dup.kind,
+      candidates: dup.candidates,
+      hint: dup.hint,
+    });
+  }
+  if (error instanceof CaptureDuplicateError) {
+    return studioErr(error.message, 409, {
+      code: "DUPLICATE",
+      kind: "idea",
+      candidates: error.candidates,
+      hint: "请 update_idea 更新已有条目，或传 force:true 强制新建",
+    });
+  }
+
   const message = error instanceof Error ? error.message : "操作失败";
   const status = message.includes("不存在")
     ? 404

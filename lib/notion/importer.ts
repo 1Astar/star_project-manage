@@ -6,7 +6,12 @@ import {
   writeDb,
   getProjectById,
 } from "@/lib/db";
-import type { ModuleNode, Requirement } from "@/lib/types";
+import {
+  REQUIREMENT_POOL_DEFAULTS,
+  statusTagsFromTaskStatus,
+  type ModuleNode,
+  type Requirement,
+} from "@/lib/types";
 import { mapNotionStatus, type NotionCsvPreview } from "@/lib/notion/parser";
 
 export interface NotionImportResult {
@@ -80,7 +85,9 @@ export async function importNotionCsvToPool(
       moduleL1Id = moduleCache.get(row.moduleName) ?? null;
     }
 
+    const status = mapNotionStatus(row.statusRaw);
     const req: Requirement = {
+      ...REQUIREMENT_POOL_DEFAULTS,
       id: uid("req-"),
       project_id: project.id,
       iteration_id: poolIteration.id,
@@ -91,7 +98,8 @@ export async function importNotionCsvToPool(
       detail_work: null,
       acceptance_criteria: null,
       priority: row.priority,
-      status: mapNotionStatus(row.statusRaw),
+      status,
+      status_tags: statusTagsFromTaskStatus(status),
       blocker_reason: null,
       sort_order: sortOrder++,
       in_pool: true,
@@ -104,11 +112,7 @@ export async function importNotionCsvToPool(
       difficulty_notes: row.difficultyNotes,
       scenario: row.scenario,
       needs_discussion: row.needsDiscussion,
-      prd_link: null,
-      prototype_link: null,
-      product_estimate_hours: null,
       tags: row.tags ?? [],
-      custom_fields: {},
       created_at: nowIso(),
       updated_at: nowIso(),
     };

@@ -1,9 +1,28 @@
 import fs from "fs/promises";
 import path from "path";
 import { createSeedData } from "@/lib/db/seed-data";
-import { readSupabaseDb, writeSupabaseDb, updateProjectById, upsertGitActivities } from "@/lib/db/supabase-store";
+import {
+  readSupabaseDb,
+  writeSupabaseDb,
+  updateProjectById,
+  upsertGitActivities,
+  upsertIterationRow,
+  upsertProjectRow,
+  upsertRequirementRow,
+  upsertRequirementAttachmentRow,
+  deleteRequirementAttachmentRow,
+  upsertActivityLogRow,
+  upsertRequirementLinkRow,
+  deleteRequirementLinkRow,
+  deleteRequirementRows,
+} from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import {
+  AGENT_ACTOR_NAME,
+  encodeAgentActivityNote,
+  formatAgentInspiration,
+} from "@/lib/cursor-actor";
 import { generateShareToken, hashToken } from "@/lib/utils";
 import {
   canShareRoleComment,
@@ -17,20 +36,37 @@ import type {
   Bug,
   GitActivity,
   Iteration,
+  LinkEntityType,
+  LinkRelationType,
   PoolColumnDef,
   PoolColumnType,
   Project,
   ProjectMember,
   Prototype,
   Requirement,
+  RequirementAttachment,
   RequirementComment,
+  RequirementLink,
+  RequirementType,
   RequirementUpdates,
   RoleTask,
   RoleType,
   ShareLink,
+  TaskStatus,
   TestRecord,
 } from "@/lib/types";
-import { REQUIREMENT_POOL_DEFAULTS } from "@/lib/types";
+import {
+  REQUIREMENT_CANCELLED_TAG,
+  REQUIREMENT_POOL_DEFAULTS,
+  deriveTaskStatusFromTags,
+  requirementIsDone,
+  statusTagsFromTaskStatus,
+} from "@/lib/types";
+import {
+  defaultReqTypeForDepth,
+  depthOf,
+  deriveParentStatusTags,
+} from "@/lib/requirement-tree";
 
 export type { DatabaseSnapshot } from "@/lib/db/types";
 
@@ -49,8 +85,9 @@ function getDbFile(): string {
 
 let memoryDb: DatabaseSnapshot | null = null;
 
-function uid(prefix = ""): string {
-  return `${prefix}${crypto.randomUUID()}`;
+function uid(_prefix = ""): string {
+  // PM 表主键在 Supabase 为 uuid，不能带前缀（如 req-/iter-），否则 upsert 直接炸掉
+  return crypto.randomUUID();
 }
 
 function nowIso(): string {
@@ -71,13 +108,31 @@ function isValidDb(db: DatabaseSnapshot | null | undefined): db is DatabaseSnaps
 }
 
 function normalizeRequirement(req: Requirement): Requirement {
+  const tags =
+    Array.isArray(req.status_tags) && req.status_tags.length > 0
+      ? req.status_tags.map(String)
+      : statusTagsFromTaskStatus(req.status ?? "pending");
+  const typeRaw = (req as Requirement & { req_type?: string }).type
+    ?? (req as Requirement & { req_type?: string }).req_type
+    ?? "task";
+  const type =
+    typeRaw === "epic" || typeRaw === "feature" || typeRaw === "task" ? typeRaw : "task";
   return {
     ...REQUIREMENT_POOL_DEFAULTS,
     ...req,
     tags: req.tags ?? [],
+    status_tags: tags,
+    assignees: Array.isArray(req.assignees) ? req.assignees.map(String) : [],
     custom_fields: req.custom_fields ?? {},
     submitted_at:
       req.submitted_at ?? (req.created_at ? req.created_at.slice(0, 10) : null),
+    completed_at: req.completed_at ?? null,
+    studio_idea_id: req.studio_idea_id ?? null,
+    parent_id: req.parent_id ?? null,
+    type,
+    direct_hours: req.direct_hours ?? null,
+    actual_hours: req.actual_hours ?? null,
+    force_closed: Boolean(req.force_closed),
   };
 }
 
@@ -87,12 +142,25 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     comments: db.comments ?? [],
     git_activities: db.git_activities ?? [],
     project_members: db.project_members ?? [],
+    activity_logs: db.activity_logs ?? [],
     pool_column_defs: (db.pool_column_defs ?? []).map((def) => ({
       ...def,
       options: Array.isArray(def.options) ? def.options : [],
     })),
+    requirement_attachments: db.requirement_attachments ?? [],
+    requirement_links: db.requirement_links ?? [],
     projects: db.projects.map(normalizeProject),
     requirements: db.requirements.map(normalizeRequirement),
+    iterations: (db.iterations ?? []).map(normalizeIteration),
+  };
+}
+
+function normalizeIteration(iter: Iteration): Iteration {
+  return {
+    ...iter,
+    start_date: iter.start_date ?? null,
+    end_date: iter.end_date ?? null,
+    release_tag: iter.release_tag ?? null,
   };
 }
 
@@ -217,9 +285,12 @@ export async function updateProjectGitSettings(
     demo_url: input.demo_url?.trim() || null,
     local_run_guide: input.local_run_guide?.trim() || null,
     code_path: input.code_path?.trim() || null,
-    vercel_project_id: input.vercel_project_id?.trim() || null,
-    vercel_deployment_url: input.vercel_deployment_url?.trim() || null,
   };
+  // 未填时不写 vercel_*，避免线上缺列（005 未跑）时整次 update 失败
+  const vercelProjectId = input.vercel_project_id?.trim();
+  if (vercelProjectId) fields.vercel_project_id = vercelProjectId;
+  const vercelDeploymentUrl = input.vercel_deployment_url?.trim();
+  if (vercelDeploymentUrl) fields.vercel_deployment_url = vercelDeploymentUrl;
 
   if (isSupabaseConfigured()) {
     const updated = await updateProjectById(project.id, fields);
@@ -322,6 +393,10 @@ export async function getProjectBundle(projectId: string) {
     tagOptions: project.pool_tag_options?.length
       ? project.pool_tag_options
       : ["硬件", "软件", "体验"],
+    activity_logs: (db.activity_logs ?? [])
+      .filter((a) => a.project_id === project.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, 30),
   };
 }
 
@@ -339,12 +414,21 @@ export async function getShareLinkByToken(token: string) {
 export async function logActivity(
   db: DatabaseSnapshot,
   entry: Omit<ActivityLog, "id" | "created_at">
-) {
-  db.activity_logs.unshift({
+): Promise<ActivityLog> {
+  if (!db.activity_logs) db.activity_logs = [];
+  const row: ActivityLog = {
     ...entry,
     id: uid("log-"),
     created_at: nowIso(),
-  });
+  };
+  db.activity_logs.unshift(row);
+  return row;
+}
+
+async function persistActivityLog(log: ActivityLog) {
+  if (isSupabaseConfigured()) {
+    await upsertActivityLogRow(log);
+  }
 }
 
 export async function updateRoleTask(
@@ -440,24 +524,69 @@ export async function updateRequirement(
   if (!req) throw new Error("需求不存在");
 
   const before = { ...req };
-  const { custom_fields, ...rest } = updates;
+  const { custom_fields, status_tags, force_closed, ...rest } = updates;
+
+  // 有子需求时禁止手工标「完成」（除非强制关闭）
+  if (status_tags && !updates.force_closed) {
+    const hasChildren = db.requirements.some((r) => r.parent_id === req.id);
+    const nextDone = requirementIsDone({
+      status_tags,
+      status: req.status,
+    });
+    if (hasChildren && nextDone && !req.force_closed) {
+      const kids = db.requirements.filter((r) => r.parent_id === req.id);
+      const allDone = kids.every((k) => requirementIsDone(k));
+      if (!allDone) {
+        throw new Error("存在未完成的子需求，不能将父需求标为完成；可使用「强制关闭」");
+      }
+    }
+  }
+
   Object.assign(req, rest, { updated_at: nowIso() });
   if (custom_fields) {
     req.custom_fields = { ...req.custom_fields, ...custom_fields };
   }
+  if (force_closed != null) {
+    req.force_closed = force_closed;
+    if (force_closed) {
+      req.status_tags = [REQUIREMENT_CANCELLED_TAG];
+      req.status = "blocked";
+      req.completed_at = null;
+    }
+  }
+  if (status_tags && force_closed == null) {
+    req.status_tags = status_tags.map((t) => t.trim()).filter(Boolean);
+    req.status = deriveTaskStatusFromTags(req.status_tags);
+    const done = requirementIsDone(req);
+    if (done) {
+      if (!req.completed_at) req.completed_at = nowIso();
+    } else {
+      req.completed_at = null;
+    }
+  } else if (updates.status && (!req.status_tags || req.status_tags.length === 0)) {
+    req.status_tags = statusTagsFromTaskStatus(updates.status);
+  }
+  if (updates.assignees) {
+    req.assignees = updates.assignees.map((a) => a.trim()).filter(Boolean);
+  }
 
   for (const [field, value] of Object.entries({
     ...rest,
+    ...(status_tags ? { status_tags: req.status_tags } : {}),
+    ...(updates.assignees ? { assignees: req.assignees } : {}),
     ...(custom_fields ? { custom_fields } : {}),
+    ...(force_closed != null ? { force_closed: req.force_closed } : {}),
   })) {
     const oldVal =
       field === "custom_fields"
         ? JSON.stringify(before.custom_fields ?? {})
-        : String((before as Record<string, unknown>)[field] ?? "");
+        : field === "status_tags" || field === "assignees" || field === "tags"
+          ? JSON.stringify((before as Record<string, unknown>)[field] ?? [])
+          : String((before as Record<string, unknown>)[field] ?? "");
     const newVal =
       field === "custom_fields"
         ? JSON.stringify(req.custom_fields ?? {})
-        : field === "tags"
+        : field === "status_tags" || field === "assignees" || field === "tags"
           ? JSON.stringify(value ?? [])
           : String(value ?? "");
     if (oldVal !== newVal) {
@@ -474,8 +603,38 @@ export async function updateRequirement(
     }
   }
 
+  // 沿祖先链重算父状态
+  await reconcileAncestorStatuses(db, req.parent_id);
+
   await saveDb(db);
   return req;
+}
+
+async function reconcileAncestorStatuses(
+  db: DatabaseSnapshot,
+  startParentId: string | null
+) {
+  let parentId = startParentId;
+  const touched: Requirement[] = [];
+  while (parentId) {
+    const parent = db.requirements.find((r) => r.id === parentId);
+    if (!parent) break;
+    const nextTags = deriveParentStatusTags(parent, db.requirements);
+    if (nextTags) {
+      parent.status_tags = nextTags;
+      parent.status = deriveTaskStatusFromTags(nextTags);
+      const done = requirementIsDone(parent);
+      parent.completed_at = done ? parent.completed_at ?? nowIso() : null;
+      parent.updated_at = nowIso();
+      touched.push(parent);
+    }
+    parentId = parent.parent_id;
+  }
+  if (isSupabaseConfigured() && touched.length) {
+    for (const r of touched) {
+      await upsertRequirementRow(r);
+    }
+  }
 }
 
 export async function addTestRecord(input: {
@@ -663,8 +822,114 @@ export async function createBug(input: {
     is_read: false,
     created_at: nowIso(),
   });
+  await logActivity(db, {
+    project_id: input.project_id,
+    entity_type: "bug",
+    entity_id: bug.id,
+    field_name: "create",
+    old_value: null,
+    new_value: bug.title,
+    actor_name: "产品",
+    actor_role: "admin",
+  });
   await saveDb(db);
   return bug;
+}
+
+export async function updateBugStatus(bugId: string, status: TaskStatus) {
+  const db = await readDb();
+  const bug = db.bugs.find((b) => b.id === bugId);
+  if (!bug) throw new Error("Bug 不存在");
+  const before = bug.status;
+  bug.status = status;
+  bug.updated_at = nowIso();
+  if (before !== status) {
+    await logActivity(db, {
+      project_id: bug.project_id,
+      entity_type: "bug",
+      entity_id: bug.id,
+      field_name: "status",
+      old_value: before,
+      new_value: status,
+      actor_name: "产品",
+      actor_role: "admin",
+    });
+  }
+  await saveDb(db);
+  return bug;
+}
+
+export async function listBugsByProject(projectId: string) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) return [];
+  return db.bugs
+    .filter((b) => b.project_id === project.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function listRequirementAttachments(requirementId: string) {
+  const db = await readDb();
+  return (db.requirement_attachments ?? [])
+    .filter((a) => a.requirement_id === requirementId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function listProjectAttachments(projectId: string) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) return [];
+  return (db.requirement_attachments ?? [])
+    .filter((a) => a.project_id === project.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function createRequirementAttachment(input: {
+  project_id: string;
+  requirement_id: string;
+  title: string;
+  url: string;
+  storage_path?: string | null;
+  mime_type?: string | null;
+}) {
+  const db = await readDb();
+  const attachment: RequirementAttachment = {
+    id: uid(),
+    project_id: input.project_id,
+    requirement_id: input.requirement_id,
+    title: input.title.trim() || "附件",
+    url: input.url,
+    storage_path: input.storage_path ?? null,
+    mime_type: input.mime_type ?? null,
+    created_at: nowIso(),
+  };
+
+  if (!db.requirement_attachments) db.requirement_attachments = [];
+  db.requirement_attachments.unshift(attachment);
+
+  if (isSupabaseConfigured()) {
+    await upsertRequirementAttachmentRow(attachment);
+    memoryDb = db;
+    return attachment;
+  }
+
+  await saveLocalDb(db);
+  return attachment;
+}
+
+export async function deleteRequirementAttachment(id: string) {
+  const db = await readDb();
+  const exists = (db.requirement_attachments ?? []).some((a) => a.id === id);
+  if (!exists) throw new Error("附件不存在");
+  db.requirement_attachments = (db.requirement_attachments ?? []).filter((a) => a.id !== id);
+
+  if (isSupabaseConfigured()) {
+    await deleteRequirementAttachmentRow(id);
+    memoryDb = db;
+    return;
+  }
+
+  await saveLocalDb(db);
 }
 
 export async function addPrototype(input: {
@@ -836,22 +1101,190 @@ export async function updateRoleTaskWithPermission(
 
 const POOL_ITERATION_NAME = "需求池";
 
+/** 为未硬编码映射的 Studio 项目创建/挂接 PM 需求池项目 */
+export async function ensurePmProjectForStudio(input: {
+  slug: string;
+  name: string;
+  description?: string | null;
+  demo_url?: string | null;
+  local_run_guide?: string | null;
+  code_path?: string | null;
+  repo_full_name?: string | null;
+  repo_branch?: string | null;
+  repo_url?: string | null;
+}): Promise<Project> {
+  const existing = await getProjectById(input.slug);
+  if (existing) {
+    await ensurePoolIteration(existing.id);
+    return existing;
+  }
+
+  const project: Project = {
+    id: uid(),
+    name: input.name,
+    slug: input.slug,
+    description: input.description ?? null,
+    pool_tag_options: ["硬件", "软件", "体验"],
+    created_at: nowIso(),
+    repo_full_name: input.repo_full_name ?? null,
+    repo_branch: input.repo_branch ?? null,
+    repo_url: input.repo_url ?? null,
+    last_commit_sha: null,
+    last_commit_message: null,
+    last_commit_at: null,
+    last_git_synced_at: null,
+    vercel_project_id: null,
+    vercel_deployment_url: null,
+    last_deploy_status: null,
+    demo_url: input.demo_url ?? null,
+    local_run_guide: input.local_run_guide ?? null,
+    code_path: input.code_path ?? null,
+  };
+
+  if (isSupabaseConfigured()) {
+    await upsertProjectRow(project);
+    if (memoryDb) {
+      memoryDb.projects = [...memoryDb.projects, project];
+    } else {
+      const db = await readDb();
+      db.projects.push(project);
+      memoryDb = db;
+    }
+  } else {
+    const db = await readDb();
+    db.projects.push(project);
+    await saveLocalDb(db);
+  }
+
+  await ensurePoolIteration(project.id);
+  return project;
+}
+
 export async function ensurePoolIteration(projectId: string): Promise<Iteration> {
   const db = await readDb();
   let iteration = db.iterations.find(
     (i) => i.project_id === projectId && i.name === POOL_ITERATION_NAME
   );
-  if (!iteration) {
-    iteration = {
-      id: uid("iter-"),
-      project_id: projectId,
-      name: POOL_ITERATION_NAME,
-      sort_order: -1,
-      created_at: nowIso(),
-    };
-    db.iterations.push(iteration);
-    await saveDb(db);
+  if (iteration) return iteration;
+
+  iteration = {
+    id: uid("iter-"),
+    project_id: projectId,
+    name: POOL_ITERATION_NAME,
+    sort_order: -1,
+    created_at: nowIso(),
+    start_date: null,
+    end_date: null,
+    release_tag: null,
+  };
+
+  // 只插一条 iteration，禁止走 writeSupabaseDb 全量 upsert（缺列/脏字段会炸整页）
+  if (isSupabaseConfigured()) {
+    await upsertIterationRow(iteration);
+    if (memoryDb) {
+      memoryDb.iterations = [...memoryDb.iterations, iteration];
+    } else {
+      db.iterations.push(iteration);
+      memoryDb = db;
+    }
+    return iteration;
   }
+
+  db.iterations.push(iteration);
+  await saveLocalDb(db);
+  return iteration;
+}
+
+export async function createPlanningIteration(input: {
+  projectId: string;
+  name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  release_tag?: string | null;
+}): Promise<Iteration> {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === input.projectId || p.slug === input.projectId);
+  if (!project) throw new Error("项目不存在");
+  const name = input.name.trim();
+  if (!name) throw new Error("迭代名称必填");
+  if (name === POOL_ITERATION_NAME) throw new Error("名称保留给需求池");
+
+  const siblings = db.iterations.filter(
+    (i) => i.project_id === project.id && i.name !== POOL_ITERATION_NAME
+  );
+  const maxOrder = siblings.reduce((m, i) => Math.max(m, i.sort_order), 0);
+
+  const iteration: Iteration = {
+    id: uid("iter-"),
+    project_id: project.id,
+    name,
+    sort_order: maxOrder + 1,
+    created_at: nowIso(),
+    start_date: input.start_date?.trim() || null,
+    end_date: input.end_date?.trim() || null,
+    release_tag: input.release_tag?.trim() || null,
+  };
+
+  if (isSupabaseConfigured()) {
+    await upsertIterationRow(iteration);
+    if (memoryDb) {
+      memoryDb.iterations = [...memoryDb.iterations, iteration];
+    } else {
+      db.iterations.push(iteration);
+      memoryDb = db;
+    }
+    return iteration;
+  }
+
+  db.iterations.push(iteration);
+  await saveLocalDb(db);
+  return iteration;
+}
+
+export async function updatePlanningIteration(
+  iterationId: string,
+  updates: Partial<{
+    name: string;
+    start_date: string | null;
+    end_date: string | null;
+    release_tag: string | null;
+    sort_order: number;
+  }>
+): Promise<Iteration> {
+  const db = await readDb();
+  const iteration = db.iterations.find((i) => i.id === iterationId);
+  if (!iteration) throw new Error("迭代不存在");
+  if (iteration.name === POOL_ITERATION_NAME) throw new Error("不能编辑需求池迭代");
+
+  if (updates.name !== undefined) {
+    const name = updates.name.trim();
+    if (!name) throw new Error("迭代名称必填");
+    if (name === POOL_ITERATION_NAME) throw new Error("名称保留给需求池");
+    iteration.name = name;
+  }
+  if (updates.start_date !== undefined) {
+    iteration.start_date = updates.start_date?.trim() || null;
+  }
+  if (updates.end_date !== undefined) {
+    iteration.end_date = updates.end_date?.trim() || null;
+  }
+  if (updates.release_tag !== undefined) {
+    iteration.release_tag = updates.release_tag?.trim() || null;
+  }
+  if (updates.sort_order !== undefined) {
+    iteration.sort_order = updates.sort_order;
+  }
+
+  if (isSupabaseConfigured()) {
+    await upsertIterationRow(iteration);
+    if (memoryDb) {
+      const idx = memoryDb.iterations.findIndex((i) => i.id === iterationId);
+      if (idx >= 0) memoryDb.iterations[idx] = iteration;
+    }
+    return iteration;
+  }
+
+  await saveLocalDb(db);
   return iteration;
 }
 
@@ -884,6 +1317,12 @@ export async function getPoolBundle(projectId: string) {
     tagOptions: project.pool_tag_options?.length
       ? project.pool_tag_options
       : ["硬件", "软件", "体验"],
+    attachments: (db.requirement_attachments ?? [])
+      .filter((a) => a.project_id === project.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    links: (db.requirement_links ?? [])
+      .filter((l) => l.project_id === project.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at)),
   };
 }
 
@@ -897,20 +1336,77 @@ export async function createPoolRequirement(
       | "stage_type"
       | "priority"
       | "status"
+      | "status_tags"
+      | "assignees"
+      | "detail_work"
+      | "acceptance_criteria"
+      | "req_source"
+      | "inspiration_source"
+      | "next_step"
+      | "studio_idea_id"
       | "optimization_notes"
       | "known_issues"
       | "module_l1_id"
       | "sub_function"
+      | "product_estimate_hours"
+      | "direct_hours"
+      | "actual_hours"
+      | "submitted_at"
+      | "completed_at"
+      | "parent_id"
+      | "type"
     >
-  >
+  > & {
+    /** 默认同步来自 Auto；勿再写「系统」 */
+    actor_name?: string;
+    /** 灰色小字：具体对话窗口/话题，便于回溯 */
+    actor_note?: string;
+  }
 ) {
   const db = await readDb();
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) throw new Error("项目不存在");
 
   const poolIteration = await ensurePoolIteration(project.id);
-  const sortOrder =
-    db.requirements.filter((r) => r.project_id === project.id && r.in_pool).length + 1;
+  const siblings = db.requirements.filter(
+    (r) =>
+      r.project_id === project.id &&
+      r.in_pool &&
+      (r.parent_id ?? null) === (input.parent_id ?? null)
+  );
+  const sortOrder = siblings.length + 1;
+
+  const statusTags = input.status_tags?.length
+    ? input.status_tags
+    : statusTagsFromTaskStatus(input.status ?? "pending");
+  const done = requirementIsDone({ status_tags: statusTags, status: "pending" });
+
+  const depth = (() => {
+    if (!input.parent_id) return 0;
+    const parent = db.requirements.find((r) => r.id === input.parent_id);
+    if (!parent) return 1;
+    return depthOf(parent, db.requirements) + 1;
+  })();
+  const reqType: RequirementType =
+    input.type ?? defaultReqTypeForDepth(depth);
+
+  const fromAgent =
+    Boolean(input.studio_idea_id) ||
+    input.actor_name === AGENT_ACTOR_NAME ||
+    input.actor_name === "尘" ||
+    input.actor_name === "Auto" ||
+    input.actor_name === "Cursor";
+  const actorNoteRaw =
+    input.actor_note?.trim() ||
+    input.inspiration_source?.trim() ||
+    (fromAgent ? "对话入库" : null);
+  const actorNote = actorNoteRaw?.replace(/^(白昼|星辰|尘|墨|Auto|Cursor)\s*·\s*/i, "").trim() || null;
+  const inspiration = fromAgent
+    ? formatAgentInspiration({
+        windowNote: actorNote,
+        triggerSource: input.inspiration_source,
+      })
+    : input.inspiration_source ?? null;
 
   const req: Requirement = {
     id: uid("req-"),
@@ -918,12 +1414,22 @@ export async function createPoolRequirement(
     iteration_id: poolIteration.id,
     module_l1_id: input.module_l1_id ?? null,
     module_l2_id: null,
+    parent_id: input.parent_id ?? null,
+    type: reqType,
     title: input.title?.trim() || "新功能点",
     sub_function: input.sub_function ?? null,
-    detail_work: null,
-    acceptance_criteria: null,
+    detail_work: input.detail_work ?? null,
+    acceptance_criteria: input.acceptance_criteria ?? null,
     priority: input.priority ?? null,
-    status: input.status ?? "pending",
+    status: deriveTaskStatusFromTags(statusTags),
+    status_tags: statusTags,
+    assignees: input.assignees ?? [],
+    req_source: input.req_source ?? null,
+    req_source_note: null,
+    inspiration_source: inspiration,
+    next_step: input.next_step ?? null,
+    completed_at: done ? input.completed_at ?? nowIso() : input.completed_at ?? null,
+    studio_idea_id: input.studio_idea_id ?? null,
     blocker_reason: null,
     sort_order: sortOrder,
     in_pool: true,
@@ -938,15 +1444,276 @@ export async function createPoolRequirement(
     needs_discussion: false,
     prd_link: null,
     prototype_link: null,
-    product_estimate_hours: null,
+    product_estimate_hours: input.product_estimate_hours ?? null,
+    direct_hours: input.direct_hours ?? null,
+    actual_hours: input.actual_hours ?? null,
+    force_closed: false,
     tags: [],
     custom_fields: {},
     created_at: nowIso(),
     updated_at: nowIso(),
   };
+  if (input.submitted_at) req.submitted_at = input.submitted_at;
   db.requirements.push(req);
-  await saveDb(db);
+
+  const actorName = fromAgent
+    ? AGENT_ACTOR_NAME
+    : input.actor_name?.trim() || "产品";
+  const action = input.studio_idea_id ? "sync" : "create";
+  const log = await logActivity(db, {
+    project_id: project.id,
+    entity_type: "requirement",
+    entity_id: req.id,
+    field_name: action,
+    old_value: fromAgent ? encodeAgentActivityNote(actorNote) : null,
+    new_value: req.title,
+    actor_name: actorName,
+    actor_role: fromAgent ? "agent" : "admin",
+  });
+
+  await reconcileAncestorStatuses(db, req.parent_id);
+
+  if (isSupabaseConfigured()) {
+    await upsertRequirementRow(req);
+    await persistActivityLog(log);
+    memoryDb = db;
+    return req;
+  }
+
+  await saveLocalDb(db);
   return req;
+}
+
+export async function createRequirementLink(input: {
+  project_id: string;
+  source_type: LinkEntityType;
+  source_id: string;
+  target_type: LinkEntityType;
+  target_id: string;
+  relation_type: LinkRelationType;
+}): Promise<RequirementLink> {
+  const db = await readDb();
+  const link: RequirementLink = {
+    id: uid(),
+    project_id: input.project_id,
+    source_type: input.source_type,
+    source_id: input.source_id,
+    target_type: input.target_type,
+    target_id: input.target_id,
+    relation_type: input.relation_type,
+    created_at: nowIso(),
+  };
+  db.requirement_links = [...(db.requirement_links ?? []), link];
+  if (isSupabaseConfigured()) {
+    await upsertRequirementLinkRow(link);
+    memoryDb = db;
+    return link;
+  }
+  await saveLocalDb(db);
+  return link;
+}
+
+export async function deleteRequirementLink(id: string): Promise<void> {
+  const db = await readDb();
+  db.requirement_links = (db.requirement_links ?? []).filter((l) => l.id !== id);
+  if (isSupabaseConfigured()) {
+    await deleteRequirementLinkRow(id);
+    memoryDb = db;
+    return;
+  }
+  await saveLocalDb(db);
+}
+
+export type StudioPoolSyncResult = {
+  created: number;
+  ideaSourceCount: number;
+  evolutionSourceCount: number;
+  skippedExisting: number;
+  errors: string[];
+  projectFound: boolean;
+};
+
+/** 已入需求池的灵感 id（排除演进伪 id evo:…） */
+export async function listPooledStudioIdeaIds(): Promise<Set<string>> {
+  const db = await readDb();
+  const ids = new Set<string>();
+  for (const r of db.requirements) {
+    const sid = r.studio_idea_id?.trim();
+    if (sid && !sid.startsWith("evo:")) ids.add(sid);
+  }
+  return ids;
+}
+
+async function markPooledIdeaConverted(ideaId: string, status?: string) {
+  if (status === "converted" || status === "done" || status === "archived") return;
+  try {
+    const { updateStudioIdea } = await import("@/lib/studio/mutations");
+    await updateStudioIdea(ideaId, { status: "converted" });
+  } catch {
+    // 灵感库不可写时不影响需求同步
+  }
+}
+
+/** 将 Studio 灵感 + 演进记录同步进 PM 需求池（按 studio_idea_id 去重） */
+export async function syncStudioIdeasIntoPool(
+  pmProjectId: string,
+  ideas: Array<{
+    id: string;
+    title: string;
+    oneLineIdea?: string;
+    whyItMatters?: string;
+    triggerSource?: string;
+    sourceChat?: string;
+    chatTopic?: string;
+    suggestedNextStep?: string;
+    priority?: string;
+    occurredAt?: string;
+    completedAt?: string | null;
+    status?: string;
+  }>,
+  evolutions: Array<{
+    id: string;
+    title: string;
+    before?: string;
+    after?: string;
+    reason?: string;
+    decision?: string;
+    createdAt?: string;
+  }> = [],
+  options?: { actorNote?: string }
+): Promise<StudioPoolSyncResult> {
+  const empty: StudioPoolSyncResult = {
+    created: 0,
+    ideaSourceCount: ideas.length,
+    evolutionSourceCount: evolutions.length,
+    skippedExisting: 0,
+    errors: [],
+    projectFound: false,
+  };
+  if (!ideas.length && !evolutions.length) return empty;
+
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === pmProjectId || p.slug === pmProjectId);
+  if (!project) return empty;
+
+  const existingIdeaIds = new Set(
+    db.requirements
+      .filter((r) => r.project_id === project.id && r.studio_idea_id)
+      .map((r) => r.studio_idea_id as string)
+  );
+
+  let created = 0;
+  let skippedExisting = 0;
+  const errors: string[] = [];
+
+  for (const idea of ideas) {
+    if (existingIdeaIds.has(idea.id)) {
+      skippedExisting += 1;
+      await markPooledIdeaConverted(idea.id, idea.status);
+      continue;
+    }
+    const tags =
+      idea.status === "done" || idea.completedAt
+        ? ["完成"]
+        : idea.status === "parked"
+          ? ["搁置"]
+          : ["待开始"];
+    try {
+      const windowNote =
+        options?.actorNote ||
+        idea.chatTopic ||
+        idea.sourceChat ||
+        idea.triggerSource ||
+        "Studio 灵感同步";
+      const createdReq = await createPoolRequirement(project.id, {
+        title: idea.title,
+        detail_work: [idea.oneLineIdea, idea.whyItMatters].filter(Boolean).join("\n\n") || null,
+        inspiration_source: formatAgentInspiration({
+          chatTopic: idea.chatTopic,
+          sourceChat: idea.sourceChat,
+          triggerSource: idea.triggerSource,
+          windowNote,
+        }),
+        next_step: idea.suggestedNextStep || null,
+        priority: idea.priority ?? null,
+        status_tags: tags,
+        studio_idea_id: idea.id,
+        submitted_at: idea.occurredAt?.slice(0, 10) ?? undefined,
+        completed_at: idea.completedAt ?? null,
+        type: "epic",
+        actor_name: AGENT_ACTOR_NAME,
+        actor_note: windowNote,
+      });
+      await createRequirementLink({
+        project_id: project.id,
+        source_type: "idea",
+        source_id: idea.id,
+        target_type: "requirement",
+        target_id: createdReq.id,
+        relation_type: "from_idea",
+      });
+      existingIdeaIds.add(idea.id);
+      created += 1;
+      await markPooledIdeaConverted(idea.id, idea.status);
+    } catch (error) {
+      errors.push(
+        `灵感「${idea.title}」: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  for (const evo of evolutions) {
+    const key = `evo:${evo.id}`;
+    if (existingIdeaIds.has(key)) {
+      skippedExisting += 1;
+      continue;
+    }
+    const body = [
+      evo.after ? `变更后：${evo.after}` : "",
+      evo.before ? `变更前：${evo.before}` : "",
+      evo.reason ? `原因：${evo.reason}` : "",
+      evo.decision ? `决策：${evo.decision}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    try {
+      const windowNote = options?.actorNote || "Studio 演进同步";
+      const createdReq = await createPoolRequirement(project.id, {
+        title: evo.title,
+        detail_work: body || null,
+        inspiration_source: formatAgentInspiration({ windowNote }),
+        status_tags: ["已记录"],
+        studio_idea_id: key,
+        submitted_at: evo.createdAt?.slice(0, 10) ?? undefined,
+        type: "feature",
+        actor_name: AGENT_ACTOR_NAME,
+        actor_note: windowNote,
+      });
+      await createRequirementLink({
+        project_id: project.id,
+        source_type: "requirement",
+        source_id: createdReq.id,
+        target_type: "evolution",
+        target_id: evo.id,
+        relation_type: "has_evolution",
+      });
+      existingIdeaIds.add(key);
+      created += 1;
+    } catch (error) {
+      errors.push(
+        `演进「${evo.title}」: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  return {
+    created,
+    ideaSourceCount: ideas.length,
+    evolutionSourceCount: evolutions.length,
+    skippedExisting,
+    errors,
+    projectFound: true,
+  };
 }
 
 export async function updatePoolRequirement(
@@ -961,13 +1728,81 @@ export async function updatePoolRequirement(
 }
 
 export async function deletePoolRequirement(requirementId: string) {
+  await deletePoolRequirements([requirementId]);
+}
+
+export async function deletePoolRequirements(requirementIds: string[]) {
+  const unique = [...new Set(requirementIds.filter(Boolean))];
+  if (!unique.length) return 0;
+
   const db = await readDb();
-  const req = db.requirements.find((r) => r.id === requirementId);
-  if (!req?.in_pool) throw new Error("需求不在需求池中");
-  db.requirements = db.requirements.filter((r) => r.id !== requirementId);
-  db.acceptance_items = db.acceptance_items.filter((a) => a.requirement_id !== requirementId);
-  db.role_tasks = db.role_tasks.filter((t) => t.requirement_id !== requirementId);
-  await saveDb(db);
+  const toDelete = db.requirements.filter((r) => unique.includes(r.id) && r.in_pool);
+  if (!toDelete.length) return 0;
+  const idSet = new Set(toDelete.map((r) => r.id));
+
+  const logs: ActivityLog[] = [];
+  for (const req of toDelete) {
+    logs.push(
+      await logActivity(db, {
+        project_id: req.project_id,
+        entity_type: "requirement",
+        entity_id: req.id,
+        field_name: "delete",
+        old_value: null,
+        new_value: req.title,
+        actor_name: "产品",
+        actor_role: "admin",
+      })
+    );
+  }
+
+  db.requirements = db.requirements.filter((r) => !idSet.has(r.id));
+  for (const child of db.requirements) {
+    if (child.parent_id && idSet.has(child.parent_id)) child.parent_id = null;
+  }
+  db.acceptance_items = db.acceptance_items.filter((a) => !idSet.has(a.requirement_id));
+  db.role_tasks = db.role_tasks.filter((t) => !idSet.has(t.requirement_id));
+
+  if (isSupabaseConfigured()) {
+    await deleteRequirementRows([...idSet]);
+    for (const log of logs) await persistActivityLog(log);
+    memoryDb = db;
+    return toDelete.length;
+  }
+
+  await saveLocalDb(db);
+  return toDelete.length;
+}
+
+/** 按 studio_idea_id（优先）+ 同项目同标题 去重，保留最早一条 */
+export async function dedupePoolRequirements(projectId: string): Promise<number> {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) throw new Error("项目不存在");
+  const pool = db.requirements
+    .filter((r) => r.project_id === project.id && r.in_pool)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const remove = new Set<string>();
+  const seenIdea = new Set<string>();
+  const seenTitle = new Set<string>();
+  for (const r of pool) {
+    if (r.studio_idea_id) {
+      if (seenIdea.has(r.studio_idea_id)) {
+        remove.add(r.id);
+        continue;
+      }
+      seenIdea.add(r.studio_idea_id);
+    }
+    const titleKey = r.title.trim();
+    if (titleKey && seenTitle.has(titleKey)) {
+      remove.add(r.id);
+      continue;
+    }
+    if (titleKey) seenTitle.add(titleKey);
+  }
+
+  return deletePoolRequirements([...remove]);
 }
 
 export async function promotePoolRequirement(
@@ -1005,9 +1840,9 @@ export async function promotePoolRequirement(
     project_id: req.project_id,
     entity_type: "requirement",
     entity_id: req.id,
-    field_name: "in_pool",
-    old_value: "true",
-    new_value: "false",
+    field_name: "promote",
+    old_value: null,
+    new_value: iteration.name,
     actor_name: actor.name,
     actor_role: actor.role ?? "admin",
   });

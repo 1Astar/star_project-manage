@@ -53,7 +53,20 @@ export function StudioGitPanel({
         lastCommitSha: data.latest?.sha ?? syncInfo.lastCommitSha,
         lastCommitMessage: data.latest?.message ?? syncInfo.lastCommitMessage,
       });
-      setMessage(data.newCount > 0 ? `新增 ${data.newCount} 条提交` : "已是最新");
+      if (typeof data.fetchedCount === "number" && data.fetchedCount === 0) {
+        setMessage(null);
+        setError(
+          data.warning ??
+            "未拉到任何提交。请核对仓库、分支是否为刚推送的分支，以及代码目录是否填错（勿填 GitHub 链接）"
+        );
+      } else {
+        setMessage(
+          data.newCount > 0
+            ? `新增 ${data.newCount} 条提交记录`
+            : `已是最新（共 ${data.fetchedCount ?? 0} 条近期提交）`
+        );
+        setError(data.warning ?? null);
+      }
       if (Array.isArray(data.activities)) setActivities(data.activities);
       router.refresh();
     } catch (err) {
@@ -75,12 +88,19 @@ export function StudioGitPanel({
                   <span className="text-slate-400">仓库：</span>
                   {project.githubRepo}
                   {project.codePath ? (
-                    <span className="ml-2 text-xs text-slate-400">path: {project.codePath}</span>
+                    <span className="ml-2 text-xs text-slate-400">
+                      目录: {project.codePath}
+                    </span>
                   ) : null}
                 </div>
-                <div>
+                {project.codePath && /^https?:\/\//i.test(project.codePath.trim()) ? (
+                  <p className="text-xs text-amber-700">
+                    「代码目录」填成了链接，同步时会被忽略。请改成仓库内相对路径（如
+                    工具/private/工具/star-pm），或清空拉整仓。
+                  </p>
+                ) : null}                <div>
                   <span className="text-slate-400">分支：</span>
-                  {project.githubBranch || "main"}
+                  {project.githubBranch || "（未配置分支）"}
                 </div>
                 <div>
                   <span className="text-slate-400">最后同步：</span>

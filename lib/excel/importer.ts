@@ -100,6 +100,9 @@ export async function importSheetToProject(
       name: iterationName,
       sort_order: db.iterations.filter((i) => i.project_id === project.id).length + 1,
       created_at: nowIso(),
+      start_date: null,
+      end_date: null,
+      release_tag: null,
     };
     db.iterations.push(iteration);
   }

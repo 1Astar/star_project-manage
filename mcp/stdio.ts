@@ -1,11 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { enableMcpMigrationWrite } from "@/lib/mcp/migration-write";
 import { registerStarPmTools } from "@/lib/mcp/server";
 
 async function main() {
+  enableMcpMigrationWrite();
   const server = new McpServer({
     name: "star-pm",
-    version: "1.3.2",
+    version: "1.7.6",
   });
   registerStarPmTools(server);
   const transport = new StdioServerTransport();

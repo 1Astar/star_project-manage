@@ -11,6 +11,27 @@ export type IdeaStatus =
 export type ProjectStatus = "mainline" | "active" | "demo" | "parking" | "archived";
 export type ProjectPriority = "P0" | "P1" | "P2" | "P3";
 
+export type StudioProjectColumnType =
+  | "text"
+  | "number"
+  | "date"
+  | "checkbox"
+  | "select"
+  | "url";
+
+export type StudioCustomFieldValue = string | number | boolean | null;
+
+export interface StudioProjectColumnDef {
+  id: string;
+  key: string;
+  label: string;
+  columnType: StudioProjectColumnType;
+  options: string[];
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export type EvolutionLogType =
   | "initial"
   | "positioning"
@@ -31,11 +52,19 @@ export interface IdeaSubtask {
 }
 
 export type AssetType =
+  | "experience"
+  | "repo"
+  | "design"
+  | "doc"
+  | "material"
+  | "prompt"
+  | "api"
+  | "deploy"
+  | "video"
+  /** @deprecated 读库兼容，展示时归一到 material / design / doc */
   | "competitor"
   | "ui_ref"
   | "tech_doc"
-  | "video"
-  | "material"
   | "inspiration";
 
 export interface Idea {
@@ -43,19 +72,37 @@ export interface Idea {
   title: string;
   oneLineIdea: string;
   whyItMatters: string;
+  /** AI 补充全文（导入模板「AI补充」） */
+  aiSupplement: string;
+  /** 聊天主题 */
+  chatTopic: string;
   triggerSource: string;
+  /** 来源聊天标题/会话名 */
+  sourceChat: string;
+  /** 来源方式：ChatGPT / 手动 / GitHub / Notion … */
+  sourceMethod: string;
   emotionLevel: EmotionLevel;
   type: IdeaType;
   priority: IdeaPriority;
   rawInput: string;
   relatedProjectId: string | null;
+  /** 父 Idea */
   relatedIdeaId: string | null;
+  /** 关联模块名称 */
+  relatedModule: string;
   subtasks: IdeaSubtask[];
   status: IdeaStatus;
   suggestedNextStep: string;
+  decisionNotes: string;
+  evolutionNotes: string;
+  relatedAssetsNote: string;
   githubIssueNumber: number | null;
   githubIssueUrl: string | null;
   githubLabels: string[];
+  /** 灵感发生时间（脑暴当时）；缺省回退 createdAt */
+  occurredAt: string;
+  /** 实际完成时间；标为 done 时自动写入，可改 */
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -93,6 +140,7 @@ export interface Project {
   lastGitSyncedAt: string | null;
   relatedPageUrl: string | null;
   portfolioValue: string;
+  customFields: Record<string, StudioCustomFieldValue>;
   body: ProjectBody;
   createdAt: string;
   updatedAt: string;
@@ -146,6 +194,21 @@ export interface Asset {
   risk: string | null;
 }
 
+/** 从 GitHub 同步的 Release / Tag */
+export interface StudioRelease {
+  id: string;
+  projectId: string;
+  tag: string;
+  name: string;
+  publishedAt: string | null;
+  body: string;
+  htmlUrl: string;
+  isPrerelease: boolean;
+  /** release = GitHub Release；tag = 仅 Tag */
+  source: "release" | "tag";
+  syncedAt: string;
+}
+
 export const IDEA_TYPE_LABELS: Record<IdeaType, string> = {
   product: "产品",
   feature: "功能",
@@ -162,8 +225,8 @@ export const EMOTION_LABELS: Record<EmotionLevel, string> = {
 };
 
 export const IDEA_STATUS_LABELS: Record<IdeaStatus, string> = {
-  inbox: "收件箱",
-  reviewing: "审阅中",
+  inbox: "灵感池",
+  reviewing: "验证中",
   converted: "已转项目",
   done: "已完成",
   parked: "停车场",
@@ -209,10 +272,30 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  experience: "在线体验",
+  repo: "代码仓库",
+  design: "设计稿",
+  doc: "文档",
+  material: "素材",
+  prompt: "Prompt",
+  api: "API",
+  deploy: "部署",
+  video: "视频",
   competitor: "竞品",
   ui_ref: "UI 参考",
   tech_doc: "技术文档",
-  video: "视频",
-  material: "素材",
   inspiration: "灵感",
 };
+
+/** 新建时可选的资源类型（不含废弃项） */
+export const ASSET_TYPE_CREATE_OPTIONS: AssetType[] = [
+  "experience",
+  "repo",
+  "design",
+  "doc",
+  "material",
+  "prompt",
+  "api",
+  "deploy",
+  "video",
+];

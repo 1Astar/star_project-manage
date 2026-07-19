@@ -82,7 +82,7 @@ export function ConvertIdeaButton({
 
   async function convert() {
     const ok = window.confirm(
-      `将「${ideaTitle}」转为新项目？\n\n会自动：创建项目 · 写入初始演进记录 · 标记为已转项目`
+      `将「${ideaTitle}」转为新项目？\n\n会自动：创建项目（定位/优先级/下一步）· 同步子任务 · 写入初始演进 · 标记已转项目`
     );
     if (!ok) return;
 

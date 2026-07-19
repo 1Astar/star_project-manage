@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { suffix: "", label: "项目恢复" },
+  { suffix: "/overview", label: "概况" },
   { suffix: "/tasks", label: "需求与任务" },
+  { suffix: "/bugs", label: "Bug" },
   { suffix: "/prototype", label: "原型与验收" },
   { suffix: "/schedule", label: "进度排期" },
   { suffix: "/evolution", label: "迭代记录" },
-  { suffix: "/resources", label: "资料链接" },
+  { suffix: "/resources", label: "资源中心" },
 ] as const;
 
 export function ProjectNav({ routeId }: { routeId: string }) {

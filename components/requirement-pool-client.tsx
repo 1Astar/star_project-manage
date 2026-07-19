@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createPoolRequirementAction,
@@ -111,7 +112,7 @@ export function RequirementPoolClient({
   function promote(requirementId: string, iterationId: string) {
     startTransition(async () => {
       await promotePoolRequirementAction({ requirementId, iterationId, projectSlug });
-      setMessage("已加入迭代，可在需求看板中继续跟进");
+      setMessage("已加入迭代，可在下方「看板视图」跟进");
       router.refresh();
     });
   }
@@ -129,7 +130,7 @@ export function RequirementPoolClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-500">
-          仅产品可见的需求池。规划成熟后「加入迭代」会进入需求看板，团队通过分享链接可见。
+          仅产品可见。规划成熟后「加入迭代」，在下方看板视图跟进。
         </p>
         <button
           type="button"
@@ -222,6 +223,7 @@ export function RequirementPoolClient({
                   <PoolRow
                     key={req.id}
                     req={req}
+                    projectSlug={projectSlug}
                     moduleLabel={
                       req.module_l1_id
                         ? moduleNameById.get(req.module_l1_id) ?? "—"
@@ -249,6 +251,7 @@ export function RequirementPoolClient({
 
 function PoolRow({
   req,
+  projectSlug,
   moduleLabel,
   pending,
   defaultIterationId,
@@ -261,6 +264,7 @@ function PoolRow({
   onPromote,
 }: {
   req: Requirement;
+  projectSlug: string;
   moduleLabel: string;
   pending: boolean;
   defaultIterationId?: string;
@@ -279,11 +283,20 @@ function PoolRow({
   return (
     <tr className="border-t border-slate-100 align-top hover:bg-slate-50/60">
       <td className="px-2 py-2">
-        <CellInput
-          value={req.title}
-          disabled={pending}
-          onCommit={(v) => onSave(req.id, "title", v)}
-        />
+        <div className="flex items-start gap-1">
+          <Link
+            href={`/projects/${projectSlug}/requirements/${req.id}`}
+            title="打开需求页"
+            className="mt-1.5 shrink-0 rounded px-1 text-indigo-600 hover:bg-indigo-50"
+          >
+            ↗
+          </Link>
+          <CellInput
+            value={req.title}
+            disabled={pending}
+            onCommit={(v) => onSave(req.id, "title", v)}
+          />
+        </div>
       </td>
       <td className="px-2 py-2 text-xs text-slate-600">{moduleLabel}</td>
       <td className="px-2 py-2">

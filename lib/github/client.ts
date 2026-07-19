@@ -60,3 +60,57 @@ export async function fetchRecentCommits(
 export function buildRepoUrl(repoFullName: string): string {
   return `https://github.com/${repoFullName}`;
 }
+
+export interface GitHubRelease {
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  html_url: string;
+  published_at: string | null;
+  draft: boolean;
+  prerelease: boolean;
+}
+
+export interface GitHubTag {
+  name: string;
+  commit: { sha: string; url: string };
+}
+
+async function githubFetch<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${getGitHubToken()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+    next: { revalidate: 0 },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`GitHub API 错误 (${res.status})：${body.slice(0, 200)}`);
+  }
+  return (await res.json()) as T;
+}
+
+/** 拉取非 draft 的 Release（最新 50） */
+export async function fetchGitHubReleases(
+  repoFullName: string,
+  perPage = 50
+): Promise<GitHubRelease[]> {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/releases`);
+  url.searchParams.set("per_page", String(perPage));
+  const all = await githubFetch<GitHubRelease[]>(url.toString());
+  return all.filter((r) => !r.draft);
+}
+
+/** 拉取 Tag 列表（最新 50），用于补无 Release 的 Tag */
+export async function fetchGitHubTags(
+  repoFullName: string,
+  perPage = 50
+): Promise<GitHubTag[]> {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const url = new URL(`https://api.github.com/repos/${owner}/${repo}/tags`);
+  url.searchParams.set("per_page", String(perPage));
+  return githubFetch<GitHubTag[]>(url.toString());
+}
