@@ -487,6 +487,9 @@ export function createSeedData(): DatabaseSnapshot {
         name: "20260610 优化版本",
         sort_order: 1,
         created_at: SEED_TIME,
+        start_date: "2026-06-10",
+        end_date: "2026-07-10",
+        release_tag: null,
       },
       {
         id: controllerIterationId,
@@ -494,6 +497,9 @@ export function createSeedData(): DatabaseSnapshot {
         name: "20260417 元井AI控制器",
         sort_order: 1,
         created_at: SEED_TIME,
+        start_date: "2026-04-17",
+        end_date: "2026-05-17",
+        release_tag: null,
       },
       {
         id: starPmIterationId,
@@ -501,6 +507,9 @@ export function createSeedData(): DatabaseSnapshot {
         name: "202607 V1.2 Studio 整合",
         sort_order: 1,
         created_at: SEED_TIME,
+        start_date: "2026-07-01",
+        end_date: "2026-07-31",
+        release_tag: null,
       },
     ],
     modules: [],
@@ -566,5 +575,7 @@ export function createSeedData(): DatabaseSnapshot {
     git_activities: [],
     project_members: [],
     pool_column_defs: [],
+    requirement_attachments: [],
+    requirement_links: [],
   };
 }

@@ -2,9 +2,11 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   assetToRow,
+  columnDefToRow,
   evolutionToRow,
   ideaToRow,
   projectToRow,
+  releaseToRow,
   taskToRow,
 } from "@/lib/studio/mappers";
 import {
@@ -13,6 +15,10 @@ import {
   getStudioSnapshot,
   invalidateStudioCache,
 } from "@/lib/studio/store";
+import {
+  assertNoDuplicateAsset,
+  assertNoDuplicateProject,
+} from "@/lib/studio/entity-dedupe";
 import type {
   Asset,
   AssetType,
@@ -28,6 +34,10 @@ import type {
   ProjectBody,
   ProjectPriority,
   ProjectStatus,
+  StudioCustomFieldValue,
+  StudioProjectColumnDef,
+  StudioProjectColumnType,
+  StudioRelease,
   StudioTask,
   TaskPriority,
   TaskStatus,
@@ -85,7 +95,16 @@ export type CreateProjectInput = {
   vercelUrl?: string | null;
   relatedPageUrl?: string | null;
   portfolioValue?: string;
+  customFields?: Record<string, StudioCustomFieldValue>;
   body?: Partial<ProjectBody>;
+  /** true=跳过标题查重强制新建 */
+  force?: boolean;
+};
+
+export type CreateProjectColumnInput = {
+  label: string;
+  columnType?: StudioProjectColumnType;
+  options?: string[];
 };
 
 export type UpdateProjectInput = Partial<CreateProjectInput>;
@@ -94,19 +113,29 @@ export type CreateIdeaInput = {
   title: string;
   oneLineIdea?: string;
   whyItMatters?: string;
+  aiSupplement?: string;
+  chatTopic?: string;
   triggerSource?: string;
+  sourceChat?: string;
+  sourceMethod?: string;
   emotionLevel?: EmotionLevel;
   type?: IdeaType;
   priority?: IdeaPriority;
   rawInput?: string;
   relatedProjectId?: string | null;
   relatedIdeaId?: string | null;
+  relatedModule?: string;
   subtasks?: IdeaSubtask[];
   status?: IdeaStatus;
   suggestedNextStep?: string;
+  decisionNotes?: string;
+  evolutionNotes?: string;
+  relatedAssetsNote?: string;
   githubIssueNumber?: number | null;
   githubIssueUrl?: string | null;
   githubLabels?: string[];
+  occurredAt?: string | null;
+  completedAt?: string | null;
   syncSubtasksToProject?: boolean;
 };
 
@@ -158,6 +187,8 @@ export type CreateAssetInput = {
   note?: string;
   takeaway?: string;
   risk?: string | null;
+  /** true=跳过标题/URL 查重强制新建 */
+  force?: boolean;
 };
 
 export type UpdateAssetInput = Partial<CreateAssetInput>;
@@ -199,7 +230,7 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
       input.localRunGuide !== undefined ? input.localRunGuide : (existing?.localRunGuide ?? null),
     codePath: input.codePath !== undefined ? input.codePath : (existing?.codePath ?? null),
     githubRepo: input.githubRepo !== undefined ? input.githubRepo : (existing?.githubRepo ?? null),
-    githubBranch: input.githubBranch ?? existing?.githubBranch ?? "main",
+    githubBranch: input.githubBranch ?? existing?.githubBranch ?? "",
     vercelUrl: input.vercelUrl !== undefined ? input.vercelUrl : (existing?.vercelUrl ?? null),
     lastCommitSha: existing?.lastCommitSha ?? null,
     lastCommitMessage: existing?.lastCommitMessage ?? null,
@@ -208,6 +239,10 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
     relatedPageUrl:
       input.relatedPageUrl !== undefined ? input.relatedPageUrl : (existing?.relatedPageUrl ?? null),
     portfolioValue: input.portfolioValue ?? existing?.portfolioValue ?? "",
+    customFields: {
+      ...(existing?.customFields ?? {}),
+      ...(input.customFields ?? {}),
+    },
     body: {
       ...EMPTY_BODY,
       ...(existing?.body ?? {}),
@@ -218,8 +253,95 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
   };
 }
 
+function slugColumnKey(label: string, existingKeys: Set<string>) {
+  const base =
+    label
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_\u4e00-\u9fa5]/g, "")
+      .slice(0, 32) || `col_${studioId("").slice(0, 6)}`;
+  let key = base;
+  let suffix = 1;
+  while (existingKeys.has(key)) {
+    key = `${base}_${suffix++}`;
+  }
+  return key;
+}
+
+export async function listStudioProjectColumns(activeOnly = true): Promise<StudioProjectColumnDef[]> {
+  const { projectColumnDefs } = await getStudioSnapshot();
+  const list = [...(projectColumnDefs ?? [])].sort((a, b) => a.sortOrder - b.sortOrder);
+  return activeOnly ? list.filter((d) => d.isActive) : list;
+}
+
+export async function createStudioProjectColumn(
+  input: CreateProjectColumnInput
+): Promise<StudioProjectColumnDef> {
+  const label = input.label?.trim();
+  if (!label) throw new Error("列名必填");
+  const columnType = input.columnType ?? "text";
+  const options = (input.options ?? []).map((s) => s.trim()).filter(Boolean);
+  if (columnType === "select" && options.length === 0) {
+    throw new Error("单选列至少需要一个选项");
+  }
+
+  const snapshot = await getStudioSnapshot();
+  const existingKeys = new Set((snapshot.projectColumnDefs ?? []).map((d) => d.key));
+  const def: StudioProjectColumnDef = {
+    id: studioId("pcol-"),
+    key: slugColumnKey(label, existingKeys),
+    label,
+    columnType,
+    options,
+    sortOrder: (snapshot.projectColumnDefs ?? []).length + 1,
+    isActive: true,
+    createdAt: nowIso(),
+  };
+
+  return writeSupabase(
+    async () => {
+      const { error } = await sb().from("studio_project_column_defs").insert(columnDefToRow(def));
+      if (error) throw new Error(error.message);
+      return def;
+    },
+    () => {
+      applyMemoryMutation((snap) => {
+        if (!snap.projectColumnDefs) snap.projectColumnDefs = [];
+        snap.projectColumnDefs.push(def);
+      });
+      return def;
+    }
+  );
+}
+
+export async function deleteStudioProjectColumn(id: string): Promise<void> {
+  const snapshot = await getStudioSnapshot();
+  const existing = (snapshot.projectColumnDefs ?? []).find((d) => d.id === id);
+  if (!existing) throw new Error("自定义列不存在");
+
+  const next = { ...existing, isActive: false };
+
+  await writeSupabase(
+    async () => {
+      const { error } = await sb()
+        .from("studio_project_column_defs")
+        .upsert(columnDefToRow(next), { onConflict: "id" });
+      if (error) throw new Error(error.message);
+    },
+    () => {
+      applyMemoryMutation((snap) => {
+        const idx = (snap.projectColumnDefs ?? []).findIndex((d) => d.id === id);
+        if (idx >= 0) snap.projectColumnDefs[idx] = next;
+      });
+    }
+  );
+}
+
 export async function createStudioProject(input: CreateProjectInput): Promise<Project> {
   if (!input.title?.trim()) throw new Error("title 必填");
+
+  const snapshot = await getStudioSnapshot();
+  assertNoDuplicateProject(snapshot.projects, input.title.trim(), input.force);
 
   const project = buildProject(input);
 
@@ -308,9 +430,6 @@ export async function deleteStudioProject(id: string): Promise<void> {
 
 export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
   if (!input.title?.trim()) throw new Error("title 必填");
-  if (input.relatedProjectId && input.relatedIdeaId) {
-    throw new Error("只能关联项目或灵感其中之一");
-  }
 
   const snapshot = await getStudioSnapshot();
   if (input.relatedProjectId && !snapshot.projects.some((p) => p.id === input.relatedProjectId)) {
@@ -326,25 +445,38 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
     rationale: item.rationale?.trim() ?? "",
   })).filter((item) => item.title.length > 0);
 
+  const sourceMethod = (input.sourceMethod ?? input.triggerSource ?? "").trim();
   const now = nowIso();
   const idea: Idea = {
     id: studioId("idea-"),
     title: input.title.trim(),
     oneLineIdea: input.oneLineIdea ?? "",
     whyItMatters: input.whyItMatters ?? "",
-    triggerSource: input.triggerSource ?? "",
+    aiSupplement: input.aiSupplement ?? "",
+    chatTopic: input.chatTopic ?? "",
+    triggerSource: input.triggerSource ?? sourceMethod,
+    sourceChat: input.sourceChat ?? "",
+    sourceMethod,
     emotionLevel: input.emotionLevel ?? "normal",
     type: input.type ?? "product",
     priority: input.priority ?? "P2",
     rawInput: input.rawInput ?? "",
     relatedProjectId: input.relatedProjectId ?? null,
     relatedIdeaId: input.relatedIdeaId ?? null,
+    relatedModule: input.relatedModule ?? "",
     subtasks,
     status: input.status ?? "inbox",
     suggestedNextStep: input.suggestedNextStep ?? "",
+    decisionNotes: input.decisionNotes ?? "",
+    evolutionNotes: input.evolutionNotes ?? "",
+    relatedAssetsNote: input.relatedAssetsNote ?? "",
     githubIssueNumber: input.githubIssueNumber ?? null,
     githubIssueUrl: input.githubIssueUrl ?? null,
     githubLabels: input.githubLabels ?? [],
+    occurredAt: input.occurredAt?.trim() || now,
+    completedAt:
+      input.completedAt?.trim() ||
+      ((input.status ?? "inbox") === "done" ? now : null),
     createdAt: now,
     updatedAt: now,
   };
@@ -362,6 +494,41 @@ export async function createStudioIdea(input: CreateIdeaInput): Promise<Idea> {
       return idea;
     }
   );
+
+  if (created.relatedProjectId) {
+    try {
+      const { getPmSlugForStudioProject } = await import("@/lib/project-bridge");
+      const { getProjectById } = await import("@/lib/studio/data");
+      const { syncStudioIdeasIntoPool } = await import("@/lib/db/local-store");
+      const studioProject = await getProjectById(created.relatedProjectId);
+      const pmSlug = studioProject ? getPmSlugForStudioProject(studioProject) : null;
+      if (pmSlug) {
+        await syncStudioIdeasIntoPool(
+          pmSlug,
+          [
+            {
+              id: created.id,
+              title: created.title,
+              oneLineIdea: created.oneLineIdea,
+              whyItMatters: created.whyItMatters,
+              triggerSource: created.triggerSource,
+              sourceChat: created.sourceChat,
+              chatTopic: created.chatTopic,
+              suggestedNextStep: created.suggestedNextStep,
+              priority: created.priority,
+              occurredAt: created.occurredAt,
+              completedAt: created.completedAt,
+              status: created.status,
+            },
+          ],
+          [],
+          { actorNote: created.chatTopic || created.sourceChat || created.triggerSource || undefined }
+        );
+      }
+    } catch {
+      // 无 PM 映射时跳过，不影响灵感创建
+    }
+  }
 
   if (input.syncSubtasksToProject && created.relatedProjectId && created.subtasks.length > 0) {
     await Promise.all(
@@ -385,18 +552,36 @@ export async function updateStudioIdea(id: string, patch: UpdateIdeaInput): Prom
   const existing = snapshot.ideas.find((i) => i.id === id);
   if (!existing) throw new Error("灵感不存在");
 
+  const now = nowIso();
+  const nextStatus = patch.status ?? existing.status;
+  let completedAt =
+    patch.completedAt !== undefined ? patch.completedAt : existing.completedAt;
+  if (nextStatus === "done" && !completedAt) {
+    completedAt = now;
+  }
+
   const idea: Idea = {
     ...existing,
     ...patch,
     title: patch.title?.trim() ?? existing.title,
     subtasks: patch.subtasks ?? existing.subtasks,
+    sourceMethod:
+      patch.sourceMethod !== undefined
+        ? patch.sourceMethod
+        : patch.triggerSource !== undefined
+          ? patch.triggerSource
+          : existing.sourceMethod,
+    triggerSource:
+      patch.triggerSource !== undefined
+        ? patch.triggerSource
+        : patch.sourceMethod !== undefined
+          ? patch.sourceMethod
+          : existing.triggerSource,
+    occurredAt: patch.occurredAt?.trim() || existing.occurredAt || existing.createdAt,
+    completedAt,
     createdAt: existing.createdAt,
-    updatedAt: nowIso(),
+    updatedAt: now,
   };
-
-  if (idea.relatedProjectId && idea.relatedIdeaId) {
-    throw new Error("只能关联项目或灵感其中之一");
-  }
 
   return writeSupabase(
     async () => {
@@ -628,6 +813,16 @@ export async function createStudioAsset(input: CreateAssetInput): Promise<Asset>
   const snapshot = await getStudioSnapshot();
   if (!snapshot.projects.some((p) => p.id === input.projectId)) throw new Error("关联项目不存在");
 
+  assertNoDuplicateAsset(
+    snapshot.assets,
+    {
+      title: input.title.trim(),
+      projectId: input.projectId,
+      url: input.url,
+    },
+    input.force
+  );
+
   const asset: Asset = {
     id: studioId("asset-"),
     title: input.title.trim(),
@@ -704,8 +899,35 @@ export async function parkStudioIdea(id: string): Promise<Idea> {
   return updateStudioIdea(id, { status: "parked" });
 }
 
+export async function archiveStudioIdea(id: string): Promise<Idea> {
+  return updateStudioIdea(id, { status: "archived" });
+}
+
+export async function bulkArchiveStudioIdeas(
+  ids: string[]
+): Promise<{ archived: number; skipped: number }> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  let archived = 0;
+  let skipped = 0;
+  for (const id of unique) {
+    try {
+      const snapshot = await getStudioSnapshot();
+      const existing = snapshot.ideas.find((i) => i.id === id);
+      if (!existing || existing.status === "archived") {
+        skipped += 1;
+        continue;
+      }
+      await archiveStudioIdea(id);
+      archived += 1;
+    } catch {
+      skipped += 1;
+    }
+  }
+  return { archived, skipped };
+}
+
 export async function completeStudioIdea(id: string): Promise<Idea> {
-  return updateStudioIdea(id, { status: "done" });
+  return updateStudioIdea(id, { status: "done", completedAt: nowIso() });
 }
 
 export type UpsertIdeaFromGitHubInput = {
@@ -761,6 +983,7 @@ export async function upsertStudioIdeaFromGitHub(
     githubIssueNumber: input.githubIssueNumber,
     githubIssueUrl: input.githubIssueUrl,
     githubLabels: input.githubLabels,
+    occurredAt: input.createdAt,
   });
 
   if (isSupabaseConfigured()) {
@@ -768,6 +991,7 @@ export async function upsertStudioIdeaFromGitHub(
       .from("studio_ideas")
       .update({
         created_at: input.createdAt,
+        occurred_at: input.createdAt,
         updated_at: input.updatedAt,
       })
       .eq("id", idea.id);
@@ -779,6 +1003,7 @@ export async function upsertStudioIdeaFromGitHub(
         snap.ideas[idx] = {
           ...snap.ideas[idx],
           createdAt: input.createdAt,
+          occurredAt: input.createdAt,
           updatedAt: input.updatedAt,
         };
       }
@@ -797,17 +1022,50 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
   const idea = snapshot.ideas.find((i) => i.id === ideaId);
   if (!idea) throw new Error("灵感不存在");
 
-  const project = await createStudioProject({
-    title: projectInput?.title ?? idea.title,
-    positioning: projectInput?.positioning ?? idea.oneLineIdea,
+  const nextFromIdea = idea.suggestedNextStep?.trim() || "";
+  const defaults: CreateProjectInput = {
+    title: idea.title,
+    positioning: idea.oneLineIdea || "",
+    priority: idea.priority,
+    currentStage: "起步",
+    nextAction: nextFromIdea,
+    portfolioValue: idea.whyItMatters || "",
     body: {
       initialThought: idea.rawInput || idea.oneLineIdea,
       whyThought: idea.whyItMatters,
-      nextStep: idea.suggestedNextStep || projectInput?.body?.nextStep || "",
+      positioning: idea.oneLineIdea,
+      nextStep: nextFromIdea,
+    },
+  };
+
+  const project = await createStudioProject({
+    ...defaults,
+    ...projectInput,
+    title: projectInput?.title ?? defaults.title,
+    positioning: projectInput?.positioning ?? defaults.positioning,
+    priority: projectInput?.priority ?? defaults.priority,
+    nextAction: projectInput?.nextAction ?? defaults.nextAction,
+    currentStage: projectInput?.currentStage ?? defaults.currentStage,
+    portfolioValue: projectInput?.portfolioValue ?? defaults.portfolioValue,
+    body: {
+      ...defaults.body,
       ...(projectInput?.body ?? {}),
     },
-    ...projectInput,
   });
+
+  if (idea.subtasks.length > 0) {
+    await Promise.all(
+      idea.subtasks.map((sub) =>
+        createStudioTask({
+          title: sub.title,
+          projectId: project.id,
+          priority: sub.priority,
+          workload: sub.rationale,
+          sourceIdeaId: ideaId,
+        })
+      )
+    );
+  }
 
   const updatedIdea = await updateStudioIdea(ideaId, {
     status: "converted",
@@ -818,6 +1076,8 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
     idea.rawInput ? `原始想法：${idea.rawInput}` : "",
     idea.oneLineIdea ? `摘要：${idea.oneLineIdea}` : "",
     idea.whyItMatters ? `为什么：${idea.whyItMatters}` : "",
+    idea.aiSupplement ? `AI补充：${idea.aiSupplement}` : "",
+    nextFromIdea ? `建议下一步：${nextFromIdea}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -829,8 +1089,94 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
     before: "",
     after: idea.oneLineIdea || idea.title,
     reason: evolutionContent,
-    decision: `来源：${idea.triggerSource || "手动"}${idea.githubIssueUrl ? ` · ${idea.githubIssueUrl}` : ""}`,
+    decision: `来源灵感 ${idea.id} · ${idea.triggerSource || idea.sourceMethod || "手动"}${idea.githubIssueUrl ? ` · ${idea.githubIssueUrl}` : ""}`,
   });
 
   return { idea: updatedIdea, project };
+}
+
+/** 从 GitHub 同步 Release + 补 Tag，按 projectId+tag upsert */
+export async function syncStudioProjectReleases(projectId: string): Promise<{
+  synced: number;
+  releases: StudioRelease[];
+}> {
+  const snapshot = await getStudioSnapshot();
+  const project = snapshot.projects.find((p) => p.id === projectId);
+  if (!project) throw new Error("项目不存在");
+  const repo = project.githubRepo?.trim();
+  if (!repo) throw new Error("项目未配置 GitHub 仓库（githubRepo）");
+
+  const { fetchGitHubReleases, fetchGitHubTags, buildRepoUrl } = await import(
+    "@/lib/github/client"
+  );
+
+  const [ghReleases, ghTags] = await Promise.all([
+    fetchGitHubReleases(repo),
+    fetchGitHubTags(repo),
+  ]);
+
+  const syncedAt = nowIso();
+  const byTag = new Map<string, StudioRelease>();
+
+  for (const r of ghReleases) {
+    const tag = r.tag_name.trim();
+    if (!tag) continue;
+    byTag.set(tag, {
+      id: `rel-${projectId}-${tag}`.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120),
+      projectId,
+      tag,
+      name: (r.name || tag).trim(),
+      publishedAt: r.published_at,
+      body: r.body ?? "",
+      htmlUrl: r.html_url,
+      isPrerelease: Boolean(r.prerelease),
+      source: "release",
+      syncedAt,
+    });
+  }
+
+  for (const t of ghTags) {
+    const tag = t.name.trim();
+    if (!tag || byTag.has(tag)) continue;
+    byTag.set(tag, {
+      id: `rel-${projectId}-${tag}`.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120),
+      projectId,
+      tag,
+      name: tag,
+      publishedAt: null,
+      body: "",
+      htmlUrl: `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`,
+      isPrerelease: false,
+      source: "tag",
+      syncedAt,
+    });
+  }
+
+  const next = [...byTag.values()].sort((a, b) =>
+    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "")
+  );
+
+  return writeSupabase(
+    async () => {
+      const client = sb();
+      // 先删本项目旧缓存再整批插入，避免陈旧 Tag
+      await client.from("studio_releases").delete().eq("project_id", projectId);
+      if (next.length) {
+        const { error } = await client
+          .from("studio_releases")
+          .upsert(next.map(releaseToRow), { onConflict: "id" });
+        if (error) throw new Error(error.message);
+      }
+      return { synced: next.length, releases: next };
+    },
+    () => {
+      applyMemoryMutation((snap) => {
+        snap.releases = [
+          ...(snap.releases ?? []).filter((r) => r.projectId !== projectId),
+          ...next,
+        ];
+      });
+      return { synced: next.length, releases: next };
+    }
+  );
 }

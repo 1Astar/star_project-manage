@@ -1,84 +1,129 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { StarMapLayout, StarMapNode } from "@/lib/studio/idea-star-map";
+import type { StarMapAnchor, StarMapLayout, StarMapNode } from "@/lib/studio/idea-star-map";
 
 type IdeaStarMapProps = {
   layout: StarMapLayout;
 };
 
-type HoverState = {
-  node: StarMapNode;
-  x: number;
-  y: number;
-};
+type HoverTarget =
+  | { type: "node"; node: StarMapNode; x: number; y: number }
+  | { type: "anchor"; anchor: StarMapAnchor; x: number; y: number };
+
+const STAT_LINKS = [
+  {
+    key: "today" as const,
+    href: "/stream?date=today",
+    label: (n: number) => `今日 +${n}`,
+  },
+  {
+    key: "star" as const,
+    href: "/stream?kind=star",
+    label: (n: number) => `${n} 颗星`,
+  },
+  {
+    key: "planet" as const,
+    href: "/stream?kind=planet",
+    label: (n: number) => `${n} 颗星球`,
+  },
+  {
+    key: "projects" as const,
+    href: "/projects",
+    label: (n: number) => `${n} 个项目引力场`,
+  },
+];
 
 export function IdeaStarMap({ layout }: IdeaStarMapProps) {
   const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<HoverState | null>(null);
+  const [hover, setHover] = useState<HoverTarget | null>(null);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
   const legend = useMemo(
     () => [
-      { label: "灵感星", color: "#818cf8" },
-      { label: "已落地星球", color: "#6366f1" },
-      { label: "废弃流星", color: "#94a3b8" },
+      { label: "灵感星", color: "#818cf8", href: "/stream?kind=star" },
+      { label: "已落地星球", color: "#6366f1", href: "/stream?kind=planet" },
+      { label: "废弃流星", color: "#94a3b8", href: "/stream?kind=meteor" },
     ],
     []
   );
+
+  const statValues = {
+    today: layout.stats.todayCount,
+    star: layout.stats.starCount,
+    planet: layout.stats.planetCount,
+    projects: layout.stats.activeProjects,
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
+
+    const FRAME_MS = 1000 / 18;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     let frame = 0;
     let raf = 0;
+    let lastPaint = 0;
+    let running = false;
+    let inView = true;
+    let pageVisible = document.visibilityState === "visible";
+    let drawW = 0;
+    let drawH = 0;
+    let bgGradient: CanvasGradient | null = null;
 
     function resize() {
       const rect = container!.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas!.width = Math.floor(rect.width * dpr);
-      canvas!.height = Math.floor(rect.height * dpr);
-      canvas!.style.width = `${rect.width}px`;
-      canvas!.style.height = `${rect.height}px`;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      drawW = rect.width;
+      drawH = rect.height;
+      canvas!.width = Math.floor(drawW * dpr);
+      canvas!.height = Math.floor(drawH * dpr);
+      canvas!.style.width = `${drawW}px`;
+      canvas!.style.height = `${drawH}px`;
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      bgGradient = ctx!.createRadialGradient(
+        drawW * 0.5,
+        drawH * 0.45,
+        0,
+        drawW * 0.5,
+        drawH * 0.5,
+        drawW * 0.65
+      );
+      bgGradient.addColorStop(0, "#1e1b4b");
+      bgGradient.addColorStop(0.55, "#0f172a");
+      bgGradient.addColorStop(1, "#020617");
     }
 
-    function drawBackground(w: number, h: number, t: number) {
-      const gradient = ctx!.createRadialGradient(w * 0.5, h * 0.45, 0, w * 0.5, h * 0.5, w * 0.65);
-      gradient.addColorStop(0, "#1e1b4b");
-      gradient.addColorStop(0.55, "#0f172a");
-      gradient.addColorStop(1, "#020617");
-      ctx!.fillStyle = gradient;
-      ctx!.fillRect(0, 0, w, h);
+    function drawBackground(t: number) {
+      ctx!.fillStyle = bgGradient ?? "#0f172a";
+      ctx!.fillRect(0, 0, drawW, drawH);
 
-      for (let i = 0; i < 48; i++) {
+      for (let i = 0; i < 20; i++) {
         const sx = ((i * 73) % 1000) / 1000;
         const sy = ((i * 131) % 1000) / 1000;
-        const blink = 0.25 + Math.sin(t * 0.02 + i) * 0.15;
+        const blink = reduceMotion ? 0.35 : 0.25 + Math.sin(t * 0.02 + i) * 0.15;
         ctx!.fillStyle = `rgba(255,255,255,${blink})`;
-        ctx!.beginPath();
-        ctx!.arc(sx * w, sy * h, i % 5 === 0 ? 1.2 : 0.6, 0, Math.PI * 2);
-        ctx!.fill();
+        ctx!.fillRect(sx * drawW, sy * drawH, i % 5 === 0 ? 1.5 : 1, i % 5 === 0 ? 1.5 : 1);
       }
     }
 
     function drawAnchor(x: number, y: number, radius: number, color: string, title: string) {
-      const glow = ctx!.createRadialGradient(x, y, 0, x, y, radius * 3.2);
-      glow.addColorStop(0, `${color}55`);
-      glow.addColorStop(1, "transparent");
-      ctx!.fillStyle = glow;
+      ctx!.globalAlpha = 0.35;
+      ctx!.fillStyle = color;
       ctx!.beginPath();
-      ctx!.arc(x, y, radius * 3.2, 0, Math.PI * 2);
+      ctx!.arc(x, y, radius * 2.6, 0, Math.PI * 2);
       ctx!.fill();
+      ctx!.globalAlpha = 1;
 
       ctx!.strokeStyle = `${color}88`;
       ctx!.lineWidth = 1;
@@ -97,21 +142,18 @@ export function IdeaStarMap({ layout }: IdeaStarMapProps) {
       ctx!.fillText(title.length > 10 ? `${title.slice(0, 10)}…` : title, x, y + radius + 14);
     }
 
-    function drawNode(node: StarMapNode, w: number, h: number, t: number) {
-      const x = node.x * w;
-      const y = node.y * h;
+    function drawNode(node: StarMapNode, t: number) {
+      const x = node.x * drawW;
+      const y = node.y * drawH;
 
       if (node.kind === "meteor") {
-        const progress = (t * 0.004 + node.twinklePhase) % 1;
-        const mx = x + progress * w * 0.25;
-        const my = y + progress * h * 0.12;
-        const trail = ctx!.createLinearGradient(mx - 24, my - 10, mx, my);
-        trail.addColorStop(0, "transparent");
-        trail.addColorStop(1, "rgba(148,163,184,0.85)");
-        ctx!.strokeStyle = trail;
+        const progress = reduceMotion ? 0.35 : (t * 0.004 + node.twinklePhase) % 1;
+        const mx = x + progress * drawW * 0.25;
+        const my = y + progress * drawH * 0.12;
+        ctx!.strokeStyle = "rgba(148,163,184,0.7)";
         ctx!.lineWidth = 1.5;
         ctx!.beginPath();
-        ctx!.moveTo(mx - 24, my - 10);
+        ctx!.moveTo(mx - 18, my - 8);
         ctx!.lineTo(mx, my);
         ctx!.stroke();
         ctx!.fillStyle = "rgba(203,213,225,0.9)";
@@ -121,13 +163,16 @@ export function IdeaStarMap({ layout }: IdeaStarMapProps) {
         return;
       }
 
-      const pulse = node.kind === "star" ? 0.65 + Math.sin(t * 0.05 + node.twinklePhase) * 0.35 : 1;
-      const glow = ctx!.createRadialGradient(x, y, 0, x, y, node.radius * (node.kind === "planet" ? 4 : 3));
-      glow.addColorStop(0, `${node.glow}${node.kind === "planet" ? "aa" : "66"}`);
-      glow.addColorStop(1, "transparent");
-      ctx!.fillStyle = glow;
+      const pulse = reduceMotion
+        ? 1
+        : node.kind === "star"
+          ? 0.7 + Math.sin(t * 0.05 + node.twinklePhase) * 0.3
+          : 1;
+      const haloR = node.radius * (node.kind === "planet" ? 3.2 : 2.4);
+      ctx!.globalAlpha = node.kind === "planet" ? 0.35 : 0.22 * pulse;
+      ctx!.fillStyle = node.glow;
       ctx!.beginPath();
-      ctx!.arc(x, y, node.radius * (node.kind === "planet" ? 4 : 3), 0, Math.PI * 2);
+      ctx!.arc(x, y, haloR, 0, Math.PI * 2);
       ctx!.fill();
 
       ctx!.globalAlpha = pulse;
@@ -146,58 +191,125 @@ export function IdeaStarMap({ layout }: IdeaStarMapProps) {
       }
     }
 
-    function render() {
-      const rect = container!.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height;
-      drawBackground(w, h, frame);
+    function paint() {
+      if (drawW <= 0 || drawH <= 0) return;
+      drawBackground(frame);
 
       for (const anchor of layoutRef.current.anchors) {
-        drawAnchor(anchor.x * w, anchor.y * h, 7, anchor.color, anchor.title);
+        drawAnchor(anchor.x * drawW, anchor.y * drawH, 7, anchor.color, anchor.title);
       }
 
-      const meteors = layoutRef.current.nodes.filter((n) => n.kind === "meteor");
-      const others = layoutRef.current.nodes.filter((n) => n.kind !== "meteor");
-      for (const node of others) drawNode(node, w, h, frame);
-      for (const node of meteors) drawNode(node, w, h, frame);
-
+      const nodes = layoutRef.current.nodes;
+      for (const node of nodes) {
+        if (node.kind !== "meteor") drawNode(node, frame);
+      }
+      for (const node of nodes) {
+        if (node.kind === "meteor") drawNode(node, frame);
+      }
       frame += 1;
-      raf = window.requestAnimationFrame(render);
+    }
+
+    function tick(now: number) {
+      raf = 0;
+      if (!running) return;
+      if (now - lastPaint >= FRAME_MS) {
+        lastPaint = now;
+        paint();
+      }
+      raf = window.requestAnimationFrame(tick);
+    }
+
+    function startLoop() {
+      if (running || reduceMotion) return;
+      if (!inView || !pageVisible) return;
+      running = true;
+      lastPaint = 0;
+      raf = window.requestAnimationFrame(tick);
+    }
+
+    function stopLoop() {
+      running = false;
+      if (raf) {
+        window.cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    }
+
+    function onVisibility() {
+      pageVisible = document.visibilityState === "visible";
+      if (pageVisible) startLoop();
+      else stopLoop();
     }
 
     resize();
-    render();
-    const observer = new ResizeObserver(resize);
-    observer.observe(container);
+    paint();
+    if (!reduceMotion) startLoop();
+
+    const resizeObserver = new ResizeObserver(() => {
+      resize();
+      paint();
+    });
+    resizeObserver.observe(container);
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry?.isIntersecting ?? false;
+        if (inView) startLoop();
+        else stopLoop();
+      },
+      { threshold: 0.05 }
+    );
+    io.observe(container);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
-      observer.disconnect();
-      window.cancelAnimationFrame(raf);
+      stopLoop();
+      resizeObserver.disconnect();
+      io.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 
-  function hitTest(clientX: number, clientY: number): StarMapNode | null {
-    const canvas = canvasRef.current;
+  function hitTest(clientX: number, clientY: number): HoverTarget | null {
     const container = containerRef.current;
-    if (!canvas || !container) return null;
+    if (!container) return null;
 
     const rect = container.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    let hit: StarMapNode | null = null;
-    let best = Infinity;
+    let bestNode: StarMapNode | null = null;
+    let bestNodeDist = Infinity;
+    let bestAnchor: StarMapAnchor | null = null;
+    let bestAnchorDist = Infinity;
 
     for (const node of layout.nodes) {
       const nx = node.x * rect.width;
       const ny = node.y * rect.height;
       const dist = Math.hypot(nx - x, ny - y);
       const threshold = node.kind === "planet" ? 14 : 10;
-      if (dist < threshold && dist < best) {
-        best = dist;
-        hit = node;
+      if (dist < threshold && dist < bestNodeDist) {
+        bestNodeDist = dist;
+        bestNode = node;
       }
     }
-    return hit;
+
+    for (const anchor of layout.anchors) {
+      const ax = anchor.x * rect.width;
+      const ay = anchor.y * rect.height;
+      const dist = Math.hypot(ax - x, ay - y);
+      if (dist < 22 && dist < bestAnchorDist) {
+        bestAnchorDist = dist;
+        bestAnchor = anchor;
+      }
+    }
+
+    if (bestNode && (!bestAnchor || bestNodeDist <= bestAnchorDist)) {
+      return { type: "node", node: bestNode, x, y };
+    }
+    if (bestAnchor) {
+      return { type: "anchor", anchor: bestAnchor, x, y };
+    }
+    return null;
   }
 
   return (
@@ -210,33 +322,30 @@ export function IdeaStarMap({ layout }: IdeaStarMapProps) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-          <span className="rounded-full bg-white/10 px-2.5 py-1">今日 +{layout.stats.todayCount}</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-1">{layout.stats.starCount} 颗星</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-1">{layout.stats.planetCount} 颗星球</span>
-          <span className="rounded-full bg-white/10 px-2.5 py-1">{layout.stats.activeProjects} 个项目引力场</span>
+          {STAT_LINKS.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className="rounded-full bg-white/10 px-2.5 py-1 transition hover:bg-white/20 hover:text-white"
+            >
+              {item.label(statValues[item.key])}
+            </Link>
+          ))}
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className="relative h-[360px] w-full cursor-crosshair md:h-[420px]"
+        className={`relative h-[360px] w-full md:h-[420px] ${hover ? "cursor-pointer" : "cursor-crosshair"}`}
         onMouseMove={(e) => {
-          const node = hitTest(e.clientX, e.clientY);
-          if (!node) {
-            setHover(null);
-            return;
-          }
-          const rect = containerRef.current!.getBoundingClientRect();
-          setHover({
-            node,
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-          });
+          setHover(hitTest(e.clientX, e.clientY));
         }}
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
-          const node = hitTest(e.clientX, e.clientY);
-          if (node) router.push(node.href);
+          const target = hitTest(e.clientX, e.clientY);
+          if (!target) return;
+          if (target.type === "node") router.push(target.node.href);
+          else router.push(target.anchor.href);
         }}
       >
         <canvas ref={canvasRef} className="absolute inset-0" />
@@ -245,26 +354,39 @@ export function IdeaStarMap({ layout }: IdeaStarMapProps) {
             className="pointer-events-none absolute z-10 max-w-[220px] rounded-lg border border-white/15 bg-slate-900/95 px-3 py-2 text-xs text-slate-100 shadow-xl"
             style={{ left: hover.x + 12, top: hover.y + 12 }}
           >
-            <div className="font-medium">{hover.node.label}</div>
-            <div className="mt-1 text-slate-400">
-              {hover.node.kind === "planet"
-                ? hover.node.status === "done"
-                  ? "已完成"
-                  : "已转项目"
-                : hover.node.kind === "meteor"
-                  ? "已归档"
-                  : "灵感星"}
-            </div>
+            {hover.type === "node" ? (
+              <>
+                <div className="font-medium">{hover.node.label}</div>
+                <div className="mt-1 text-slate-400">
+                  {hover.node.kind === "planet"
+                    ? hover.node.status === "done"
+                      ? "已完成 · 点击进入项目"
+                      : "已转项目 · 点击进入项目"
+                    : hover.node.kind === "meteor"
+                      ? "已归档 · 点击查看"
+                      : "灵感星 · 点击查看"}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-medium">{hover.anchor.title}</div>
+                <div className="mt-1 text-slate-400">项目引力场 · 点击进入</div>
+              </>
+            )}
           </div>
         ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-4 border-t border-white/10 px-5 py-3 text-xs text-slate-400">
         {legend.map((item) => (
-          <span key={item.label} className="inline-flex items-center gap-1.5">
+          <Link
+            key={item.label}
+            href={item.href}
+            className="inline-flex items-center gap-1.5 transition hover:text-slate-200"
+          >
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: item.color }} />
             {item.label}
-          </span>
+          </Link>
         ))}
         <span className="ml-auto text-slate-500">悬停查看 · 点击跳转</span>
       </div>

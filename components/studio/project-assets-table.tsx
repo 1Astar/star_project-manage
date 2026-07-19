@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { StudioBadge } from "@/components/studio/shell";
 import { publicStudioAssetUrl } from "@/lib/studio/asset-url";
-import type { Asset, AssetType } from "@/lib/studio/types";
-import { ASSET_TYPE_LABELS } from "@/lib/studio/types";
+import { assetTypeLabel } from "@/lib/studio/asset-categories";
+import type { Asset } from "@/lib/studio/types";
+import { parseAgentSourceLabel } from "@/lib/cursor-actor";
 
 type ProjectAssetsTableProps = {
   assets: Asset[];
@@ -78,7 +79,7 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
               <tr key={asset.id} className="hover:bg-slate-50/80">
                 <td className="px-3 py-2 font-medium text-slate-800">{asset.title}</td>
                 <td className="px-3 py-2">
-                  <StudioBadge>{ASSET_TYPE_LABELS[asset.assetType as AssetType]}</StudioBadge>
+                  <StudioBadge>{assetTypeLabel(asset.assetType)}</StudioBadge>
                 </td>
                 <td className="px-3 py-2">
                   {asset.storagePath ? (
@@ -111,8 +112,24 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
                     <span className="text-slate-400">—</span>
                   )}
                 </td>
-                <td className="max-w-xs truncate px-3 py-2 text-slate-600" title={asset.takeaway}>
-                  {asset.takeaway || "—"}
+                <td className="max-w-xs px-3 py-2 text-slate-600" title={asset.takeaway}>
+                  {(() => {
+                    const parsed = parseAgentSourceLabel(asset.takeaway);
+                    if (parsed.label) {
+                      return (
+                        <span className="block truncate">
+                          <span className="font-medium text-slate-700">{parsed.label}</span>
+                          {parsed.note ? (
+                            <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                              {parsed.note}
+                            </span>
+                          ) : null}
+                        </span>
+                      );
+                    }
+                    if (!parsed.note) return <span className="text-slate-400">—</span>;
+                    return <span className="block truncate">{parsed.note}</span>;
+                  })()}
                 </td>
                 <td className="px-3 py-2">
                   <button

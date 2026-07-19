@@ -1,28 +1,13 @@
-import { notFound } from "next/navigation";
-import { fetchPoolData } from "@/lib/actions";
-import { RequirementPoolClient } from "@/components/requirement-pool-client";
+import { redirect } from "next/navigation";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 
-export default async function PoolPage({
+/** 需求池已并入「需求与任务」主视图，旧 /pool 链接重定向过去 */
+export default async function PoolPageRedirect({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  const slug = ctx.pmSlug ?? id;
-  const bundle = await fetchPoolData(slug);
-  if (!bundle) notFound();
-
-  return (
-    <RequirementPoolClient
-      projectId={bundle.project.id}
-      projectSlug={bundle.project.slug}
-      requirements={bundle.poolRequirements}
-      modules={bundle.poolModules}
-      activeIterations={bundle.activeIterations}
-      columnDefs={bundle.poolColumnDefs}
-      tagOptions={bundle.tagOptions}
-    />
-  );
+  redirect(`/projects/${ctx.routeId}/tasks`);
 }

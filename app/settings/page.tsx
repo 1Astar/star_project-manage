@@ -29,7 +29,9 @@ export default function SettingsPage() {
         </section>
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="text-sm font-semibold text-slate-700">Notion 导入</h2>
-          <p className="mt-1 text-xs text-slate-500">从 Notion 看板同步灵感到收件箱</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Token 存本机 localStorage（同 OpenAI）；导入时临时传服务端拉数据，不写底层配置
+          </p>
           <div className="mt-4">
             <NotionImportPanel />
           </div>

@@ -10,6 +10,60 @@
 
 ---
 
+## v1.7.6 · 2026-07-18
+
+- **作品集 Prompt 模板**：项目恢复 / 概览挂载 Case Study 面板（叙事主线 · 生成 Prompt · 空模板，可一键复制）
+- **模板文档**：`docs/templates/case-study-*.md`；Concept 模板与「传统文化知识图谱」示例；「随心而行」Case Study 示例（`docs/case-studies/`）
+- **Idea 补充定位**：Concept / Case Study 不阻断 Idea → Project
+
+## v1.7.5 · 2026-07-17
+
+- **操作者代号**：助手写入显示「白昼」，ChatGPT 显示「星辰」（不再用「系统」）；动态灰字备注对话窗口；灵感来源 / 资料 takeaway 对齐 `白昼|星辰 · …`
+- **项目桥接**：水泵 / Star Lab OS / 个人效能工具箱等 Studio↔PM slug 映射
+
+## v1.7.4 · 2026-07-16
+
+- **项目库自定义字段**：全局列定义（文本/数字/日期/勾选/单选/链接）；表格内联编辑；新建项目「更多字段」可填；Migration `026_studio_project_custom_fields.sql`
+
+## v1.7.3 · 2026-07-16
+
+- **三套入口打通**：快记「保存并转成项目」；新建项目可选来源灵感（预填 + convert：关联灵感 / 定位 / 初始演进）；灵感流「转成项目」沿用同一链路
+
+## v1.7.2 · 2026-07-16
+
+- **新建项目**：字段对齐创建接口；默认精简，更多字段可折叠
+- **项目库内联编辑**：定位 / 下一步 / 阶段 / 优先级 / 状态可点改
+- **空「下一步」**：工作台与项目库弱提醒；可从最近未完成任务一键采纳草稿
+- **灵感转项目**：带出定位、优先级、下一步、正文；同步子任务；初始演进记来源灵感
+
+## v1.7.1 · 2026-07-16
+
+- **项目库**：网页「＋新建项目」（对接已有 API / MCP `create_project`）
+- **灵感流**：默认隐藏已完成灵感（与已入池一致；「含已入池」可一并显示）
+
+## v1.7.0 · 2026-07-15
+
+- **资源中心**：九类入口（体验/代码/部署半自动）；GitHub Release/Tag 同步与版本切换
+- **迭代计划**：起止日状态切片、挂版本、本期顶层模块概况（完成/进行/待开始）
+- **需求表**：结束时间 / AI补充等内置列；自定义列；Side Peek 结束时间
+- **Migration**：`025_releases_and_iteration_version.sql`（`studio_releases` + iterations 日期/版本字段）
+
+## v1.6.1 · 2026-07-15
+
+- **capture_idea 查重 + 自动挂父**：标题相似度 ≥0.85 拒绝新建（可 `force:true`）；未传 `relatedIdeaId` 时尝试挂顶层总纲；返回 `parentAutoLinked` / `parentAlternatives`
+
+## v1.6.0 · 2026-07-15
+
+- **MCP P2 工作台**：`get_project` / `create_project` / `update_project` / `create_asset` / `add_evolution` / `add_decision` / `link_item` / `generate_brief` / `summarize_project` / `summarize_day`
+- **关系与日志**：`023_studio_links_and_ai_logs.sql`（`studio_links` + `studio_ai_action_logs`）
+- **Migration 序号修正**：DDL/记忆字段改为 `021` / `022`（避免与 `019_requirement_tree_links` 撞号）
+
+## v1.5.0 · 2026-07-15
+
+- **MCP P0 查库/改库**：`list_tables` / `describe_table` / `add_column` / `create_table` / `create_index`（仅 `studio_*`，需 `confirm:true`）
+- **stdio 落盘**：本地 `mcp:stdio` 改库成功后自动写下一序号 migration；远程 HTTP 只改库并提示补文件
+- **MCP P1 灵感记忆**：`search` / `get_idea`；Ideas 增补来源/模块/AI补充/沉淀字段；`capture_idea` / `update_idea` 入参扩展
+
 ## v1.4.0 · 2026-07-14
 
 - **灵感流 `/stream`**：时间线 / 表格双视图；底部 Enter 快记；项目标签筛选；`/inbox` 重定向

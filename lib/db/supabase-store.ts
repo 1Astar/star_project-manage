@@ -1,6 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { DatabaseSnapshot } from "@/lib/db/types";
-import type { GitActivity, Project } from "@/lib/types";
+import type { GitActivity, Iteration, Project, Requirement, RequirementAttachment, RequirementLink } from "@/lib/types";
 
 function client() {
   const sb = createServiceClient();
@@ -81,6 +81,8 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   const git_activities = await loadGitActivities(sb);
   const project_members = await loadOptionalTable(sb, "project_members");
   const pool_column_defs = await loadOptionalTable(sb, "pool_column_defs");
+  const requirement_attachments = await loadOptionalTable(sb, "requirement_attachments");
+  const requirement_links = await loadOptionalTable(sb, "requirement_links");
 
   return {
     projects: throwOnError(projects, "projects"),
@@ -100,6 +102,8 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     git_activities,
     project_members,
     pool_column_defs,
+    requirement_attachments,
+    requirement_links,
   };
 }
 
@@ -118,7 +122,9 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "requirement_comments" ||
       table === "git_activities" ||
       table === "project_members" ||
-      table === "pool_column_defs"
+      table === "pool_column_defs" ||
+      table === "requirement_attachments" ||
+      table === "requirement_links"
     ) {
       return;
     }
@@ -160,9 +166,23 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   if ((snapshot.pool_column_defs ?? []).length) {
     await upsertRows("pool_column_defs", snapshot.pool_column_defs ?? []);
   }
+  if ((snapshot.requirement_attachments ?? []).length) {
+    await upsertRows("requirement_attachments", snapshot.requirement_attachments ?? []);
+  }
+  if ((snapshot.requirement_links ?? []).length) {
+    await upsertRows("requirement_links", snapshot.requirement_links ?? []);
+  }
 
   await deleteMissing("git_activities", (snapshot.git_activities ?? []).map((r) => r.id));
   await deleteMissing("pool_column_defs", (snapshot.pool_column_defs ?? []).map((r) => r.id));
+  await deleteMissing(
+    "requirement_attachments",
+    (snapshot.requirement_attachments ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "requirement_links",
+    (snapshot.requirement_links ?? []).map((r) => r.id)
+  );
   await deleteMissing("project_members", (snapshot.project_members ?? []).map((r) => r.id));
   await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
@@ -208,6 +228,51 @@ export async function updateProjectById(
     .single();
   if (error) throw new Error(`projects update: ${error.message}`);
   return data as Project;
+}
+
+export async function upsertProjectRow(project: Project): Promise<void> {
+  await upsertRows("projects", [project]);
+}
+
+export async function upsertIterationRow(iteration: Iteration): Promise<void> {
+  await upsertRows("iterations", [iteration]);
+}
+
+export async function upsertRequirementRow(requirement: Requirement): Promise<void> {
+  await upsertRows("requirements", [requirement]);
+}
+
+export async function upsertActivityLogRow(log: import("@/lib/types").ActivityLog): Promise<void> {
+  await upsertRows("activity_logs", [log]);
+}
+
+export async function upsertRequirementAttachmentRow(
+  attachment: RequirementAttachment
+): Promise<void> {
+  await upsertRows("requirement_attachments", [attachment]);
+}
+
+export async function deleteRequirementAttachmentRow(id: string): Promise<void> {
+  const sb = client();
+  const { error } = await sb.from("requirement_attachments").delete().eq("id", id);
+  if (error) throw new Error(`requirement_attachments delete: ${error.message}`);
+}
+
+export async function upsertRequirementLinkRow(link: RequirementLink): Promise<void> {
+  await upsertRows("requirement_links", [link]);
+}
+
+export async function deleteRequirementLinkRow(id: string): Promise<void> {
+  const sb = client();
+  const { error } = await sb.from("requirement_links").delete().eq("id", id);
+  if (error) throw new Error(`requirement_links delete: ${error.message}`);
+}
+
+export async function deleteRequirementRows(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const sb = client();
+  const { error } = await sb.from("requirements").delete().in("id", ids);
+  if (error) throw new Error(`requirements delete: ${error.message}`);
 }
 
 export async function upsertGitActivities(rows: GitActivity[]) {

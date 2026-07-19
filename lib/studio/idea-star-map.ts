@@ -25,6 +25,7 @@ export type StarMapAnchor = {
   x: number;
   y: number;
   color: string;
+  href: string;
 };
 
 export type StarMapLayout = {
@@ -70,6 +71,7 @@ function projectAnchors(projects: Project[]): StarMapAnchor[] {
       x: 0.5 + Math.cos(angle) * radius,
       y: 0.5 + Math.sin(angle) * radius * 0.72,
       color: PROJECT_COLORS[index % PROJECT_COLORS.length],
+      href: `/projects/${project.id}`,
     };
   });
 }
@@ -138,9 +140,14 @@ export function buildStarMapLayout(ideas: Idea[], projects: Project[]): StarMapL
         color,
         glow: kind === "meteor" ? "#94a3b8" : color,
         label: idea.title,
-        href: kind === "planet" && idea.relatedProjectId
-          ? `/projects/${idea.relatedProjectId}`
-          : "/stream",
+        href:
+          kind === "planet" && idea.relatedProjectId
+            ? `/projects/${idea.relatedProjectId}`
+            : kind === "planet"
+              ? `/stream?kind=planet&idea=${idea.id}`
+              : kind === "meteor"
+                ? `/stream?kind=meteor&idea=${idea.id}`
+                : `/stream?kind=star&idea=${idea.id}`,
         status: idea.status,
         type: idea.type,
         projectId: idea.relatedProjectId,
@@ -149,7 +156,7 @@ export function buildStarMapLayout(ideas: Idea[], projects: Project[]): StarMapL
     });
   }
 
-  const todayCount = ideas.filter((i) => isIdeaOnDate(i.createdAt, "today")).length;
+  const todayCount = ideas.filter((i) => isIdeaOnDate(i, "today")).length;
 
   return {
     nodes,

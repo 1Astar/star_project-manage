@@ -128,18 +128,32 @@ const TASK_STATUS_MAP: Record<string, TaskStatus> = {
 };
 
 const ASSET_TYPE_MAP: Record<string, AssetType> = {
-  竞品: "competitor",
-  competitor: "competitor",
-  UI参考: "ui_ref",
-  ui_ref: "ui_ref",
-  技术文档: "tech_doc",
-  tech_doc: "tech_doc",
+  竞品: "material",
+  competitor: "material",
+  UI参考: "design",
+  ui_ref: "design",
+  设计稿: "design",
+  design: "design",
+  技术文档: "doc",
+  tech_doc: "doc",
+  文档: "doc",
+  doc: "doc",
   视频: "video",
   video: "video",
   素材: "material",
   material: "material",
-  灵感: "inspiration",
-  inspiration: "inspiration",
+  灵感: "material",
+  inspiration: "material",
+  Prompt: "prompt",
+  prompt: "prompt",
+  API: "api",
+  api: "api",
+  在线体验: "experience",
+  experience: "experience",
+  代码仓库: "repo",
+  repo: "repo",
+  部署: "deploy",
+  deploy: "deploy",
 };
 
 export interface NotionImportResult {
@@ -230,6 +244,7 @@ async function mapNotionPageToProject(
     lastCommitAt: null,
     relatedPageUrl: page.url ?? notionPageUrl(page.id),
     portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
+    customFields: {},
     body,
     createdAt: page.created_time || now,
     updatedAt: now,
@@ -256,13 +271,22 @@ function mapIdeaPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
   const relatedProjectId = relatedNotionId
     ? (projectIdByNotion.get(relatedNotionId) ?? projectIdFromNotion(relatedNotionId))
     : null;
+  const createdAt = page.created_time || new Date().toISOString();
+  const updatedAt = page.last_edited_time || page.created_time || createdAt;
+  const status = matchSelect(getPropertyText(page, "状态", "Status"), IDEA_STATUS_MAP, "inbox");
 
   return {
     id: ideaIdFromNotion(page.id),
     title: getPropertyText(page, "标题", "名称", "Name") || getPageTitle(page),
     oneLineIdea: getPropertyText(page, "一句话想法", "想法", "One-line", "Idea"),
     whyItMatters: getPropertyText(page, "为什么", "为什么想到", "Why"),
+    aiSupplement: getPropertyText(page, "AI补充", "AI 补充"),
+    chatTopic: getPropertyText(page, "聊天主题", "主题"),
     triggerSource: getPropertyText(page, "触发来源", "来源", "Trigger"),
+    sourceChat: getPropertyText(page, "来源聊天", "聊天"),
+    sourceMethod:
+      getPropertyText(page, "来源方式", "Source Method") ||
+      getPropertyText(page, "触发来源", "来源", "Trigger"),
     emotionLevel: matchSelect(
       getPropertyText(page, "情绪", "Emotion"),
       EMOTION_MAP,
@@ -270,17 +294,24 @@ function mapIdeaPage(page: NotionPage, projectIdByNotion: Map<string, string>): 
     ),
     type: matchSelect(getPropertyText(page, "类型", "Type"), IDEA_TYPE_MAP, "product"),
     priority: matchSelect(getPropertyText(page, "优先级", "Priority"), PRIORITY_MAP, "P2"),
-    rawInput: "",
+    rawInput: getPropertyText(page, "原始想法", "原文"),
     relatedProjectId,
     relatedIdeaId: null,
+    relatedModule: getPropertyText(page, "关联模块", "模块"),
     subtasks: [],
-    status: matchSelect(getPropertyText(page, "状态", "Status"), IDEA_STATUS_MAP, "inbox"),
+    status,
     suggestedNextStep: getPropertyText(page, "下一步", "下一步建议"),
+    decisionNotes: getPropertyText(page, "决策记录", "决策"),
+    evolutionNotes: getPropertyText(page, "演进记录", "演进"),
+    relatedAssetsNote: getPropertyText(page, "相关资产", "资产"),
     githubIssueNumber: null,
     githubIssueUrl: null,
     githubLabels: [],
-    createdAt: page.created_time || new Date().toISOString(),
-    updatedAt: page.last_edited_time || page.created_time || new Date().toISOString(),
+    occurredAt:
+      getPropertyText(page, "产生时间", "发生时间") || createdAt,
+    completedAt: status === "done" ? updatedAt : null,
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -424,6 +455,7 @@ function mapDatabasePages(
         lastCommitAt: null,
         relatedPageUrl: page.url ?? notionPageUrl(page.id),
         portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
+        customFields: {},
         body: {
           ...EMPTY_BODY,
           initialThought: getPropertyText(page, "初始想法", "想法"),
@@ -446,7 +478,7 @@ function mapDatabasePages(
 export async function fetchNotionStudioSnapshot(
   config: NotionImportConfig = getNotionImportConfig()!
 ): Promise<NotionImportResult> {
-  if (!config?.token) throw new Error("NOTION_TOKEN 未配置");
+  if (!config?.token) throw new Error("Notion Token 未配置");
 
   const client = new NotionClient(config.token);
   const warnings: string[] = [];
@@ -505,6 +537,8 @@ export async function fetchNotionStudioSnapshot(
     evolutionLogs,
     tasks,
     assets,
+    releases: [],
+    projectColumnDefs: [],
   };
 
   return {

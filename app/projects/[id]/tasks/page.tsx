@@ -1,72 +1,112 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { fetchProjectBoard } from "@/lib/actions";
-import { KanbanBoard } from "@/components/task-board";
-import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { ProjectIdeasSection } from "@/components/studio/project-ideas-section";
-import { ProjectTaskBoard } from "@/components/studio/project-task-board";
+import { fetchPoolDataWithIdeaSync, fetchProjectBoard } from "@/lib/actions";
+import { ProjectTasksViews } from "@/components/project-tasks-views";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { getProjectIdeas, getProjectTasks } from "@/lib/studio/data";
+import { getProjectEvolution, getProjectIdeas, getProjectReleases, getProjectTasks } from "@/lib/studio/data";
 
 export default async function ProjectTasksPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ req?: string; view?: string }>;
 }) {
   const { id } = await params;
+  await searchParams;
   const ctx = await resolveProjectRoute(id);
   if (!ctx.studio && !ctx.pmBundle) notFound();
 
-  const pmBundle = ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : ctx.pmBundle;
-  const studioTasks = ctx.studio ? await getProjectTasks(ctx.studio.id) : [];
+  const pmSlug = ctx.pmSlug ?? null;
   const ideas = ctx.studio ? await getProjectIdeas(ctx.studio.id) : [];
+  const evolutions = ctx.studio ? await getProjectEvolution(ctx.studio.id) : [];
+  const [pmBundle, poolSync, studioTasks] = await Promise.all([
+    pmSlug ? fetchProjectBoard(pmSlug) : Promise.resolve(ctx.pmBundle),
+    pmSlug
+      ? fetchPoolDataWithIdeaSync(
+          pmSlug,
+          ideas.map((i) => ({
+            id: i.id,
+            title: i.title,
+            oneLineIdea: i.oneLineIdea,
+            whyItMatters: i.whyItMatters,
+            triggerSource: i.triggerSource,
+            suggestedNextStep: i.suggestedNextStep,
+            priority: i.priority,
+            occurredAt: i.occurredAt,
+            completedAt: i.completedAt,
+            status: i.status,
+          })),
+          evolutions.map((e) => ({
+            id: e.id,
+            title: e.title,
+            before: e.before,
+            after: e.after,
+            reason: e.reason,
+            decision: e.decision,
+            createdAt: e.createdAt,
+          }))
+        )
+      : Promise.resolve(null),
+    ctx.studio ? getProjectTasks(ctx.studio.id) : Promise.resolve([]),
+  ]);
+
+  const studioReleases = ctx.studio ? await getProjectReleases(ctx.studio.id) : [];
+
+  const poolBundle = poolSync?.bundle ?? null;
+  const syncInfo = poolSync?.sync ?? null;
+
+  if (!poolBundle || !pmBundle) {
+    return <p className="text-sm text-slate-500">暂无任务数据</p>;
+  }
 
   return (
     <div className="space-y-8">
-      {ctx.studio ? (
-        <ProjectIdeasSection
-          projectId={ctx.studio.id}
-          projectTitle={ctx.studio.title}
-          ideas={ideas}
+      <Suspense fallback={<div className="h-40 rounded-xl bg-slate-50" />}>
+        <ProjectTasksViews
+          routeId={ctx.routeId}
+          projectId={poolBundle.project.id}
+          projectSlug={poolBundle.project.slug}
+          poolRequirements={poolBundle.poolRequirements}
+          poolModules={poolBundle.poolModules}
+          activeIterations={poolBundle.activeIterations}
+          columnDefs={poolBundle.poolColumnDefs}
+          tagOptions={poolBundle.tagOptions}
+          attachments={poolBundle.attachments ?? []}
+          members={poolBundle.project_members ?? []}
+          boardRequirements={pmBundle.requirements}
+          boardTasks={pmBundle.role_tasks}
+          syncInfo={syncInfo}
+          links={poolBundle.links ?? []}
+          timelineEntities={[
+            ...ideas.map((i) => ({
+              id: i.id,
+              kind: "idea" as const,
+              title: i.title,
+              at: i.occurredAt ?? i.createdAt ?? null,
+              note: i.oneLineIdea ?? i.whyItMatters ?? null,
+            })),
+            ...evolutions.map((e) => ({
+              id: e.id,
+              kind: "evolution" as const,
+              title: e.title,
+              at: e.createdAt ?? null,
+              note: e.reason ?? e.decision ?? null,
+            })),
+            ...studioTasks.map((t) => ({
+              id: t.id,
+              kind: "studio_task" as const,
+              title: t.title,
+              at: t.dueDate ?? t.endDate ?? t.startDate ?? t.completedAt ?? null,
+              note: t.progressNote ?? null,
+            })),
+          ]}
+          studioProjectId={ctx.studio?.id ?? null}
+          studioTasks={studioTasks}
+          studioHasGitHub={!!ctx.studio?.githubRepo}
+          studioReleases={studioReleases}
         />
-      ) : null}
-
-      {pmBundle ? (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700">PM 需求看板</h2>
-            <Link
-              href={`/projects/${ctx.pmSlug ?? id}/pool`}
-              className="text-sm text-indigo-600 hover:underline"
-            >
-              打开需求池 →
-            </Link>
-          </div>
-          <RealtimeRefresh />
-          <KanbanBoard
-            requirements={pmBundle.requirements}
-            tasks={pmBundle.role_tasks}
-            projectId={pmBundle.project.id}
-            actorName="产品"
-            actorRole="admin"
-          />
-        </section>
-      ) : null}
-
-      {ctx.studio ? (
-        <section>
-          <h2 className="mb-4 text-sm font-semibold text-slate-700">Studio 需求任务</h2>
-          <ProjectTaskBoard
-            projectId={ctx.studio.id}
-            tasks={studioTasks}
-            hasGitHub={!!ctx.studio.githubRepo}
-          />
-        </section>
-      ) : null}
-
-      {!pmBundle && !ctx.studio ? (
-        <p className="text-sm text-slate-500">暂无任务数据</p>
-      ) : null}
+      </Suspense>
     </div>
   );
 }

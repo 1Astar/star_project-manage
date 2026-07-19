@@ -11,30 +11,111 @@ import {
   StreamProjectTags,
   type StreamView,
 } from "@/components/studio/idea-stream-tabs";
+import { StreamActiveFilters } from "@/components/studio/stream-active-filters";
 import { StreamQuickCapture } from "@/components/studio/stream-quick-capture";
 import { InboxSyncButton } from "@/components/studio/inbox-sync-button";
 import { getAllIdeas, getAllProjects, getProjectTitle } from "@/lib/studio/data";
+import { getIdeaDateGroup, isIdeaOnDate } from "@/lib/studio/idea-stream-utils";
+import type { Idea, IdeaStatus } from "@/lib/studio/types";
 
 function parseView(view?: string): StreamView {
   return view === "table" ? "table" : "timeline";
 }
 
+type StreamKind = "star" | "planet" | "meteor";
+
+function parseKind(kind?: string): StreamKind | null {
+  if (kind === "star" || kind === "planet" || kind === "meteor") return kind;
+  return null;
+}
+
+function matchesKind(status: IdeaStatus, kind: StreamKind): boolean {
+  if (kind === "planet") return status === "converted" || status === "done";
+  if (kind === "meteor") return status === "archived";
+  return status !== "converted" && status !== "done" && status !== "archived";
+}
+
+function applyStreamFilters(
+  ideas: Idea[],
+  opts: {
+    projectFilter?: string;
+    date?: string;
+    kind: StreamKind | null;
+    includePooled: boolean;
+    pooledIdeaIds: Set<string>;
+  }
+): Idea[] {
+  let filtered = ideas;
+
+  if (opts.projectFilter === INBOX_UNLINKED_FILTER) {
+    filtered = filtered.filter((idea) => !idea.relatedProjectId);
+  } else if (opts.projectFilter) {
+    filtered = filtered.filter((idea) => idea.relatedProjectId === opts.projectFilter);
+  }
+
+  if (opts.date === "today") {
+    filtered = filtered.filter((idea) => isIdeaOnDate(idea.createdAt, "today"));
+  } else if (opts.date === "yesterday") {
+    filtered = filtered.filter((idea) => getIdeaDateGroup(idea.createdAt) === "yesterday");
+  } else if (opts.date) {
+    filtered = filtered.filter((idea) => isIdeaOnDate(idea.createdAt, opts.date!));
+  }
+
+  if (opts.kind) {
+    filtered = filtered.filter((idea) => matchesKind(idea.status, opts.kind!));
+  }
+
+  // 默认隐藏已入池 / converted / done；打开「含已入池」或选「已落地星球」时保留
+  if (!opts.includePooled && opts.kind !== "planet") {
+    filtered = filtered.filter(
+      (idea) =>
+        !opts.pooledIdeaIds.has(idea.id) &&
+        idea.status !== "converted" &&
+        idea.status !== "done"
+    );
+  }
+
+  return filtered;
+}
+
 export default async function StreamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; project?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    project?: string;
+    date?: string;
+    kind?: string;
+    idea?: string;
+    pooled?: string;
+  }>;
 }) {
-  const { view: viewParam, project: projectFilter } = await searchParams;
+  const {
+    view: viewParam,
+    project: projectFilter,
+    date: dateFilter,
+    kind: kindParam,
+    idea: focusIdeaId,
+    pooled: pooledParam,
+  } = await searchParams;
   const currentView = parseView(viewParam);
+  const kindFilter = parseKind(kindParam);
+  const includePooled = pooledParam === "1";
 
-  const [ideas, projects] = await Promise.all([getAllIdeas(), getAllProjects()]);
+  const { listPooledStudioIdeaIds } = await import("@/lib/db/local-store");
+  const [ideas, projects, pooledIdeaIds] = await Promise.all([
+    getAllIdeas(),
+    getAllProjects(),
+    listPooledStudioIdeaIds(),
+  ]);
 
-  let filteredIdeas = ideas;
-  if (projectFilter === INBOX_UNLINKED_FILTER) {
-    filteredIdeas = ideas.filter((idea) => !idea.relatedProjectId);
-  } else if (projectFilter) {
-    filteredIdeas = ideas.filter((idea) => idea.relatedProjectId === projectFilter);
-  }
+  const filteredIdeas = applyStreamFilters(ideas, {
+    projectFilter,
+    date: dateFilter,
+    kind: kindFilter,
+    includePooled,
+    pooledIdeaIds,
+  });
 
   const sortedIdeas = [...filteredIdeas].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
@@ -45,7 +126,9 @@ export default async function StreamPage({
         ? await getProjectTitle(idea.relatedProjectId)
         : null,
       parentIdeaTitle: idea.relatedIdeaId
-        ? sortedIdeas.find((item) => item.id === idea.relatedIdeaId)?.title ?? "未知灵感"
+        ? sortedIdeas.find((item) => item.id === idea.relatedIdeaId)?.title ??
+          ideas.find((item) => item.id === idea.relatedIdeaId)?.title ??
+          "未知灵感"
         : null,
     }))
   );
@@ -60,6 +143,15 @@ export default async function StreamPage({
 
   const defaultProjectId =
     projectFilter && projectFilter !== INBOX_UNLINKED_FILTER ? projectFilter : null;
+
+  const focusIdeaTitle = focusIdeaId
+    ? ideas.find((i) => i.id === focusIdeaId)?.title ?? null
+    : null;
+
+  const hasActiveFilter = Boolean(
+    dateFilter || kindFilter || focusIdeaId || includePooled
+  );
+  const emptyMessage = hasActiveFilter || projectFilter ? "没有符合筛选条件的灵感" : "暂无灵感";
 
   return (
     <WorkbenchShell
@@ -92,16 +184,26 @@ export default async function StreamPage({
         </details>
 
         <Suspense fallback={null}>
-          <StreamProjectTags projects={tagOptions} currentProject={projectFilter ?? null} />
+          <StreamActiveFilters
+            date={dateFilter}
+            kind={kindFilter}
+            ideaTitle={focusIdeaTitle}
+            includePooled={includePooled}
+          />
+        </Suspense>
+
+        <Suspense fallback={null}>
+          <StreamProjectTags
+            projects={tagOptions}
+            currentProject={projectFilter ?? null}
+            includePooled={includePooled}
+          />
         </Suspense>
 
         {currentView === "timeline" ? (
-          <IdeaStreamTimeline items={ideasWithMeta} />
+          <IdeaStreamTimeline items={ideasWithMeta} focusIdeaId={focusIdeaId} />
         ) : (
-          <InboxTableView
-            rows={ideasWithMeta}
-            emptyMessage={projectFilter ? "没有符合筛选条件的灵感" : "暂无灵感"}
-          />
+          <InboxTableView rows={ideasWithMeta} emptyMessage={emptyMessage} />
         )}
       </div>
 

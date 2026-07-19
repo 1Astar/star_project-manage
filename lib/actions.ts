@@ -7,19 +7,29 @@ import {
   claimShareAssignee,
   createPoolColumnDef,
   createPoolRequirement,
+  createPlanningIteration,
+  createRequirementLink,
+  createBug,
   createProjectMember,
   createShareLink,
   deletePoolColumnDef,
   deletePoolRequirement,
+  deletePoolRequirements,
+  dedupePoolRequirements,
   deleteProjectMember,
+  deleteRequirementLink,
   getPoolBundle,
   getProjectBundle,
   getProjects,
   getShareLinkByToken,
+  listBugsByProject,
   promotePoolRequirement,
+  syncStudioIdeasIntoPool,
   toggleShareLink,
   updateAcceptanceItem,
   updateAcceptanceItemWithPermission,
+  updateBugStatus,
+  updatePlanningIteration,
   updatePoolRequirement,
   updateProjectGitSettings,
   updateProjectMember,
@@ -28,6 +38,8 @@ import {
   updateRoleTaskWithPermission,
 } from "@/lib/db/local-store";
 import type {
+  LinkEntityType,
+  LinkRelationType,
   PoolColumnType,
   RequirementUpdates,
   RoleTask,
@@ -63,6 +75,39 @@ export async function fetchPoolData(projectId: string) {
   return getPoolBundle(projectId);
 }
 
+/** 拉取需求池前，把该项目 Studio 灵感 + 演进同步进需求（去重） */
+export async function fetchPoolDataWithIdeaSync(
+  projectId: string,
+  ideas: Array<{
+    id: string;
+    title: string;
+    oneLineIdea?: string;
+    whyItMatters?: string;
+    triggerSource?: string;
+    sourceChat?: string;
+    chatTopic?: string;
+    suggestedNextStep?: string;
+    priority?: string;
+    occurredAt?: string;
+    completedAt?: string | null;
+    status?: string;
+  }>,
+  evolutions: Array<{
+    id: string;
+    title: string;
+    before?: string;
+    after?: string;
+    reason?: string;
+    decision?: string;
+    createdAt?: string;
+  }> = [],
+  options?: { actorNote?: string }
+) {
+  const sync = await syncStudioIdeasIntoPool(projectId, ideas, evolutions, options);
+  const bundle = await getPoolBundle(projectId);
+  return { bundle, sync };
+}
+
 export async function savePoolRequirementAction(input: {
   requirementId: string;
   projectSlug: string;
@@ -73,6 +118,21 @@ export async function savePoolRequirementAction(input: {
     role: "admin",
   });
   revalidatePath(`/projects/${input.projectSlug}/pool`);
+}
+
+export async function saveRequirementDetailAction(input: {
+  requirementId: string;
+  projectSlug: string;
+  updates: RequirementUpdates;
+}) {
+  await updateRequirement(input.requirementId, input.updates, {
+    name: "产品",
+    role: "admin",
+  });
+  revalidatePath(`/projects/${input.projectSlug}/requirements/${input.requirementId}`);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  revalidatePath(`/projects/${input.projectSlug}`);
 }
 
 export async function saveRequirementMetaAction(input: {
@@ -106,11 +166,13 @@ export async function createPoolColumnAction(input: {
     options: input.options,
   });
   revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
 }
 
 export async function deletePoolColumnAction(defId: string, projectSlug: string) {
   await deletePoolColumnDef(defId);
   revalidatePath(`/projects/${projectSlug}/pool`);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
 }
 
 export async function savePoolTagOptionsAction(input: {
@@ -120,11 +182,62 @@ export async function savePoolTagOptionsAction(input: {
 }) {
   await updateProjectPoolTagOptions(input.projectId, input.tagOptions);
   revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
 }
 
-export async function createPoolRequirementAction(projectSlug: string, projectId: string) {
-  await createPoolRequirement(projectId, { title: "新功能点" });
+export async function createPoolRequirementAction(
+  projectSlug: string,
+  projectId: string,
+  opts?: { parentId?: string | null; title?: string }
+) {
+  const req = await createPoolRequirement(projectId, {
+    title: opts?.title ?? "新功能点",
+    parent_id: opts?.parentId ?? null,
+  });
   revalidatePath(`/projects/${projectSlug}/pool`);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
+  return { id: req.id, requirement: req };
+}
+
+export async function createRequirementLinkAction(input: {
+  projectId: string;
+  projectSlug: string;
+  sourceType: LinkEntityType;
+  sourceId: string;
+  targetType: LinkEntityType;
+  targetId: string;
+  relationType: LinkRelationType;
+}) {
+  const link = await createRequirementLink({
+    project_id: input.projectId,
+    source_type: input.sourceType,
+    source_id: input.sourceId,
+    target_type: input.targetType,
+    target_id: input.targetId,
+    relation_type: input.relationType,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return link;
+}
+
+export async function deleteRequirementLinkAction(
+  linkId: string,
+  projectSlug: string
+) {
+  await deleteRequirementLink(linkId);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
+}
+
+export async function forceCloseRequirementAction(input: {
+  requirementId: string;
+  projectSlug: string;
+}) {
+  await updateRequirement(
+    input.requirementId,
+    { force_closed: true },
+    { name: "产品", role: "admin" }
+  );
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
 }
 
 export async function deletePoolRequirementAction(
@@ -133,6 +246,27 @@ export async function deletePoolRequirementAction(
 ) {
   await deletePoolRequirement(requirementId);
   revalidatePath(`/projects/${projectSlug}/pool`);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
+}
+
+export async function deletePoolRequirementsAction(
+  requirementIds: string[],
+  projectSlug: string
+) {
+  const n = await deletePoolRequirements(requirementIds);
+  revalidatePath(`/projects/${projectSlug}/pool`);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
+  return { deleted: n };
+}
+
+export async function dedupePoolRequirementsAction(
+  projectId: string,
+  projectSlug: string
+) {
+  const n = await dedupePoolRequirements(projectId);
+  revalidatePath(`/projects/${projectSlug}/pool`);
+  revalidatePath(`/projects/${projectSlug}/tasks`);
+  return { deleted: n };
 }
 
 export async function promotePoolRequirementAction(input: {
@@ -145,8 +279,72 @@ export async function promotePoolRequirementAction(input: {
     role: "admin",
   });
   revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
   revalidatePath(`/projects/${input.projectSlug}/board`);
   revalidatePath(`/projects/${input.projectSlug}`);
+}
+
+export async function createPlanningIterationAction(input: {
+  projectId: string;
+  projectSlug: string;
+  name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  release_tag?: string | null;
+}) {
+  const iteration = await createPlanningIteration(input);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  revalidatePath(`/projects/${input.projectSlug}`);
+  return iteration;
+}
+
+export async function updatePlanningIterationAction(input: {
+  iterationId: string;
+  projectSlug: string;
+  updates: Partial<{
+    name: string;
+    start_date: string | null;
+    end_date: string | null;
+    release_tag: string | null;
+  }>;
+}) {
+  const iteration = await updatePlanningIteration(input.iterationId, input.updates);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  revalidatePath(`/projects/${input.projectSlug}`);
+  return iteration;
+}
+
+export async function createBugAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  description?: string;
+  reproSteps?: string;
+  assignee?: string;
+  requirementId?: string | null;
+}) {
+  await createBug({
+    project_id: input.projectId,
+    requirement_id: input.requirementId,
+    title: input.title,
+    description: input.description,
+    repro_steps: input.reproSteps,
+    assignee: input.assignee,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+}
+
+export async function updateBugStatusAction(input: {
+  bugId: string;
+  projectSlug: string;
+  status: TaskStatus;
+}) {
+  await updateBugStatus(input.bugId, input.status);
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+}
+
+export async function fetchProjectBugs(projectId: string) {
+  return listBugsByProject(projectId);
 }
 
 export async function createMemberAction(input: {

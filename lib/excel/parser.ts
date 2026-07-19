@@ -126,7 +126,13 @@ function parseHeader(sheet: ExcelJS.Worksheet, mergedMap: Map<string, ExcelJS.Ce
       const normalized = normalizeHeader(value);
       const last = roleColumns[roleColumns.length - 1];
       if (!last) continue;
-      if (normalized.includes("工时")) last.colHours = col;
+      // 「工时核定」含「工时」字样，不能覆盖真正的工时(小时)列
+      if (
+        (normalized.includes("工时") || normalized === "小时") &&
+        !normalized.includes("核定")
+      ) {
+        last.colHours = col;
+      }
       if (normalized.includes("参与人") || normalized.includes("负责人")) last.colAssignee = col;
       if (normalized.includes("进度")) last.colProgress = col;
       if (normalized.includes("开始")) last.colStart = col;
@@ -178,9 +184,13 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
     const { roleColumns, headerRows } = parseHeader(sheet, mergedMap);
 
     const colIteration = findColumnByKeyword(sheet, mergedMap, "项目名称") ?? 1;
-    const colL1 = findColumnByKeyword(sheet, mergedMap, "一级模块") ?? 2;
-    const colL2 = findColumnByKeyword(sheet, mergedMap, "二级模块") ?? 3;
-    const colSub = findColumnByKeyword(sheet, mergedMap, "细分功能") ?? 4;
+    const colL1 =
+      findColumnByKeyword(sheet, mergedMap, "一级模块") ??
+      findColumnByKeyword(sheet, mergedMap, "一期") ??
+      2;
+    const colL2 = findColumnByKeyword(sheet, mergedMap, "二级模块");
+    // 旧版一期表没有「细分功能」列；勿默认落到工时列（常为第 4 列）
+    const colSub = findColumnByKeyword(sheet, mergedMap, "细分功能");
     const colDetail = findColumnByKeyword(sheet, mergedMap, "详细工作");
     const colAccept = findColumnByKeyword(sheet, mergedMap, "验收标准");
     const colPriority = findColumnByKeyword(sheet, mergedMap, "优先级");
@@ -196,8 +206,12 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
     for (let row = headerRows + 1; row <= sheet.rowCount; row++) {
       const iterationName = String(getCellValue(sheet, row, colIteration, mergedMap) ?? "").trim();
       const moduleL1 = String(getCellValue(sheet, row, colL1, mergedMap) ?? "").trim();
-      const moduleL2 = String(getCellValue(sheet, row, colL2, mergedMap) ?? "").trim();
-      const subFunction = String(getCellValue(sheet, row, colSub, mergedMap) ?? "").trim();
+      const moduleL2 = colL2
+        ? String(getCellValue(sheet, row, colL2, mergedMap) ?? "").trim()
+        : "";
+      const subFunction = colSub
+        ? String(getCellValue(sheet, row, colSub, mergedMap) ?? "").trim()
+        : "";
 
       if (iterationName) current.iterationName = iterationName;
       if (moduleL1) current.moduleL1 = moduleL1;

@@ -15,6 +15,7 @@ export function TaskCard({
   actorRole,
   editable = true,
   shareToken,
+  detailHref,
 }: {
   task: RoleTask;
   requirement: Requirement;
@@ -23,6 +24,7 @@ export function TaskCard({
   actorRole?: string;
   editable?: boolean;
   shareToken?: string;
+  detailHref?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [notes, setNotes] = useState(task.notes ?? "");
@@ -68,6 +70,13 @@ export function TaskCard({
               <Link
                 href={`/share/${shareToken}/items/${requirement.id}`}
                 className="hover:text-blue-600 hover:underline"
+              >
+                {requirement.title}
+              </Link>
+            ) : detailHref ? (
+              <Link
+                href={`${detailHref}/requirements/${requirement.id}`}
+                className="hover:text-indigo-600 hover:underline"
               >
                 {requirement.title}
               </Link>
@@ -145,6 +154,7 @@ export function KanbanBoard({
   actorRole,
   roleFilter,
   shareToken,
+  detailBasePath,
 }: {
   requirements: Requirement[];
   tasks: RoleTask[];
@@ -153,6 +163,7 @@ export function KanbanBoard({
   actorRole?: string;
   roleFilter?: string;
   shareToken?: string;
+  detailBasePath?: string;
 }) {
   const filteredTasks = roleFilter
     ? tasks.filter((t) => t.role === roleFilter)
@@ -168,12 +179,23 @@ export function KanbanBoard({
     "blocked",
   ];
 
+  const columnColors: Record<TaskStatus, string> = {
+    pending: "bg-blue-500",
+    in_progress: "bg-sky-500",
+    integration: "bg-violet-500",
+    testing: "bg-amber-500",
+    acceptance: "bg-orange-500",
+    done: "bg-emerald-500",
+    blocked: "bg-slate-500",
+  };
+
   return (
-    <div className="grid gap-4 xl:grid-cols-7 md:grid-cols-3">
+    <div className="flex gap-3 overflow-x-auto pb-2">
       {columns.map((status) => {
         const columnTasks = filteredTasks.filter((t) => t.status === status);
         return (
-          <div key={status} className="min-w-[220px]">
+          <div key={status} className="w-[240px] shrink-0">
+            <div className={`mb-2 h-1 rounded-full ${columnColors[status]}`} />
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-700">
                 {TASK_STATUS_LABELS[status]}
@@ -195,6 +217,7 @@ export function KanbanBoard({
                     actorName={actorName}
                     actorRole={actorRole}
                     shareToken={shareToken}
+                    detailHref={detailBasePath}
                   />
                 );
               })}

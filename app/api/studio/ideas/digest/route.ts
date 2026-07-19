@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
   try {
     const [ideas, projects] = await Promise.all([getAllIdeas(), getAllProjects()]);
-    const dayIdeas = ideas.filter((idea) => isIdeaOnDate(idea.createdAt, date));
+    const dayIdeas = ideas.filter((idea) => isIdeaOnDate(idea, date));
 
     const dateLabel = date === "today" ? "今日" : date;
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 
+/** 旧 /gantt 入口 → 需求与任务 · 甘特 */
 export default async function GanttRedirectPage({
   params,
 }: {
@@ -8,5 +9,5 @@ export default async function GanttRedirectPage({
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  redirect(`/projects/${ctx.routeId}/schedule`);
+  redirect(`/projects/${ctx.routeId}/tasks?view=gantt`);
 }

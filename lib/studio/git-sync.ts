@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getProjectById } from "@/lib/studio/data";
 import { invalidateStudioCache } from "@/lib/studio/store";
 import type { StudioGitActivity } from "@/lib/studio/git-utils";
+import { resolveProjectGitScope } from "@/lib/studio/git-utils";
 export type { StudioGitActivity } from "@/lib/studio/git-utils";
 export { studioProjectHasGit, studioProjectRepoUrl } from "@/lib/studio/git-utils";
 import type { Project } from "@/lib/studio/types";
@@ -30,11 +31,6 @@ function sb() {
 
 function shortSha(sha: string) {
   return sha.slice(0, 7);
-}
-
-function normalizeRepoPath(codePath: string | null): string | undefined {
-  if (!codePath?.trim()) return undefined;
-  return codePath.trim().replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
 function rowToActivity(row: StudioGitActivityRow): StudioGitActivity {
@@ -78,14 +74,26 @@ export async function syncStudioProjectGit(projectId: string) {
 
   const project = await getProjectById(projectId);
   if (!project) throw new Error("项目不存在");
-  if (!project.githubRepo?.trim()) {
-    throw new Error("项目未绑定 GitHub 仓库");
+
+  const { repoFullName, branch, path } = resolveProjectGitScope(project);
+  let commits = await fetchRecentCommits(repoFullName, branch, 20, path);
+  let pathFilterIgnored = false;
+  let warning: string | null = null;
+
+  // path 过滤过严或误填时 GitHub 会返回空；回退整仓再拉一次
+  if (path && commits.length === 0) {
+    commits = await fetchRecentCommits(repoFullName, branch, 20);
+    if (commits.length > 0) {
+      pathFilterIgnored = true;
+      warning = `代码目录「${path}」下无提交，已改拉分支整仓最近提交`;
+    }
   }
 
-  const repoFullName = project.githubRepo.trim();
-  const branch = (project.githubBranch || "main").trim();
-  const path = normalizeRepoPath(project.codePath);
-  const commits = await fetchRecentCommits(repoFullName, branch, 10, path);
+  if (commits.length === 0) {
+    warning =
+      warning ??
+      `仓库 ${repoFullName} 分支 ${branch}${path ? `（目录 ${path}）` : ""} 未拉到任何提交。请确认分支名与 GitHub TOKEN 权限`;
+  }
 
   const { data: existingRows } = await sb()
     .from("studio_git_activities")
@@ -149,12 +157,15 @@ export async function syncStudioProjectGit(projectId: string) {
   if (updateError) throw new Error(updateError.message);
   invalidateStudioCache();
 
-  const activities = await getStudioGitActivities(projectId, 5);
+  const activities = await getStudioGitActivities(projectId, 10);
 
   return {
     ok: true as const,
     projectId,
     newCount,
+    fetchedCount: commits.length,
+    pathFilterIgnored,
+    warning,
     latest: latest
       ? {
           sha: latest.sha,

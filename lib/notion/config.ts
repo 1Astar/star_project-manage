@@ -1,5 +1,5 @@
-export function isNotionConfigured(): boolean {
-  return Boolean(process.env.NOTION_TOKEN?.trim());
+export function isNotionConfigured(tokenOverride?: string | null): boolean {
+  return Boolean(tokenOverride?.trim() || process.env.NOTION_TOKEN?.trim());
 }
 
 /** 32 位 hex → UUID */
@@ -26,8 +26,9 @@ export interface NotionImportConfig {
   projectPageIds: string[];
 }
 
-export function getNotionImportConfig(): NotionImportConfig | null {
-  const token = process.env.NOTION_TOKEN?.trim();
+/** token 优先用请求体（页面 localStorage），环境变量仅作可选兜底 */
+export function getNotionImportConfig(tokenOverride?: string | null): NotionImportConfig | null {
+  const token = tokenOverride?.trim() || process.env.NOTION_TOKEN?.trim();
   if (!token) return null;
 
   const ideaDatabaseId =

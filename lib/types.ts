@@ -21,6 +21,34 @@ export type EstimateLevel = "module" | "requirement";
 
 export type DeployStatus = "ready" | "building" | "error";
 
+export type RequirementType = "epic" | "feature" | "task";
+
+/** 表格/表单展示用中文（存储仍为 epic/feature/task） */
+export const REQUIREMENT_TYPE_LABELS: Record<RequirementType, string> = {
+  epic: "大型模块",
+  feature: "功能",
+  task: "任务",
+};
+
+export type LinkEntityType = "requirement" | "idea" | "evolution" | "studio_task";
+
+export type LinkRelationType =
+  | "inspired_by"
+  | "from_idea"
+  | "has_task"
+  | "has_evolution";
+
+export interface RequirementLink {
+  id: string;
+  project_id: string;
+  source_type: LinkEntityType;
+  source_id: string;
+  target_type: LinkEntityType;
+  target_id: string;
+  relation_type: LinkRelationType;
+  created_at: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -63,6 +91,11 @@ export interface Iteration {
   name: string;
   sort_order: number;
   created_at: string;
+  /** YYYY-MM-DD；空则无法判「未开始/已过期」 */
+  start_date: string | null;
+  end_date: string | null;
+  /** 绑定的 GitHub Release/Tag */
+  release_tag: string | null;
 }
 
 export interface ModuleNode {
@@ -96,12 +129,28 @@ export interface Requirement {
   iteration_id: string;
   module_l1_id: string | null;
   module_l2_id: string | null;
+  /** 子需求树：指向父需求；根为 null */
+  parent_id: string | null;
+  /** epic / feature / task（库字段 req_type） */
+  type: RequirementType;
   title: string;
   sub_function: string | null;
   detail_work: string | null;
   acceptance_criteria: string | null;
   priority: string | null;
+  /** 看板/任务机读兼容；产品侧以 status_tags 为准 */
   status: TaskStatus;
+  /** 可自建的状态标签（含「完成」「评审」等），可读可写 */
+  status_tags: string[];
+  /** 需求指派，多选 */
+  assignees: string[];
+  req_source: string | null;
+  req_source_note: string | null;
+  inspiration_source: string | null;
+  next_step: string | null;
+  completed_at: string | null;
+  /** 从 Studio 灵感迁入时去重 */
+  studio_idea_id: string | null;
   blocker_reason: string | null;
   sort_order: number;
   in_pool: boolean;
@@ -116,7 +165,13 @@ export interface Requirement {
   needs_discussion: boolean;
   prd_link: string | null;
   prototype_link: string | null;
+  /** 叶子节点自身预计工时 */
   product_estimate_hours: number | null;
+  /** 非叶节点自身直接执行工时（不计入叶子 SUM 重复，展示时加在 Σ叶子 上） */
+  direct_hours: number | null;
+  actual_hours: number | null;
+  /** 强制关闭父需求（已取消），不再被自动完成覆盖 */
+  force_closed: boolean;
   tags: string[];
   custom_fields: Record<string, string | number | boolean | null>;
   created_at: string;
@@ -138,8 +193,21 @@ export const REQUIREMENT_POOL_DEFAULTS: Pick<
   | "prd_link"
   | "prototype_link"
   | "product_estimate_hours"
+  | "direct_hours"
+  | "actual_hours"
+  | "force_closed"
+  | "parent_id"
+  | "type"
   | "tags"
   | "custom_fields"
+  | "status_tags"
+  | "assignees"
+  | "req_source"
+  | "req_source_note"
+  | "inspiration_source"
+  | "next_step"
+  | "completed_at"
+  | "studio_idea_id"
 > = {
   in_pool: false,
   category: null,
@@ -154,8 +222,21 @@ export const REQUIREMENT_POOL_DEFAULTS: Pick<
   prd_link: null,
   prototype_link: null,
   product_estimate_hours: null,
+  direct_hours: null,
+  actual_hours: null,
+  force_closed: false,
+  parent_id: null,
+  type: "task",
   tags: [],
   custom_fields: {},
+  status_tags: ["待开始"],
+  assignees: [],
+  req_source: null,
+  req_source_note: null,
+  inspiration_source: null,
+  next_step: null,
+  completed_at: null,
+  studio_idea_id: null,
 };
 
 export type RequirementUpdates = Partial<{
@@ -165,6 +246,14 @@ export type RequirementUpdates = Partial<{
   acceptance_criteria: string | null;
   priority: string | null;
   status: TaskStatus;
+  status_tags: string[];
+  assignees: string[];
+  req_source: string | null;
+  req_source_note: string | null;
+  inspiration_source: string | null;
+  next_step: string | null;
+  completed_at: string | null;
+  studio_idea_id: string | null;
   category: string | null;
   stage_type: string | null;
   optimization_notes: string | null;
@@ -172,6 +261,8 @@ export type RequirementUpdates = Partial<{
   sort_order: number;
   module_l1_id: string | null;
   module_l2_id: string | null;
+  parent_id: string | null;
+  type: RequirementType;
   submitted_at: string | null;
   due_date: string | null;
   difficulty_notes: string | null;
@@ -180,6 +271,9 @@ export type RequirementUpdates = Partial<{
   prd_link: string | null;
   prototype_link: string | null;
   product_estimate_hours: number | null;
+  direct_hours: number | null;
+  actual_hours: number | null;
+  force_closed: boolean;
   tags: string[];
   custom_fields: Record<string, string | number | boolean | null>;
 }>;
@@ -240,6 +334,17 @@ export interface Bug {
   status: TaskStatus;
   created_at: string;
   updated_at: string;
+}
+
+export interface RequirementAttachment {
+  id: string;
+  project_id: string;
+  requirement_id: string;
+  title: string;
+  url: string;
+  storage_path: string | null;
+  mime_type: string | null;
+  created_at: string;
 }
 
 export interface ShareLink {
@@ -325,6 +430,47 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   done: "已完成",
   blocked: "阻塞",
 };
+
+/** 含此标签视为已完成，并写入 completed_at */
+export const REQUIREMENT_DONE_TAG = "完成";
+
+/** 强制关闭 / 取消方向 */
+export const REQUIREMENT_CANCELLED_TAG = "已取消";
+
+export function requirementIsDone(req: Pick<Requirement, "status_tags" | "status">): boolean {
+  const tags = req.status_tags ?? [];
+  if (tags.some((t) => t === REQUIREMENT_DONE_TAG || t === "已完成" || t === "已做")) {
+    return true;
+  }
+  return req.status === "done";
+}
+
+export function requirementIsCancelled(
+  req: Pick<Requirement, "status_tags" | "force_closed">
+): boolean {
+  if (req.force_closed) return true;
+  return (req.status_tags ?? []).some(
+    (t) => t === REQUIREMENT_CANCELLED_TAG || t === "取消"
+  );
+}
+
+export function deriveTaskStatusFromTags(tags: string[]): TaskStatus {
+  const set = new Set(tags);
+  if (set.has(REQUIREMENT_DONE_TAG) || set.has("已完成") || set.has("已做")) return "done";
+  if (set.has(REQUIREMENT_CANCELLED_TAG) || set.has("取消")) return "blocked";
+  if (set.has("阻塞")) return "blocked";
+  if (set.has("待验收") || set.has("验收")) return "acceptance";
+  if (set.has("待测试") || set.has("测试")) return "testing";
+  if (set.has("待联调") || set.has("联调")) return "integration";
+  if (set.has("开发中") || set.has("进行中") || set.has("评审")) return "in_progress";
+  if (set.has("待开始")) return "pending";
+  return tags.length ? "in_progress" : "pending";
+}
+
+export function statusTagsFromTaskStatus(status: TaskStatus): string[] {
+  if (status === "done") return [REQUIREMENT_DONE_TAG];
+  return [TASK_STATUS_LABELS[status]];
+}
 
 export const ROLE_LABELS: Record<RoleType, string> = {
   product: "产品",

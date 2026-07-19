@@ -37,7 +37,7 @@ export function ProjectGitSettings({
           demo_url: demoUrl || null,
           local_run_guide: localRunGuide || null,
           code_path: codePath || null,
-          vercel_project_id: vercelProjectId || null,
+          vercel_project_id: vercelProjectId || undefined,
         });
         setMessage("已保存到 Supabase");
         router.refresh();

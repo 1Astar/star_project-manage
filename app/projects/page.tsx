@@ -1,10 +1,15 @@
 import { WorkbenchShell } from "@/components/workbench-shell";
-import { ListFilterBar } from "@/components/studio/list-filter-bar";
-import { ProjectLibraryCard } from "@/components/project-library-card";
-import { getAllProjects } from "@/lib/studio/data";
-import { PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/studio/types";
+import { ProjectLibraryTable } from "@/components/project-library-table";
+import {
+  getAllIdeas,
+  getAllProjects,
+  getNextActionDrafts,
+  getProjectColumnDefs,
+} from "@/lib/studio/data";
+import type { ProjectStatus } from "@/lib/studio/types";
 
 const STATUS_ORDER: ProjectStatus[] = ["mainline", "active", "demo", "parking", "archived"];
+const CONVERTIBLE = new Set(["inbox", "reviewing", "parked"]);
 
 export default async function ProjectsLibraryPage({
   searchParams,
@@ -12,7 +17,13 @@ export default async function ProjectsLibraryPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const { status: statusFilter } = await searchParams;
-  let projects = [...(await getAllProjects())];
+  const [allProjects, nextActionDrafts, allIdeas, columnDefs] = await Promise.all([
+    getAllProjects(),
+    getNextActionDrafts(),
+    getAllIdeas(),
+    getProjectColumnDefs(true),
+  ]);
+  let projects = [...allProjects];
 
   if (statusFilter && STATUS_ORDER.includes(statusFilter as ProjectStatus)) {
     projects = projects.filter((p) => p.status === statusFilter);
@@ -23,31 +34,33 @@ export default async function ProjectsLibraryPage({
     return order[a.status] - order[b.status] || a.priority.localeCompare(b.priority);
   });
 
-  const statusOptions = STATUS_ORDER.map((status) => ({
-    id: status,
-    label: PROJECT_STATUS_LABELS[status],
-  }));
+  const sourceIdeas = allIdeas
+    .filter((i) => CONVERTIBLE.has(i.status) && !i.relatedProjectId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 40)
+    .map((i) => ({
+      id: i.id,
+      title: i.title,
+      oneLineIdea: i.oneLineIdea,
+      whyItMatters: i.whyItMatters,
+      priority: i.priority,
+      suggestedNextStep: i.suggestedNextStep,
+    }));
 
   return (
-    <WorkbenchShell title="项目库" subtitle="进入项目详情 · 恢复现场 · 需求与演进">
-      <ListFilterBar
-        basePath="/projects"
-        currentValue={statusFilter ?? null}
-        options={statusOptions}
-        allLabel="全部状态"
-        paramName="status"
-        label="按状态"
-      />
-
-      {projects.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-500">没有符合筛选条件的项目</p>
-      ) : (
-        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {projects.map((p) => (
-            <ProjectLibraryCard key={p.id} project={p} />
-          ))}
-        </div>
-      )}
+    <WorkbenchShell
+      title="项目库"
+      subtitle="自研 / 作品 / 工作项目归档 · 多列表格可左右滑动 · 点项目名进入"
+    >
+      <div className="mt-2">
+        <ProjectLibraryTable
+          projects={projects}
+          statusFilter={statusFilter ?? null}
+          nextActionDrafts={nextActionDrafts}
+          sourceIdeas={sourceIdeas}
+          columnDefs={columnDefs}
+        />
+      </div>
     </WorkbenchShell>
   );
 }

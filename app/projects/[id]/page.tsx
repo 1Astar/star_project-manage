@@ -6,6 +6,7 @@ import {
   BodySection,
 } from "@/components/studio/shell";
 import { ProjectGitPanel } from "@/components/project-git-panel";
+import { PortfolioPromptPanel } from "@/components/studio/portfolio-prompt-panel";
 import { StudioGitPanel } from "@/components/studio/studio-git-panel";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import { getStudioProjectGitPreview } from "@/lib/studio/project-git";
@@ -29,6 +30,8 @@ export default async function ProjectRecoveryPage({
       {ctx.studio ? (
         <>
           <RecoveryCard project={ctx.studio} gitPreview={gitPreview} />
+
+          <PortfolioPromptPanel projectTitle={ctx.studio.title} />
 
           <div className="rounded-xl border border-slate-200 bg-white px-5 py-2">
             <PropertyRow
