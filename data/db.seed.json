@@ -18,13 +18,41 @@
       "last_deploy_status": null,
       "demo_url": null,
       "local_run_guide": null,
-      "code_path": null
+      "code_path": null,
+      "parent_id": null
     },
     {
       "id": "a1000001-0001-4001-8001-000000000002",
       "name": "AI 控制器",
       "slug": "ai-controller",
-      "description": "元井 AI 控制器优化需求管理",
+      "description": "元井 AI 控制器：设备控制、归属迁移、下控体验与分期优化（与水泵/宠物分线）",
+      "created_at": "2026-06-22T00:00:00.000Z",
+      "repo_full_name": null,
+      "repo_branch": null,
+      "repo_url": null,
+      "last_commit_sha": null,
+      "last_commit_message": null,
+      "last_commit_at": null,
+      "last_git_synced_at": null,
+      "vercel_project_id": null,
+      "vercel_deployment_url": null,
+      "last_deploy_status": null,
+      "demo_url": null,
+      "local_run_guide": null,
+      "code_path": null,
+      "parent_id": null
+    },
+    {
+      "id": "a1000001-0001-4001-8001-000000000004",
+      "name": "元井水泵控制系统",
+      "slug": "yuanjing-pump",
+      "description": "水泵/泵组智能运维：小程序远程管控 + Web 后台规模化交付（元井/YOKING）",
+      "parent_id": "a1000001-0001-4001-8001-000000000002",
+      "pool_tag_options": [
+        "硬件",
+        "软件",
+        "体验"
+      ],
       "created_at": "2026-06-22T00:00:00.000Z",
       "repo_full_name": null,
       "repo_branch": null,

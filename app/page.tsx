@@ -28,6 +28,7 @@ import {
   EVOLUTION_TYPE_LABELS,
   PROJECT_STATUS_LABELS,
 } from "@/lib/studio/types";
+import { toProjectTree } from "@/lib/studio/project-tree";
 
 export default async function WorkbenchPage() {
   const [
@@ -71,6 +72,8 @@ export default async function WorkbenchPage() {
       const order = { mainline: 0, active: 1, demo: 2, parking: 3, archived: 4 };
       return order[a.status] - order[b.status] || a.priority.localeCompare(b.priority);
     });
+
+  const libraryTree = toProjectTree(libraryProjects).slice(0, 4);
 
   return (
     <WorkbenchShell title="今日工作台" subtitle="灵感 · 项目 · 任务 · 恢复现场">
@@ -162,10 +165,12 @@ export default async function WorkbenchPage() {
           </Link>
         </div>
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {libraryProjects.slice(0, 4).map((p) => (
+          {libraryTree.map(({ project: p, depth, parentTitle }) => (
             <ProjectLibraryCard
               key={p.id}
               project={p}
+              depth={depth}
+              parentTitle={parentTitle}
               nextActionDraft={nextActionDrafts[p.id]}
             />
           ))}

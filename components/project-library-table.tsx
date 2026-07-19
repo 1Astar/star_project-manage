@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CreateProjectButton,
   type SourceIdeaOption,
@@ -17,6 +17,7 @@ import {
   type ProjectStatus,
   type StudioProjectColumnDef,
 } from "@/lib/studio/types";
+import { toProjectTree } from "@/lib/studio/project-tree";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -340,6 +341,8 @@ export function ProjectLibraryTable({
     return !effectiveNext(p);
   }).length;
 
+  const treeItems = useMemo(() => toProjectTree(projects), [projects]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -413,17 +416,24 @@ export function ProjectLibraryTable({
                   </td>
                 </tr>
               ) : (
-                projects.map((project) => {
+                treeItems.map(({ project, depth, parentTitle }) => {
                   const demo = project.demoUrl || project.vercelUrl;
                   return (
                     <tr key={project.id} className="group hover:bg-indigo-50/40">
                       <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] group-hover:bg-indigo-50/40">
-                        <Link
-                          href={`/projects/${project.id}`}
-                          className="font-medium text-slate-900 hover:text-indigo-700"
-                        >
-                          {project.title}
-                        </Link>
+                        <div className={cn(depth === 1 && "ml-5 border-l-2 border-slate-200 pl-3")}>
+                          {depth === 1 && parentTitle ? (
+                            <div className="mb-0.5 text-[11px] text-slate-400">
+                              子项目 · {parentTitle}
+                            </div>
+                          ) : null}
+                          <Link
+                            href={`/projects/${project.id}`}
+                            className="font-medium text-slate-900 hover:text-indigo-700"
+                          >
+                            {depth === 1 ? `↳ ${project.title}` : project.title}
+                          </Link>
+                        </div>
                       </td>
                       <td className="px-3 py-3">
                         <InlineTextField

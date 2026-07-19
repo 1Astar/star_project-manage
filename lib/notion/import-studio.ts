@@ -245,6 +245,7 @@ async function mapNotionPageToProject(
     relatedPageUrl: page.url ?? notionPageUrl(page.id),
     portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
     customFields: {},
+    parentId: null,
     body,
     createdAt: page.created_time || now,
     updatedAt: now,
@@ -456,6 +457,7 @@ function mapDatabasePages(
         relatedPageUrl: page.url ?? notionPageUrl(page.id),
         portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
         customFields: {},
+        parentId: null,
         body: {
           ...EMPTY_BODY,
           initialThought: getPropertyText(page, "初始想法", "想法"),

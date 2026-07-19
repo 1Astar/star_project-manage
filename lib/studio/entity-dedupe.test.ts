@@ -39,6 +39,7 @@ function project(partial: Pick<Project, "id" | "title" | "status">): Project {
     },
     createdAt: "2026-07-16T00:00:00.000Z",
     updatedAt: "2026-07-16T00:00:00.000Z",
+    parentId: null,
     ...partial,
   };
 }
