@@ -48,6 +48,7 @@ export interface StudioProjectRow {
   portfolio_value: string;
   custom_fields?: Record<string, StudioCustomFieldValue> | null;
   body: ProjectBody | Record<string, string>;
+  parent_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -227,6 +228,7 @@ export function projectToRow(project: Project): StudioProjectRow {
     portfolio_value: project.portfolioValue,
     custom_fields: project.customFields ?? {},
     body: project.body,
+    parent_id: project.parentId ?? null,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
   };
@@ -282,6 +284,7 @@ export function rowToProject(row: StudioProjectRow): Project {
     portfolioValue: row.portfolio_value,
     customFields: normalizeCustomFields(row.custom_fields),
     body: normalizeBody(row.body),
+    parentId: row.parent_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

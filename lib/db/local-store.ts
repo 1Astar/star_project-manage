@@ -167,6 +167,7 @@ function normalizeIteration(iter: Iteration): Iteration {
 function normalizeProject(project: Project): Project {
   return {
     ...project,
+    parent_id: project.parent_id ?? null,
     pool_tag_options: project.pool_tag_options?.length
       ? project.pool_tag_options
       : ["硬件", "软件", "体验"],
@@ -1124,6 +1125,7 @@ export async function ensurePmProjectForStudio(input: {
     name: input.name,
     slug: input.slug,
     description: input.description ?? null,
+    parent_id: null,
     pool_tag_options: ["硬件", "软件", "体验"],
     created_at: nowIso(),
     repo_full_name: input.repo_full_name ?? null,

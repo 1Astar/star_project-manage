@@ -54,6 +54,8 @@ export interface Project {
   name: string;
   slug: string;
   description: string | null;
+  /** 父项目 id；仅支持一层，null 为顶层 */
+  parent_id: string | null;
   pool_tag_options: string[];
   created_at: string;
   repo_full_name: string | null;

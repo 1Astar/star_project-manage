@@ -10,6 +10,12 @@
 
 ---
 
+## v1.8.0 · 2026-07-19
+
+- **项目父子树形**：`studio_projects.parent_id` / `projects.parent_id`（仅一层）
+- **项目库 / 工作台**：子项目缩进展示（元井水泵挂在 AI 控制器下）
+- **Seed / Migration**：`027_project_parent.sql`；生产已知 id `proj-c84ff6fa` → `proj-ai-controller`
+
 ## v1.7.6 · 2026-07-18
 
 - **作品集 Prompt 模板**：项目恢复 / 概览挂载 Case Study 面板（叙事主线 · 生成 Prompt · 空模板，可一键复制）

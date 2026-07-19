@@ -9,6 +9,7 @@ const STUDIO_TO_PM_SLUG: Record<string, string> = {
   "proj-ai-controller": "ai-controller",
   "proj-star-pm": "star-pm",
   "proj-c84ff6fa": "yoking-pump",
+  "proj-yuanjing-pump": "yuanjing-pump",
   "proj-star-lab-os": "star-lab-os",
   "proj-personal-tools": "personal-tools",
 };

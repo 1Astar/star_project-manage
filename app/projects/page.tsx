@@ -7,6 +7,7 @@ import {
   getProjectColumnDefs,
 } from "@/lib/studio/data";
 import type { ProjectStatus } from "@/lib/studio/types";
+import { toProjectTree } from "@/lib/studio/project-tree";
 
 const STATUS_ORDER: ProjectStatus[] = ["mainline", "active", "demo", "parking", "archived"];
 const CONVERTIBLE = new Set(["inbox", "reviewing", "parked"]);
@@ -34,6 +35,8 @@ export default async function ProjectsLibraryPage({
     return order[a.status] - order[b.status] || a.priority.localeCompare(b.priority);
   });
 
+  const treeProjects = toProjectTree(projects).map((item) => item.project);
+
   const sourceIdeas = allIdeas
     .filter((i) => CONVERTIBLE.has(i.status) && !i.relatedProjectId)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -54,7 +57,7 @@ export default async function ProjectsLibraryPage({
     >
       <div className="mt-2">
         <ProjectLibraryTable
-          projects={projects}
+          projects={treeProjects}
           statusFilter={statusFilter ?? null}
           nextActionDrafts={nextActionDrafts}
           sourceIdeas={sourceIdeas}

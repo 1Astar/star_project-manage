@@ -51,6 +51,22 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** 仅一层父子：父必须存在且自身无父；不可自挂；有子时不可再挂父 */
+function assertValidParent(
+  projects: Project[],
+  parentId: string | null,
+  selfId: string | null
+) {
+  if (!parentId) return;
+  if (selfId && parentId === selfId) throw new Error("不能将项目设为自己的父项目");
+  const parent = projects.find((p) => p.id === parentId);
+  if (!parent) throw new Error("父项目不存在");
+  if (parent.parentId) throw new Error("仅支持一层父子，不能挂到子项目下");
+  if (selfId && projects.some((p) => p.parentId === selfId)) {
+    throw new Error("该项目已有子项目，不能再挂到其他父项目下");
+  }
+}
+
 function sb() {
   const client = createServiceClient();
   if (!client) throw new Error("Supabase 未配置");
@@ -97,6 +113,8 @@ export type CreateProjectInput = {
   portfolioValue?: string;
   customFields?: Record<string, StudioCustomFieldValue>;
   body?: Partial<ProjectBody>;
+  /** 父项目 id；仅一层 */
+  parentId?: string | null;
   /** true=跳过标题查重强制新建 */
   force?: boolean;
 };
@@ -248,6 +266,8 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
       ...(existing?.body ?? {}),
       ...(input.body ?? {}),
     },
+    parentId:
+      input.parentId !== undefined ? input.parentId : (existing?.parentId ?? null),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -342,6 +362,7 @@ export async function createStudioProject(input: CreateProjectInput): Promise<Pr
 
   const snapshot = await getStudioSnapshot();
   assertNoDuplicateProject(snapshot.projects, input.title.trim(), input.force);
+  assertValidParent(snapshot.projects, input.parentId ?? null, null);
 
   const project = buildProject(input);
 
@@ -375,6 +396,10 @@ export async function updateStudioProject(id: string, patch: UpdateProjectInput)
   const snapshot = await getStudioSnapshot();
   const existing = snapshot.projects.find((p) => p.id === id);
   if (!existing) throw new Error("项目不存在");
+
+  const nextParent =
+    patch.parentId !== undefined ? patch.parentId : existing.parentId;
+  assertValidParent(snapshot.projects, nextParent ?? null, id);
 
   const project = buildProject({ ...patch, title: patch.title ?? existing.title }, existing);
 

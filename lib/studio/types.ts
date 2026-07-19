@@ -142,6 +142,8 @@ export interface Project {
   portfolioValue: string;
   customFields: Record<string, StudioCustomFieldValue>;
   body: ProjectBody;
+  /** 父项目 id；仅支持一层，null 为顶层 */
+  parentId: string | null;
   createdAt: string;
   updatedAt: string;
 }
