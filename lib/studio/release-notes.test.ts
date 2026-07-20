@@ -4,12 +4,37 @@ import {
   formatCommitsAsChangelog,
   formatReleaseNotesMarkdown,
   groupChangesByModule,
+  isSemverReleaseTag,
+  partitionReleaseTags,
 } from "./release-notes";
 import type { EvolutionLog } from "./types";
 import type { GitHubCommit } from "@/lib/github/client";
 
 assert.ok(compareVersionTags("v0.4.10", "v0.4.11") < 0);
 assert.ok(compareVersionTags("v1.9.0", "v1.9.1") < 0);
+
+assert.equal(isSemverReleaseTag("v1.9.2"), true);
+assert.equal(isSemverReleaseTag("1.0.0"), true);
+assert.equal(isSemverReleaseTag("v0.4.10"), true);
+assert.equal(isSemverReleaseTag("v1.9.2-rc.1"), true);
+assert.equal(isSemverReleaseTag("stage/phone-ui"), false);
+assert.equal(isSemverReleaseTag("nest/deploy"), false);
+assert.equal(isSemverReleaseTag("chris-phone"), false);
+
+const parts = partitionReleaseTags([
+  { tag: "v1.9.2" },
+  { tag: "stage/foo" },
+  { tag: "v1.8.0" },
+  { tag: "nest/bar" },
+]);
+assert.deepEqual(
+  parts.semver.map((r) => r.tag),
+  ["v1.9.2", "v1.8.0"]
+);
+assert.deepEqual(
+  parts.process.map((r) => r.tag),
+  ["stage/foo", "nest/bar"]
+);
 
 const commits = [
   {

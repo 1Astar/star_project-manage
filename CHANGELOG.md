@@ -10,6 +10,11 @@
 
 ---
 
+## v1.9.3 · 2026-07-20
+
+- **发版时间线**：默认只展示语义化版本 Tag（如 `v1.2.3`）；`stage/`、`nest/` 等过程 Tag 折叠在「过程 Tag」
+- **资源中心 / 关联版本下拉**：语义化与过程 Tag 分组
+
 ## v1.9.2 · 2026-07-20
 
 - **统一 AI 规则**：`docs/ai/CANONICAL_RULES.md` + `AGENTS.md` / `.cursor/rules/star-pm-ai.mdc` 指针

@@ -13,6 +13,7 @@ import {
   type ResourceCategoryId,
 } from "@/lib/studio/asset-categories";
 import type { Asset, AssetType, Project, StudioRelease } from "@/lib/studio/types";
+import { partitionReleaseTags } from "@/lib/studio/release-notes";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -77,6 +78,16 @@ export function ResourceCenter({ project, assets, releases }: Props) {
     ? releases.find((r) => r.tag === versionTag)
     : null;
 
+  const { semver: semverReleases, process: processReleases } = useMemo(
+    () =>
+      partitionReleaseTags(
+        [...releases].sort((a, b) =>
+          (b.publishedAt ?? b.syncedAt).localeCompare(a.publishedAt ?? a.syncedAt)
+        )
+      ),
+    [releases]
+  );
+
   function persistVersion(tag: string) {
     setVersionTag(tag);
     try {
@@ -132,13 +143,28 @@ export function ResourceCenter({ project, assets, releases }: Props) {
                 className="max-w-[180px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
               >
                 <option value="">全部（默认分支）</option>
-                {releases.map((r) => (
-                  <option key={r.id} value={r.tag}>
-                    {r.name || r.tag}
-                    {r.source === "tag" ? " · Tag" : ""}
-                    {r.isPrerelease ? " · pre" : ""}
-                  </option>
-                ))}
+                {semverReleases.length > 0 ? (
+                  <optgroup label="语义化版本">
+                    {semverReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.name || r.tag}
+                        {r.source === "tag" ? " · Tag" : ""}
+                        {r.isPrerelease ? " · pre" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {processReleases.length > 0 ? (
+                  <optgroup label="过程 Tag">
+                    {processReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.name || r.tag}
+                        {r.source === "tag" ? " · Tag" : ""}
+                        {r.isPrerelease ? " · pre" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             </label>
             <button

@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
+import { partitionReleaseTags } from "@/lib/studio/release-notes";
 import {
   EVOLUTION_TYPE_LABELS,
   type EvolutionLog,
@@ -71,6 +72,11 @@ export function ProjectEvolutionTimeline({
         (b.publishedAt ?? b.syncedAt).localeCompare(a.publishedAt ?? a.syncedAt)
       ),
     [releases]
+  );
+
+  const { semver: semverReleases, process: processReleases } = useMemo(
+    () => partitionReleaseTags(sortedReleases),
+    [sortedReleases]
   );
 
   const untaggedEvolution = useMemo(
@@ -175,7 +181,7 @@ export function ProjectEvolutionTimeline({
         <div>
           <h2 className="text-sm font-semibold text-slate-800">迭代记录</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            「同步版本」拉 GitHub Tag/Release，并尽量补全本版 commits 变更；板块来自演进/灵感标签。
+            「同步版本」拉 GitHub Tag/Release，并尽量补全本版 commits 变更；默认只展示语义化版本，过程 Tag 折叠。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -255,12 +261,26 @@ export function ProjectEvolutionTimeline({
                 onChange={(e) => setForm((f) => ({ ...f, releaseTag: e.target.value }))}
               >
                 <option value="">未挂版本</option>
-                {sortedReleases.map((r) => (
-                  <option key={r.id} value={r.tag}>
-                    {r.tag}
-                    {r.name && r.name !== r.tag ? ` · ${r.name}` : ""}
-                  </option>
-                ))}
+                {semverReleases.length > 0 ? (
+                  <optgroup label="语义化版本">
+                    {semverReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.tag}
+                        {r.name && r.name !== r.tag ? ` · ${r.name}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {processReleases.length > 0 ? (
+                  <optgroup label="过程 Tag">
+                    {processReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.tag}
+                        {r.name && r.name !== r.tag ? ` · ${r.name}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             </label>
             <label className="block text-sm md:col-span-2">
@@ -328,93 +348,45 @@ export function ProjectEvolutionTimeline({
               暂无发版记录。配置 GitHub 仓库后点「同步版本」，或在下方「未挂版本」查看演进。
             </p>
           ) : (
-            sortedReleases.map((release) => {
-              const linkedEvo = evolution.filter((e) => e.releaseTag === release.tag);
-              const linkedIter = iterations.filter((i) => i.release_tag === release.tag);
-              const mods = modulesForRelease(release.tag);
-              return (
-                <article
-                  key={release.id}
-                  className="rounded-xl border border-slate-200 bg-white p-5"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-base font-bold text-slate-900">{release.tag}</span>
-                    {release.name && release.name !== release.tag ? (
-                      <span className="text-sm text-slate-600">{release.name}</span>
-                    ) : null}
-                    <StudioBadge tone="muted">
-                      {release.source === "tag" ? "Tag" : "Release"}
-                    </StudioBadge>
-                    {release.isPrerelease ? (
-                      <StudioBadge tone="muted">预发布</StudioBadge>
-                    ) : null}
-                    <span className="text-xs text-slate-400">
-                      {formatDate(release.publishedAt)}
+            <>
+              {semverReleases.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  暂无语义化版本 Tag（如 v1.2.3）。过程 Tag 已折叠在下方。
+                </p>
+              ) : (
+                semverReleases.map((release) => (
+                  <ReleaseArticle
+                    key={release.id}
+                    release={release}
+                    evolution={evolution}
+                    iterations={iterations}
+                    modulesForRelease={modulesForRelease}
+                  />
+                ))
+              )}
+
+              {processReleases.length > 0 ? (
+                <details className="rounded-xl border border-slate-200 bg-white">
+                  <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                    过程 Tag（{processReleases.length}）
+                    <span className="ml-2 font-normal text-slate-400">
+                      stage/、nest/ 等非语义化 Tag，默认折叠
                     </span>
+                  </summary>
+                  <div className="space-y-4 border-t border-slate-100 p-4">
+                    {processReleases.map((release) => (
+                      <ReleaseArticle
+                        key={release.id}
+                        release={release}
+                        evolution={evolution}
+                        iterations={iterations}
+                        modulesForRelease={modulesForRelease}
+                      />
+                    ))}
                   </div>
-                  {mods.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {mods.map((m) => (
-                        <StudioBadge key={m}>{m}</StudioBadge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs text-amber-700">
-                      本版尚未关联板块。请用 MCP/站内写演进时填写板块，或发版时用
-                      publish_release 汇总。
-                    </p>
-                  )}
-                  {release.body ? (
-                    <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                      <div className="text-xs font-medium text-slate-500">本版更新内容</div>
-                      <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-slate-700">
-                        {release.body.slice(0, 1200)}
-                        {release.body.length > 1200 ? "…" : ""}
-                      </pre>
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-slate-500">
-                      暂无变更说明（无 Release body，且未能从 commits 推断）。
-                    </p>
-                  )}
-                  {linkedEvo.length > 0 ? (
-                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      <div className="text-xs font-medium text-slate-500">
-                        板块演进（{linkedEvo.length}）
-                      </div>
-                      {linkedEvo.map((log) => (
-                        <EvolutionCard key={log.id} log={log} compact />
-                      ))}
-                    </div>
-                  ) : null}
-                  {release.htmlUrl ? (
-                    <a
-                      href={release.htmlUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-block text-xs text-indigo-600 hover:underline"
-                    >
-                      在 GitHub 打开 →
-                    </a>
-                  ) : null}
-                  {linkedIter.length > 0 ? (
-                    <div className="mt-3">
-                      <div className="text-xs font-medium text-slate-500">迭代计划</div>
-                      <ul className="mt-1 space-y-1 text-sm text-slate-700">
-                        {linkedIter.map((it) => (
-                          <li key={it.id}>
-                            {it.name}
-                            {it.start_date || it.end_date
-                              ? ` · ${it.start_date ?? "?"} → ${it.end_date ?? "?"}`
-                              : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })
+                </details>
+              ) : null}
+            </>
           )}
 
           <section className="space-y-3">
@@ -489,6 +461,96 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+function ReleaseArticle({
+  release,
+  evolution,
+  iterations,
+  modulesForRelease,
+}: {
+  release: StudioRelease;
+  evolution: EvolutionLog[];
+  iterations: Iteration[];
+  modulesForRelease: (tag: string) => string[];
+}) {
+  const linkedEvo = evolution.filter((e) => e.releaseTag === release.tag);
+  const linkedIter = iterations.filter((i) => i.release_tag === release.tag);
+  const mods = modulesForRelease(release.tag);
+  return (
+    <article className="rounded-xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-base font-bold text-slate-900">{release.tag}</span>
+        {release.name && release.name !== release.tag ? (
+          <span className="text-sm text-slate-600">{release.name}</span>
+        ) : null}
+        <StudioBadge tone="muted">
+          {release.source === "tag" ? "Tag" : "Release"}
+        </StudioBadge>
+        {release.isPrerelease ? <StudioBadge tone="muted">预发布</StudioBadge> : null}
+        <span className="text-xs text-slate-400">{formatDate(release.publishedAt)}</span>
+      </div>
+      {mods.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {mods.map((m) => (
+            <StudioBadge key={m}>{m}</StudioBadge>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-amber-700">
+          本版尚未关联板块。请用 MCP/站内写演进时填写板块，或发版时用 publish_release 汇总。
+        </p>
+      )}
+      {release.body ? (
+        <div className="mt-3 rounded-lg bg-slate-50 p-3">
+          <div className="text-xs font-medium text-slate-500">本版更新内容</div>
+          <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-slate-700">
+            {release.body.slice(0, 1200)}
+            {release.body.length > 1200 ? "…" : ""}
+          </pre>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">
+          暂无变更说明（无 Release body，且未能从 commits 推断）。
+        </p>
+      )}
+      {linkedEvo.length > 0 ? (
+        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+          <div className="text-xs font-medium text-slate-500">
+            板块演进（{linkedEvo.length}）
+          </div>
+          {linkedEvo.map((log) => (
+            <EvolutionCard key={log.id} log={log} compact />
+          ))}
+        </div>
+      ) : null}
+      {release.htmlUrl ? (
+        <a
+          href={release.htmlUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-block text-xs text-indigo-600 hover:underline"
+        >
+          在 GitHub 打开 →
+        </a>
+      ) : null}
+      {linkedIter.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-xs font-medium text-slate-500">迭代计划</div>
+          <ul className="mt-1 space-y-1 text-sm text-slate-700">
+            {linkedIter.map((it) => (
+              <li key={it.id}>
+                {it.name}
+                {it.start_date || it.end_date
+                  ? ` · ${it.start_date ?? "?"} → ${it.end_date ?? "?"}`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </article>
   );
 }
 
