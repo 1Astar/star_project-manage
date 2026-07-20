@@ -1,4 +1,4 @@
-import { fetchRecentCommits, buildRepoUrl } from "@/lib/github/client";
+import { fetchRecentCommits, buildRepoUrl, normalizeGithubRepoFullName, parseRepoFullName } from "@/lib/github/client";
 import { readDb, persistGitSyncResult } from "@/lib/db/local-store";
 import { syncAllStudioBoundProjectsGit } from "@/lib/studio/git-sync";
 import type { GitActivity, Project } from "@/lib/types";

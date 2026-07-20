@@ -49,6 +49,7 @@ export interface StudioProjectRow {
   custom_fields?: Record<string, StudioCustomFieldValue> | null;
   body: ProjectBody | Record<string, string>;
   parent_id?: string | null;
+  feature_modules?: string[] | unknown;
   created_at: string;
   updated_at: string;
 }
@@ -105,7 +106,14 @@ export interface StudioEvolutionRow {
   after_text: string;
   reason: string;
   decision: string;
+  module?: string;
+  release_tag?: string | null;
   created_at: string;
+}
+
+function normalizeStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v).trim()).filter(Boolean);
 }
 
 export interface StudioTaskRow {
@@ -229,6 +237,7 @@ export function projectToRow(project: Project): StudioProjectRow {
     custom_fields: project.customFields ?? {},
     body: project.body,
     parent_id: project.parentId ?? null,
+    feature_modules: project.featureModules ?? [],
     created_at: project.createdAt,
     updated_at: project.updatedAt,
   };
@@ -285,6 +294,7 @@ export function rowToProject(row: StudioProjectRow): Project {
     customFields: normalizeCustomFields(row.custom_fields),
     body: normalizeBody(row.body),
     parentId: row.parent_id ?? null,
+    featureModules: normalizeStringList(row.feature_modules),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -369,6 +379,8 @@ export function evolutionToRow(log: EvolutionLog): StudioEvolutionRow {
     after_text: log.after,
     reason: log.reason,
     decision: log.decision,
+    module: log.module ?? "",
+    release_tag: log.releaseTag,
     created_at: log.createdAt,
   };
 }
@@ -383,6 +395,8 @@ export function rowToEvolution(row: StudioEvolutionRow): EvolutionLog {
     after: row.after_text,
     reason: row.reason,
     decision: row.decision,
+    module: row.module ?? "",
+    releaseTag: row.release_tag ?? null,
     createdAt: row.created_at,
   };
 }

@@ -1,4 +1,5 @@
 import { updateProjectGitSettings } from "@/lib/db/local-store";
+import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import { getPmSlugForStudioProject } from "@/lib/project-bridge";
 import { fetchProjectBoard } from "@/lib/actions";
 import { updateStudioProject } from "@/lib/studio/mutations";
@@ -13,6 +14,17 @@ function sanitizeCodePathInput(raw: string | null | undefined): string | null {
   return trimmed;
 }
 
+function sanitizeGithubRepoInput(raw: string | null | undefined): string | null {
+  const trimmed = raw?.trim() || null;
+  if (!trimmed) return null;
+  const normalized = normalizeGithubRepoFullName(trimmed);
+  const parts = normalized.split("/");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`仓库格式无效：${trimmed}，应为 owner/repo 或 GitHub URL`);
+  }
+  return normalized;
+}
+
 export type SaveStudioGitInput = {
   projectId: string;
   githubRepo?: string | null;
@@ -24,14 +36,15 @@ export type SaveStudioGitInput = {
 };
 
 export async function saveStudioGitSettings(input: SaveStudioGitInput): Promise<Project> {
-  const repo = input.githubRepo?.trim() || null;
+  const repo =
+    input.githubRepo !== undefined ? sanitizeGithubRepoInput(input.githubRepo) : undefined;
   const branch = input.githubBranch?.trim() || null;
   if (repo && !branch) {
     throw new Error("请填写分支名（githubBranch），须使用项目实际分支，不再默认 main");
   }
 
   const project = await updateStudioProject(input.projectId, {
-    githubRepo: repo,
+    ...(input.githubRepo !== undefined ? { githubRepo: repo } : {}),
     githubBranch: branch ?? "",
     codePath:
       input.codePath !== undefined
@@ -48,7 +61,7 @@ export async function saveStudioGitSettings(input: SaveStudioGitInput): Promise<
     const bundle = await fetchProjectBoard(pmSlug);
     if (bundle) {
       await updateProjectGitSettings(bundle.project.id, {
-        repo_full_name: repo,
+        repo_full_name: project.githubRepo,
         repo_branch: branch,
         code_path: project.codePath,
         demo_url: project.demoUrl,
@@ -63,7 +76,7 @@ export async function saveStudioGitSettings(input: SaveStudioGitInput): Promise<
 export async function applyDefaultGitToUnboundProjects(repo: string, branch: string) {
   const { getAllProjects } = await import("@/lib/studio/data");
   const projects = await getAllProjects();
-  const trimmedRepo = repo.trim();
+  const trimmedRepo = sanitizeGithubRepoInput(repo);
   const trimmedBranch = branch.trim();
 
   if (!trimmedRepo) throw new Error("仓库必填");

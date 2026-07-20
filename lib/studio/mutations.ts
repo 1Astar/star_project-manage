@@ -115,6 +115,8 @@ export type CreateProjectInput = {
   body?: Partial<ProjectBody>;
   /** 父项目 id；仅一层 */
   parentId?: string | null;
+  /** 功能板块名单；空则运行时用默认 */
+  featureModules?: string[];
   /** true=跳过标题查重强制新建 */
   force?: boolean;
 };
@@ -167,6 +169,10 @@ export type CreateEvolutionInput = {
   after?: string;
   reason?: string;
   decision?: string;
+  /** 功能板块 */
+  module?: string;
+  /** 挂到某个 Release/Tag */
+  releaseTag?: string | null;
 };
 
 export type UpdateEvolutionInput = Partial<Omit<CreateEvolutionInput, "projectId">> & {
@@ -268,6 +274,10 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
     },
     parentId:
       input.parentId !== undefined ? input.parentId : (existing?.parentId ?? null),
+    featureModules:
+      input.featureModules !== undefined
+        ? input.featureModules.map((m) => m.trim()).filter(Boolean)
+        : (existing?.featureModules ?? []),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -657,6 +667,8 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
     after: input.after ?? "",
     reason: input.reason ?? "",
     decision: input.decision ?? "",
+    module: (input.module ?? "").trim(),
+    releaseTag: input.releaseTag?.trim() || null,
     createdAt: nowIso(),
   };
 
@@ -688,6 +700,12 @@ export async function updateStudioEvolution(id: string, patch: UpdateEvolutionIn
     ...existing,
     ...patch,
     title: patch.title?.trim() ?? existing.title,
+    module:
+      patch.module !== undefined ? patch.module.trim() : existing.module,
+    releaseTag:
+      patch.releaseTag !== undefined
+        ? patch.releaseTag?.trim() || null
+        : existing.releaseTag,
     createdAt: existing.createdAt,
   };
 

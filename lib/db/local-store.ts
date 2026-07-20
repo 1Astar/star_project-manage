@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import {
   AGENT_ACTOR_NAME,
   encodeAgentActivityNote,
@@ -275,7 +276,10 @@ export async function updateProjectGitSettings(
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) throw new Error("项目不存在");
 
-  const repoFullName = input.repo_full_name?.trim() || null;
+  const repoFullNameRaw = input.repo_full_name?.trim() || null;
+  const repoFullName = repoFullNameRaw
+    ? normalizeGithubRepoFullName(repoFullNameRaw) || repoFullNameRaw
+    : null;
   const repoBranch = input.repo_branch?.trim() || null;
   const fields: Partial<Project> = {
     repo_full_name: repoFullName,

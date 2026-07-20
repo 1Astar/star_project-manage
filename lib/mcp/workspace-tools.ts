@@ -327,6 +327,8 @@ export function registerWorkspaceTools(server: McpServer) {
         after: z.string().optional().describe("影响/结果"),
         reason: z.string().optional().describe("原因"),
         decision: z.string().optional(),
+        module: z.string().optional().describe("功能板块，如「资源中心」「迭代记录」"),
+        releaseTag: z.string().optional().describe("关联 GitHub Release/Tag"),
       },
     },
     async (input) => {
@@ -339,6 +341,8 @@ export function registerWorkspaceTools(server: McpServer) {
           after: input.after,
           reason: input.reason,
           decision: input.decision,
+          module: input.module,
+          releaseTag: input.releaseTag ?? null,
         });
         await logAiAction({
           action: "add_evolution",
@@ -354,6 +358,8 @@ export function registerWorkspaceTools(server: McpServer) {
             reason: log.reason,
             after: log.after,
             decision: log.decision,
+            module: log.module,
+            releaseTag: log.releaseTag,
             createdAt: log.createdAt,
           },
         });
