@@ -100,7 +100,12 @@ export function ResourceCenter({ project, assets, releases }: Props) {
         if (!res.ok) {
           throw new Error(json.error || "同步失败");
         }
-        setMessage(`已同步 ${json.synced ?? 0} 个版本`);
+        setMessage(`已同步 ${json.synced ?? 0} 个版本${
+          typeof (json as { changelogFilled?: number }).changelogFilled === "number" &&
+          (json as { changelogFilled?: number }).changelogFilled! > 0
+            ? `（${(json as { changelogFilled?: number }).changelogFilled} 个 Tag 已补 commits 说明）`
+            : ""
+        }`);
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "同步失败");

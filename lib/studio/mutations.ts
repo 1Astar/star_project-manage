@@ -1133,15 +1133,17 @@ export async function convertIdeaToProject(ideaId: string, projectInput?: Create
     after: idea.oneLineIdea || idea.title,
     reason: evolutionContent,
     decision: `来源灵感 ${idea.id} · ${idea.triggerSource || idea.sourceMethod || "手动"}${idea.githubIssueUrl ? ` · ${idea.githubIssueUrl}` : ""}`,
+    module: idea.relatedModule?.trim() || "",
   });
 
   return { idea: updatedIdea, project };
 }
 
-/** 从 GitHub 同步 Release + 补 Tag，按 projectId+tag upsert */
+/** 从 GitHub 同步 Release + Tag；无 Release body 的 Tag 用 commits 区间补「本版变更」 */
 export async function syncStudioProjectReleases(projectId: string): Promise<{
   synced: number;
   releases: StudioRelease[];
+  changelogFilled: number;
 }> {
   const snapshot = await getStudioSnapshot();
   const project = snapshot.projects.find((p) => p.id === projectId);
@@ -1149,17 +1151,25 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
   const repo = project.githubRepo?.trim();
   if (!repo) throw new Error("项目未配置 GitHub 仓库（githubRepo）");
 
-  const { fetchGitHubReleases, fetchGitHubTags, buildRepoUrl } = await import(
-    "@/lib/github/client"
+  const {
+    fetchGitHubReleases,
+    fetchGitHubTags,
+    buildRepoUrl,
+    fetchCommitDate,
+    fetchCompareCommits,
+  } = await import("@/lib/github/client");
+  const { compareVersionTags, formatCommitsAsChangelog } = await import(
+    "@/lib/studio/release-notes"
   );
 
   const [ghReleases, ghTags] = await Promise.all([
     fetchGitHubReleases(repo),
-    fetchGitHubTags(repo),
+    fetchGitHubTags(repo, 50),
   ]);
 
   const syncedAt = nowIso();
   const byTag = new Map<string, StudioRelease>();
+  const tagSha = new Map<string, string>();
 
   for (const r of ghReleases) {
     const tag = r.tag_name.trim();
@@ -1180,7 +1190,9 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
 
   for (const t of ghTags) {
     const tag = t.name.trim();
-    if (!tag || byTag.has(tag)) continue;
+    if (!tag) continue;
+    if (t.commit?.sha) tagSha.set(tag, t.commit.sha);
+    if (byTag.has(tag)) continue;
     byTag.set(tag, {
       id: `rel-${projectId}-${tag}`.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120),
       projectId,
@@ -1195,14 +1207,62 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     });
   }
 
-  const next = [...byTag.values()].sort((a, b) =>
-    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "")
-  );
+  // 升序版本，便于算「上一版 → 本版」commits
+  const ascending = [...byTag.keys()].sort(compareVersionTags);
+  let changelogFilled = 0;
+  const FILL_LIMIT = 20;
+
+  for (let i = ascending.length - 1; i >= 0 && changelogFilled < FILL_LIMIT; i--) {
+    const tag = ascending[i];
+    const current = byTag.get(tag);
+    if (!current) continue;
+
+    // Tag 缺发布时间 → 用 commit 日期
+    if (!current.publishedAt && tagSha.get(tag)) {
+      try {
+        const date = await fetchCommitDate(repo, tagSha.get(tag)!);
+        if (date) current.publishedAt = date;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // 已有 Release 说明则不覆盖
+    if (current.body?.trim()) continue;
+
+    const prev = i > 0 ? ascending[i - 1] : null;
+    try {
+      if (prev) {
+        const commits = await fetchCompareCommits(repo, prev, tag);
+        const body = formatCommitsAsChangelog(commits);
+        if (body) {
+          current.body = body;
+          changelogFilled++;
+        }
+      } else {
+        // 最早一版：用该 tag 上近期 commits 顶一下
+        const { fetchRecentCommits } = await import("@/lib/github/client");
+        const commits = await fetchRecentCommits(repo, tag, 15);
+        const body = formatCommitsAsChangelog(commits);
+        if (body) {
+          current.body = body;
+          changelogFilled++;
+        }
+      }
+    } catch {
+      /* 个别 tag compare 失败不阻断整次同步 */
+    }
+  }
+
+  const next = [...byTag.values()].sort((a, b) => {
+    const byDate = (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "");
+    if (byDate) return byDate;
+    return compareVersionTags(b.tag, a.tag);
+  });
 
   return writeSupabase(
     async () => {
       const client = sb();
-      // 先删本项目旧缓存再整批插入，避免陈旧 Tag
       await client.from("studio_releases").delete().eq("project_id", projectId);
       if (next.length) {
         const { error } = await client
@@ -1210,7 +1270,7 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
           .upsert(next.map(releaseToRow), { onConflict: "id" });
         if (error) throw new Error(error.message);
       }
-      return { synced: next.length, releases: next };
+      return { synced: next.length, releases: next, changelogFilled };
     },
     () => {
       applyMemoryMutation((snap) => {
@@ -1219,7 +1279,109 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
           ...next,
         ];
       });
-      return { synced: next.length, releases: next };
+      return { synced: next.length, releases: next, changelogFilled };
     }
   );
+}
+
+/**
+ * 汇总 PM 内带板块的变更，创建 GitHub Release，并把未挂版本的演进挂上本 tag。
+ * 用于「发版时带上新增内容 + 对应模块」。
+ */
+export async function publishStudioProjectRelease(input: {
+  projectId: string;
+  tag: string;
+  name?: string;
+  /** 默认用项目 githubBranch 或 main */
+  targetCommitish?: string;
+  /** 额外说明，拼在正文前 */
+  extraBody?: string;
+  /** 把未挂版本且有板块的演进挂到本 tag */
+  attachUntaggedEvolution?: boolean;
+  draft?: boolean;
+  prerelease?: boolean;
+}): Promise<{
+  release: StudioRelease;
+  githubUrl: string;
+  modules: string[];
+  attachedEvolutionIds: string[];
+}> {
+  const snapshot = await getStudioSnapshot();
+  const project = snapshot.projects.find((p) => p.id === input.projectId);
+  if (!project) throw new Error("项目不存在");
+  const repo = project.githubRepo?.trim();
+  if (!repo) throw new Error("项目未配置 GitHub 仓库（githubRepo）");
+
+  const tag = input.tag.trim();
+  if (!tag) throw new Error("tag 必填");
+
+  const { createGitHubRelease, buildRepoUrl } = await import("@/lib/github/client");
+  const { groupChangesByModule, formatReleaseNotesMarkdown, modulesForReleaseTag } =
+    await import("@/lib/studio/release-notes");
+
+  const attach = input.attachUntaggedEvolution !== false;
+  const attachedEvolutionIds: string[] = [];
+
+  if (attach) {
+    const untagged = snapshot.evolutionLogs.filter(
+      (e) =>
+        e.projectId === input.projectId &&
+        !e.releaseTag?.trim() &&
+        e.module?.trim()
+    );
+    for (const e of untagged) {
+      await updateStudioEvolution(e.id, { releaseTag: tag });
+      attachedEvolutionIds.push(e.id);
+    }
+  }
+
+  const fresh = await getStudioSnapshot();
+  const evolution = fresh.evolutionLogs.filter((e) => e.projectId === input.projectId);
+  const groups = groupChangesByModule({
+    evolution,
+    releaseTag: tag,
+  });
+  const body = [
+    input.extraBody?.trim() ?? "",
+    formatReleaseNotesMarkdown({
+      title: input.name || tag,
+      groups,
+    }),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const gh = await createGitHubRelease(repo, {
+    tag,
+    name: input.name || tag,
+    body,
+    targetCommitish: input.targetCommitish || project.githubBranch || "main",
+    draft: input.draft,
+    prerelease: input.prerelease,
+  });
+
+  // 刷新本地 releases 缓存
+  await syncStudioProjectReleases(input.projectId);
+  const after = await getStudioSnapshot();
+  const release =
+    after.releases.find((r) => r.projectId === input.projectId && r.tag === tag) ??
+    ({
+      id: `rel-${input.projectId}-${tag}`.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120),
+      projectId: input.projectId,
+      tag,
+      name: gh.name || tag,
+      publishedAt: gh.published_at,
+      body: gh.body ?? body,
+      htmlUrl: gh.html_url,
+      isPrerelease: Boolean(gh.prerelease),
+      source: "release" as const,
+      syncedAt: nowIso(),
+    } satisfies StudioRelease);
+
+  return {
+    release,
+    githubUrl: gh.html_url || `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`,
+    modules: modulesForReleaseTag(tag, evolution),
+    attachedEvolutionIds,
+  };
 }

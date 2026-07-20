@@ -318,7 +318,8 @@ export function registerWorkspaceTools(server: McpServer) {
     "add_evolution",
     {
       title: "Add Evolution",
-      description: "记录项目演进：时间/事件/原因/影响。",
+      description:
+        "记录项目演进：时间/事件/原因/影响。强烈建议填写 module（功能板块）；发版时按板块汇总。可选 releaseTag 挂到某版本。",
       inputSchema: {
         projectId: z.string().min(1),
         title: z.string().min(1).describe("事件标题，如「加入小六壬体系」"),
@@ -327,8 +328,11 @@ export function registerWorkspaceTools(server: McpServer) {
         after: z.string().optional().describe("影响/结果"),
         reason: z.string().optional().describe("原因"),
         decision: z.string().optional(),
-        module: z.string().optional().describe("功能板块，如「资源中心」「迭代记录」"),
-        releaseTag: z.string().optional().describe("关联 GitHub Release/Tag"),
+        module: z
+          .string()
+          .optional()
+          .describe("功能板块（强烈建议）：工作台/项目库/灵感/需求任务/迭代记录/资源中心/Git/设置"),
+        releaseTag: z.string().optional().describe("关联 GitHub Release/Tag，如 v1.9.1"),
       },
     },
     async (input) => {
@@ -350,6 +354,9 @@ export function registerWorkspaceTools(server: McpServer) {
         });
         return mcpJson({
           ok: true,
+          warning: log.module?.trim()
+            ? undefined
+            : "未填写 module（板块）。发版汇总时将归入「未分板块」，建议补写。",
           evolution: {
             id: log.id,
             title: log.title,
@@ -370,16 +377,73 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "publish_release",
+    {
+      title: "Publish Release",
+      description:
+        "按项目汇总带板块的演进，创建 GitHub Release（含本版内容与板块），并把未挂版本的演进挂到该 tag。发版前请先确保 MCP/站内写入时带了 module。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        tag: z.string().min(1).describe("版本号，如 v1.9.1"),
+        name: z.string().optional().describe("Release 标题，默认用 tag"),
+        targetCommitish: z
+          .string()
+          .optional()
+          .describe("目标分支或 sha；默认用项目 githubBranch 或 main"),
+        extraBody: z.string().optional().describe("额外说明，拼在正文前"),
+        attachUntaggedEvolution: z
+          .boolean()
+          .optional()
+          .describe("默认 true：把未挂版本且有板块的演进挂到本 tag"),
+        draft: z.boolean().optional(),
+        prerelease: z.boolean().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { publishStudioProjectRelease } = await import("@/lib/studio/mutations");
+        const result = await publishStudioProjectRelease({
+          projectId: input.projectId,
+          tag: input.tag,
+          name: input.name,
+          targetCommitish: input.targetCommitish,
+          extraBody: input.extraBody,
+          attachUntaggedEvolution: input.attachUntaggedEvolution,
+          draft: input.draft,
+          prerelease: input.prerelease,
+        });
+        await logAiAction({
+          action: "publish_release",
+          payload: {
+            projectId: input.projectId,
+            tag: input.tag,
+            modules: result.modules,
+          },
+        });
+        return mcpJson({
+          ok: true,
+          ...result,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "publish_release 失败");
+      }
+    }
+  );
+
+  server.registerTool(
     "add_decision",
     {
       title: "Add Decision",
-      description: "记录产品决策（不采用什么、原因、替代方案），写入演进日志。",
+      description:
+        "记录产品决策（不采用什么、原因、替代方案），写入演进日志。强烈建议填写 module（功能板块）。",
       inputSchema: {
         projectId: z.string().min(1),
         decision: z.string().min(1).describe("决策内容"),
         reason: z.string().optional().describe("原因"),
         alternative: z.string().optional().describe("替代方案"),
         title: z.string().optional().describe("默认用决策摘要"),
+        module: z.string().optional().describe("功能板块（强烈建议）"),
+        releaseTag: z.string().optional().describe("关联版本 Tag"),
       },
     },
     async (input) => {
@@ -389,24 +453,28 @@ export function registerWorkspaceTools(server: McpServer) {
           title,
           projectId: input.projectId,
           logType: "tech_decision",
+          before: input.alternative ? `备选：${input.alternative}` : "",
+          after: input.decision,
           reason: input.reason ?? "",
-          after: input.alternative ? `替代：${input.alternative}` : "",
           decision: input.decision,
+          module: input.module,
+          releaseTag: input.releaseTag ?? null,
         });
         await logAiAction({
           action: "add_decision",
-          reason: input.reason,
-          payload: { evolutionId: log.id, projectId: input.projectId },
+          payload: { evolutionId: log.id, projectId: log.projectId },
         });
         return mcpJson({
           ok: true,
-          decision: {
+          warning: log.module?.trim()
+            ? undefined
+            : "未填写 module（板块）。发版汇总时将归入「未分板块」，建议补写。",
+          evolution: {
             id: log.id,
             title: log.title,
-            decision: log.decision,
-            reason: log.reason,
-            alternative: input.alternative ?? null,
             projectId: log.projectId,
+            module: log.module,
+            releaseTag: log.releaseTag,
             createdAt: log.createdAt,
           },
         });

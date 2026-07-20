@@ -109,9 +109,17 @@ export function ProjectEvolutionTimeline({
         const res = await fetch(`/api/studio/projects/${project.id}/releases/sync`, {
           method: "POST",
         });
-        const json = (await res.json()) as { error?: string; synced?: number };
+        const json = (await res.json()) as {
+          error?: string;
+          synced?: number;
+          changelogFilled?: number;
+        };
         if (!res.ok) throw new Error(json.error || "同步失败");
-        setMessage(`已同步 ${json.synced ?? 0} 个版本`);
+        const filled =
+          typeof json.changelogFilled === "number" && json.changelogFilled > 0
+            ? `，其中 ${json.changelogFilled} 个 Tag 已用 commits 补全变更说明`
+            : "";
+        setMessage(`已同步 ${json.synced ?? 0} 个版本（Tag/Release）${filled}`);
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "同步失败");
@@ -167,7 +175,7 @@ export function ProjectEvolutionTimeline({
         <div>
           <h2 className="text-sm font-semibold text-slate-800">迭代记录</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            发版时间线 + 按功能板块追溯；原因可空，空时会弱提醒。
+            「同步版本」拉 GitHub Tag/Release，并尽量补全本版 commits 变更；板块来自演进/灵感标签。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -350,12 +358,34 @@ export function ProjectEvolutionTimeline({
                         <StudioBadge key={m}>{m}</StudioBadge>
                       ))}
                     </div>
-                  ) : null}
-                  {release.body ? (
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
-                      {release.body.slice(0, 800)}
-                      {release.body.length > 800 ? "…" : ""}
+                  ) : (
+                    <p className="mt-2 text-xs text-amber-700">
+                      本版尚未关联板块。请用 MCP/站内写演进时填写板块，或发版时用
+                      publish_release 汇总。
                     </p>
+                  )}
+                  {release.body ? (
+                    <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                      <div className="text-xs font-medium text-slate-500">本版更新内容</div>
+                      <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-slate-700">
+                        {release.body.slice(0, 1200)}
+                        {release.body.length > 1200 ? "…" : ""}
+                      </pre>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">
+                      暂无变更说明（无 Release body，且未能从 commits 推断）。
+                    </p>
+                  )}
+                  {linkedEvo.length > 0 ? (
+                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                      <div className="text-xs font-medium text-slate-500">
+                        板块演进（{linkedEvo.length}）
+                      </div>
+                      {linkedEvo.map((log) => (
+                        <EvolutionCard key={log.id} log={log} compact />
+                      ))}
+                    </div>
                   ) : null}
                   {release.htmlUrl ? (
                     <a
@@ -380,14 +410,6 @@ export function ProjectEvolutionTimeline({
                           </li>
                         ))}
                       </ul>
-                    </div>
-                  ) : null}
-                  {linkedEvo.length > 0 ? (
-                    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-                      <div className="text-xs font-medium text-slate-500">关联演进</div>
-                      {linkedEvo.map((log) => (
-                        <EvolutionCard key={log.id} log={log} compact />
-                      ))}
                     </div>
                   ) : null}
                 </article>
