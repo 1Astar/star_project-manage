@@ -10,6 +10,15 @@
 
 ---
 
+## v1.9.0 · 2026-07-20
+
+- **迭代记录升级**：`/projects/[id]/evolution` 多 tab — 项目发版时间线 + 功能板块过滤
+- **发版时间线**：同步 GitHub Release/Tag；节点挂演进 / 迭代计划；展示本版涉及板块；未挂版本单独分区
+- **板块标签**：演进 `module` + 可选 `releaseTag`；灵感沿用 `relatedModule`；项目可配 `featureModules`
+- **变更原因弱提醒**：可空，表单与列表空原因时弱提示（不阻断保存）
+- **MCP**：`add_evolution` 支持 `module` / `releaseTag`
+- **Migration**：`028_evolution_modules.sql`
+
 ## v1.8.0 · 2026-07-19
 
 - **项目父子树形**：`studio_projects.parent_id` / `projects.parent_id`（仅一层）

@@ -246,6 +246,7 @@ async function mapNotionPageToProject(
     portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
     customFields: {},
     parentId: null,
+    featureModules: [],
     body,
     createdAt: page.created_time || now,
     updatedAt: now,
@@ -337,6 +338,8 @@ function mapEvolutionPage(page: NotionPage, projectIdByNotion: Map<string, strin
     after: getPropertyText(page, "变化后", "After"),
     reason: getPropertyText(page, "为什么", "原因", "Reason"),
     decision: getPropertyText(page, "结论", "决策", "Decision"),
+    module: getPropertyText(page, "板块", "模块", "Module"),
+    releaseTag: getPropertyText(page, "版本", "Release", "Tag") || null,
     createdAt: page.created_time || new Date().toISOString(),
   };
 }
@@ -458,6 +461,7 @@ function mapDatabasePages(
         portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
         customFields: {},
         parentId: null,
+        featureModules: [],
         body: {
           ...EMPTY_BODY,
           initialThought: getPropertyText(page, "初始想法", "想法"),

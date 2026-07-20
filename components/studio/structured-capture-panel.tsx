@@ -33,6 +33,7 @@ export function StructuredCapturePanel({
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("灵感收件箱");
   const [emotionLevel, setEmotionLevel] = useState<EmotionLevel>("normal");
   const [relatedProjectId, setRelatedProjectId] = useState(defaultProjectId ?? "");
+  const [relatedModule, setRelatedModule] = useState("");
   const [suggestedNextStep, setSuggestedNextStep] = useState("");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -60,6 +61,7 @@ export function StructuredCapturePanel({
           status,
           emotionLevel: EMOTION_LABELS[emotionLevel],
           relatedProjectId: relatedProjectId || null,
+          relatedModule: relatedModule.trim(),
           suggestedNextStep: suggestedNextStep.trim(),
         }),
       });
@@ -70,6 +72,7 @@ export function StructuredCapturePanel({
       setRawThought("");
       setSummary("");
       setWhy("");
+      setRelatedModule("");
       setSuggestedNextStep("");
       router.refresh();
     } catch (err) {
@@ -189,6 +192,15 @@ export function StructuredCapturePanel({
               <option key={p.id} value={p.id}>{p.label}</option>
             ))}
           </select>
+        </label>
+        <label className="block text-sm md:col-span-2">
+          <span className="text-stone-500">关联板块（可选）</span>
+          <input
+            className="mt-1 w-full rounded border border-stone-200 px-3 py-2 text-sm"
+            value={relatedModule}
+            onChange={(e) => setRelatedModule(e.target.value)}
+            placeholder="如：迭代记录、资源中心、工作台"
+          />
         </label>
         <label className="block text-sm md:col-span-2">
           <span className="text-stone-500">下一步建议</span>

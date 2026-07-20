@@ -18,12 +18,45 @@ function getGitHubToken(): string {
   return token;
 }
 
+/**
+ * 把 GitHub 仓库输入归一为 owner/repo。
+ * 接受：owner/repo、https://github.com/owner/repo(.git)、git@github.com:owner/repo.git
+ */
+export function normalizeGithubRepoFullName(input: string): string {
+  let raw = input.trim();
+  if (!raw) return "";
+
+  raw = raw.replace(/^git\+/i, "");
+
+  const ssh = raw.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?\/?$/i);
+  if (ssh) return `${ssh[1]}/${ssh[2]}`;
+
+  raw = raw.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  if (/^github\.com\//i.test(raw)) {
+    raw = raw.replace(/^github\.com\//i, "");
+  }
+
+  raw = raw.replace(/\.git$/i, "").replace(/\/+$/, "");
+  // 去掉多余 path（/tree/main 等）
+  const parts = raw.split("/").filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]}/${parts[1]}`;
+  }
+  return raw;
+}
+
 export function parseRepoFullName(repoFullName: string): { owner: string; repo: string } {
-  const parts = repoFullName.trim().split("/");
+  const normalized = normalizeGithubRepoFullName(repoFullName);
+  const parts = normalized.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`仓库格式无效：${repoFullName}，应为 owner/repo`);
+    throw new Error(`仓库格式无效：${repoFullName}，应为 owner/repo 或 GitHub URL`);
   }
   return { owner: parts[0], repo: parts[1] };
+}
+
+export function buildRepoUrl(repoFullName: string): string {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  return `https://github.com/${owner}/${repo}`;
 }
 
 export async function fetchRecentCommits(
@@ -55,10 +88,6 @@ export async function fetchRecentCommits(
   }
 
   return (await res.json()) as GitHubCommit[];
-}
-
-export function buildRepoUrl(repoFullName: string): string {
-  return `https://github.com/${repoFullName}`;
 }
 
 export interface GitHubRelease {
