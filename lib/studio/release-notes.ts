@@ -1,6 +1,29 @@
 import type { EvolutionLog, Idea, StudioRelease } from "@/lib/studio/types";
 import type { GitHubCommit } from "@/lib/github/client";
 
+/**
+ * 语义化发版 Tag：整段为 v?MAJOR.MINOR[.PATCH[.BUILD]][+/-预发布]。
+ * `stage/…`、`nest/…` 等过程 Tag 返回 false。
+ */
+export function isSemverReleaseTag(tag: string): boolean {
+  const t = tag.trim();
+  if (!t) return false;
+  return /^v?\d+\.\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?$/i.test(t);
+}
+
+/** 拆成默认展示的语义化版本 vs 折叠的过程 Tag */
+export function partitionReleaseTags<T extends { tag: string }>(
+  releases: T[]
+): { semver: T[]; process: T[] } {
+  const semver: T[] = [];
+  const process: T[] = [];
+  for (const r of releases) {
+    if (isSemverReleaseTag(r.tag)) semver.push(r);
+    else process.push(r);
+  }
+  return { semver, process };
+}
+
 /** 简易版本排序：优先解析 v1.2.3，否则按字符串 */
 export function compareVersionTags(a: string, b: string): number {
   const pa = parseVersionParts(a);
