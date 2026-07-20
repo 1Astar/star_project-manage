@@ -22,6 +22,7 @@ export async function GET() {
       preview: true,
       stats: result.stats,
       warnings: result.warnings,
+      pendingModuleFill: result.pendingModuleFill,
       projects: result.snapshot.projects.map((p) => ({
         id: p.id,
         title: p.title,
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       imported: !body?.dryRun,
       stats: result.stats,
       warnings: result.warnings,
+      pendingModuleFill: result.pendingModuleFill,
     });
   } catch (error) {
     return mapStudioError(error);

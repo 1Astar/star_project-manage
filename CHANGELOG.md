@@ -10,6 +10,13 @@
 
 ---
 
+## v1.9.2 · 2026-07-20
+
+- **统一 AI 规则**：`docs/ai/CANONICAL_RULES.md` + `AGENTS.md` / `.cursor/rules/star-pm-ai.mdc` 指针
+- **MCP**：`get_ai_rules`、`compare_sources`（Git / Vercel / Studio 谁最新）
+- **导入校验**：缺板块标记「待补齐·板块」仍可导入；Notion 导入返回 `pendingModuleFill`
+- **capture_idea**：关联项目但无板块时同样标记待补齐
+
 ## v1.9.1 · 2026-07-20
 
 - **Tag 同步增强**：无 Release body 时用相邻 Tag 的 commits 生成「本版变更」；补 Tag 发布时间

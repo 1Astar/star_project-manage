@@ -7,6 +7,10 @@ import {
   findDuplicateCandidates,
   suggestParentIdea,
 } from "@/lib/studio/capture-relation";
+import {
+  appendPendingModuleMarker,
+  needsModuleFill,
+} from "@/lib/studio/inbound-rules";
 
 const PRIORITIES = new Set<IdeaPriority>(["P0", "P1", "P2", "P3"]);
 
@@ -18,6 +22,8 @@ export type CaptureIdeaResult = {
   parentLinkReason: string | null;
   parentAlternatives: Array<{ id: string; title: string; score: number; reason: string }>;
   duplicateSkipped: boolean;
+  /** 已关联项目但缺板块 → 待补齐 */
+  pendingModuleFill: boolean;
 };
 
 export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureIdeaResult> {
@@ -65,6 +71,11 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
     }
   }
 
+  const pendingModuleFill = needsModuleFill({
+    relatedProjectId: fields.relatedProjectId,
+    module: fields.relatedModule,
+  });
+
   const idea = await createStudioIdea({
     title: fields.title,
     rawInput: fields.rawThought,
@@ -86,7 +97,9 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
     relatedModule: fields.relatedModule,
     status: fields.status,
     suggestedNextStep: fields.suggestedNextStep,
-    decisionNotes: fields.decisionNotes,
+    decisionNotes: pendingModuleFill
+      ? appendPendingModuleMarker(fields.decisionNotes)
+      : fields.decisionNotes,
     evolutionNotes: fields.evolutionNotes,
     relatedAssetsNote: fields.relatedAssetsNote,
     occurredAt: fields.occurredAt,
@@ -102,5 +115,6 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
       ? parentAlternatives.filter((a) => a.id !== relatedIdeaId).slice(0, 3)
       : parentAlternatives.slice(0, 5),
     duplicateSkipped: force,
+    pendingModuleFill,
   };
 }

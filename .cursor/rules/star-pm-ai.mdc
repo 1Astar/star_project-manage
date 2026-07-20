@@ -1,0 +1,21 @@
+---
+description: Star PM AI 统一规则指针——必读仓库内 CANONICAL_RULES
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Star PM · AI 规则（指针）
+
+动手前必读仓库正文（勿在本文件复制长文，避免漂移）：
+
+`docs/ai/CANONICAL_RULES.md`
+
+要点摘要：
+
+1. 改代码前先 `compare_sources`（Git / Vercel / Studio），避免用旧版本覆盖新版本  
+2. 灵感/演进写入强烈建议带**板块**（`relatedModule` / `module`）  
+3. 导入缺板块 →「待补齐」仍可导入，不要静默丢  
+4. 发版用 `publish_release`；「同步版本」≠「同步 Git 更新」
+
+MCP：先调 `get_ai_rules` 再大批量写入。
