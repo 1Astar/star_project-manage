@@ -19,6 +19,7 @@ import {
   needsModuleFill,
   type PendingModuleItem,
 } from "@/lib/studio/inbound-rules";
+import { resolveModuleForImport } from "@/lib/studio/infer-modules";
 import type {
   Asset,
   AssetType,
@@ -556,50 +557,71 @@ export async function fetchNotionStudioSnapshot(
   };
 
   const pendingModuleFill: PendingModuleItem[] = [];
+  let inferredModuleCount = 0;
 
   snapshot.ideas = snapshot.ideas.map((idea) => {
+    const resolved = resolveModuleForImport(
+      idea.relatedModule,
+      [idea.title, idea.oneLineIdea, idea.rawInput, idea.whyItMatters]
+        .filter(Boolean)
+        .join("\n"),
+      idea.relatedProjectId
+    );
+    if (resolved.inferred) inferredModuleCount += 1;
+    const withModule = { ...idea, relatedModule: resolved.module };
     if (
       !needsModuleFill({
-        relatedProjectId: idea.relatedProjectId,
-        module: idea.relatedModule,
+        relatedProjectId: withModule.relatedProjectId,
+        module: withModule.relatedModule,
       })
     ) {
-      return idea;
+      return withModule;
     }
     pendingModuleFill.push({
       kind: "idea",
-      id: idea.id,
-      title: idea.title,
-      projectId: idea.relatedProjectId,
-      reason: "已关联项目但未填板块",
+      id: withModule.id,
+      title: withModule.title,
+      projectId: withModule.relatedProjectId,
+      reason: "已关联项目但未填板块（关键词未能推断）",
     });
     return {
-      ...idea,
-      decisionNotes: appendPendingModuleMarker(idea.decisionNotes),
+      ...withModule,
+      decisionNotes: appendPendingModuleMarker(withModule.decisionNotes),
     };
   });
 
   snapshot.evolutionLogs = snapshot.evolutionLogs.map((log) => {
+    const resolved = resolveModuleForImport(
+      log.module,
+      [log.title, log.after, log.before, log.reason].filter(Boolean).join("\n"),
+      log.projectId
+    );
+    if (resolved.inferred) inferredModuleCount += 1;
+    const withModule = { ...log, module: resolved.module };
     if (
       !needsModuleFill({
-        relatedProjectId: log.projectId,
-        module: log.module,
+        relatedProjectId: withModule.projectId,
+        module: withModule.module,
       })
     ) {
-      return log;
+      return withModule;
     }
     pendingModuleFill.push({
       kind: "evolution",
-      id: log.id,
-      title: log.title,
-      projectId: log.projectId,
-      reason: "演进未填板块",
+      id: withModule.id,
+      title: withModule.title,
+      projectId: withModule.projectId,
+      reason: "演进未填板块（关键词未能推断）",
     });
     return {
-      ...log,
-      decision: appendPendingModuleMarker(log.decision),
+      ...withModule,
+      decision: appendPendingModuleMarker(withModule.decision),
     };
   });
+
+  if (inferredModuleCount) {
+    warnings.push(`已按条目关键词推断板块 ${inferredModuleCount} 条`);
+  }
 
   if (pendingModuleFill.length) {
     warnings.push(

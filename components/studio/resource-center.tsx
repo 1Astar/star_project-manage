@@ -116,6 +116,11 @@ export function ResourceCenter({ project, assets, releases }: Props) {
           (json as { changelogFilled?: number }).changelogFilled! > 0
             ? `（${(json as { changelogFilled?: number }).changelogFilled} 个 Tag 已补 commits 说明）`
             : ""
+        }${
+          typeof (json as { evolutionImported?: number }).evolutionImported === "number" &&
+          (json as { evolutionImported?: number }).evolutionImported! > 0
+            ? `；导入 ${(json as { evolutionImported?: number }).evolutionImported} 条版本需求`
+            : ""
         }`);
         router.refresh();
       } catch (error) {
@@ -172,7 +177,8 @@ export function ResourceCenter({ project, assets, releases }: Props) {
               disabled={pending || !project.githubRepo}
               onClick={syncReleases}
               title={project.githubRepo ? "从 GitHub 同步 Release/Tag" : "请先绑定 GitHub 仓库"}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="btn-secondary"
+              style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
             >
               {pending ? "同步中…" : "同步版本"}
             </button>

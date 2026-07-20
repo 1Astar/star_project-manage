@@ -25,7 +25,9 @@ type Props = {
   iterations: Iteration[];
 };
 
-type TabKey = "releases" | `module:${string}`;
+type TabKey = "releases" | "modules";
+/** 板块演进内：全部概览 或 单个板块 */
+type ModuleFilter = "all" | string;
 
 const LOG_TYPES = Object.keys(EVOLUTION_TYPE_LABELS) as EvolutionLogType[];
 
@@ -48,6 +50,7 @@ export function ProjectEvolutionTimeline({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<TabKey>("releases");
+  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>("all");
   const [message, setMessage] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -84,18 +87,18 @@ export function ProjectEvolutionTimeline({
     [evolution]
   );
 
-  const activeModule =
-    tab.startsWith("module:") ? tab.slice("module:".length) : null;
+  const moduleStats = useMemo(() => {
+    return modules.map((m) => ({
+      module: m,
+      evolution: evolution.filter((e) => (e.module || "").trim() === m),
+      ideas: ideas.filter((i) => (i.relatedModule || "").trim() === m),
+    }));
+  }, [modules, evolution, ideas]);
 
-  const moduleEvolution = useMemo(() => {
-    if (!activeModule) return [];
-    return evolution.filter((e) => (e.module || "").trim() === activeModule);
-  }, [activeModule, evolution]);
-
-  const moduleIdeas = useMemo(() => {
-    if (!activeModule) return [];
-    return ideas.filter((i) => (i.relatedModule || "").trim() === activeModule);
-  }, [activeModule, ideas]);
+  const filteredModuleStats = useMemo(() => {
+    if (moduleFilter === "all") return moduleStats;
+    return moduleStats.filter((s) => s.module === moduleFilter);
+  }, [moduleStats, moduleFilter]);
 
   function modulesForRelease(tag: string) {
     const set = new Set<string>();
@@ -119,13 +122,18 @@ export function ProjectEvolutionTimeline({
           error?: string;
           synced?: number;
           changelogFilled?: number;
+          evolutionImported?: number;
         };
         if (!res.ok) throw new Error(json.error || "同步失败");
         const filled =
           typeof json.changelogFilled === "number" && json.changelogFilled > 0
             ? `，其中 ${json.changelogFilled} 个 Tag 已用 commits 补全变更说明`
             : "";
-        setMessage(`已同步 ${json.synced ?? 0} 个版本（Tag/Release）${filled}`);
+        const evo =
+          typeof json.evolutionImported === "number" && json.evolutionImported > 0
+            ? `；已导入 ${json.evolutionImported} 条版本需求（关键词推断板块）`
+            : "";
+        setMessage(`已同步 ${json.synced ?? 0} 个版本（Tag/Release）${filled}${evo}`);
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "同步失败");
@@ -181,7 +189,7 @@ export function ProjectEvolutionTimeline({
         <div>
           <h2 className="text-sm font-semibold text-slate-800">迭代记录</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            「同步版本」拉 GitHub Tag/Release，并尽量补全本版 commits 变更；默认只展示语义化版本，过程 Tag 折叠。
+            「同步版本」拉 Tag/Release、补全本版变更，并把各版说明条目导入为演进（关键词推断板块）；默认只展示语义化版本，过程 Tag 折叠。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -189,7 +197,8 @@ export function ProjectEvolutionTimeline({
             type="button"
             disabled={pending || !project.githubRepo}
             onClick={syncReleases}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="btn-secondary"
+            style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
             title={project.githubRepo ? "从 GitHub 同步 Release/Tag" : "请先配置 GitHub 仓库"}
           >
             {pending ? "同步中…" : "同步版本"}
@@ -197,7 +206,8 @@ export function ProjectEvolutionTimeline({
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+            className="btn-secondary"
+            style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
           >
             {showForm ? "收起表单" : "+ 补一条演进"}
           </button>
@@ -316,11 +326,7 @@ export function ProjectEvolutionTimeline({
               />
             </label>
           </div>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
+          <button type="submit" disabled={pending} className="btn-primary">
             {pending ? "保存中…" : "保存"}
           </button>
         </form>
@@ -330,15 +336,15 @@ export function ProjectEvolutionTimeline({
         <TabButton active={tab === "releases"} onClick={() => setTab("releases")}>
           项目发版
         </TabButton>
-        {modules.map((m) => (
-          <TabButton
-            key={m}
-            active={tab === `module:${m}`}
-            onClick={() => setTab(`module:${m}`)}
-          >
-            {m}
-          </TabButton>
-        ))}
+        <TabButton
+          active={tab === "modules"}
+          onClick={() => {
+            setTab("modules");
+            setModuleFilter("all");
+          }}
+        >
+          板块演进
+        </TabButton>
       </div>
 
       {tab === "releases" ? (
@@ -401,34 +407,73 @@ export function ProjectEvolutionTimeline({
       ) : (
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
-            板块「{activeModule}」：演进 {moduleEvolution.length} · 灵感{" "}
-            {moduleIdeas.length}
+            按功能板块查看演进与灵感；默认「全部」会分段列出各板块历程。
           </p>
-          {moduleEvolution.length === 0 && moduleIdeas.length === 0 ? (
-            <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-              该板块还没有带标签的演进或灵感。补演进时选板块，或给灵感填「关联模块」。
-            </p>
-          ) : null}
-          {moduleEvolution.map((log) => (
-            <EvolutionCard key={log.id} log={log} />
-          ))}
-          {moduleIdeas.map((idea) => (
-            <article
-              key={idea.id}
-              className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4"
+          <div className="flex flex-wrap gap-1.5">
+            <ChipButton
+              active={moduleFilter === "all"}
+              onClick={() => setModuleFilter("all")}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <StudioBadge tone="muted">灵感</StudioBadge>
-                <span className="text-xs text-slate-400">
-                  {formatDate(idea.occurredAt || idea.createdAt)}
+              全部
+            </ChipButton>
+            {moduleStats.map(({ module: m, evolution: ev, ideas: ids }) => (
+              <ChipButton
+                key={m}
+                active={moduleFilter === m}
+                onClick={() => setModuleFilter(m)}
+              >
+                {m}
+                <span className="ml-1 text-[10px] opacity-70">
+                  {ev.length + ids.length}
                 </span>
-              </div>
-              <h3 className="mt-1 text-sm font-semibold text-slate-900">{idea.title}</h3>
-              {idea.oneLineIdea ? (
-                <p className="mt-1 text-sm text-slate-600">{idea.oneLineIdea}</p>
-              ) : null}
-            </article>
-          ))}
+              </ChipButton>
+            ))}
+          </div>
+
+          {filteredModuleStats.length === 0 ? (
+            <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+              还没有配置板块。可在项目设置里配置 featureModules。
+            </p>
+          ) : (
+            filteredModuleStats.map(({ module: m, evolution: ev, ideas: ids }) => (
+              <section
+                key={m}
+                className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900">{m}</h3>
+                  <p className="text-xs text-slate-400">
+                    演进 {ev.length} · 灵感 {ids.length}
+                  </p>
+                </div>
+                {ev.length === 0 && ids.length === 0 ? (
+                  <p className="text-sm text-slate-500">
+                    该板块还没有带标签的演进或灵感。补演进时选板块即可。
+                  </p>
+                ) : null}
+                {ev.map((log) => (
+                  <EvolutionCard key={log.id} log={log} />
+                ))}
+                {ids.map((idea) => (
+                  <article
+                    key={idea.id}
+                    className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StudioBadge tone="muted">灵感</StudioBadge>
+                      <span className="text-xs text-slate-400">
+                        {formatDate(idea.occurredAt || idea.createdAt)}
+                      </span>
+                    </div>
+                    <h4 className="mt-1 text-sm font-semibold text-slate-900">{idea.title}</h4>
+                    {idea.oneLineIdea ? (
+                      <p className="mt-1 text-sm text-slate-600">{idea.oneLineIdea}</p>
+                    ) : null}
+                  </article>
+                ))}
+              </section>
+            ))
+          )}
         </div>
       )}
 
@@ -452,12 +497,37 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+      className={cn("tab-pill", active ? "tab-pill-active" : "tab-pill-idle")}
+      style={
         active
-          ? "bg-slate-900 text-white"
-          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-      )}
+          ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+          : { backgroundColor: "#ffffff", color: "#334155" }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function ChipButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn("chip-pill", active ? "chip-pill-active" : "chip-pill-idle")}
+      style={
+        active
+          ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+          : { backgroundColor: "#ffffff", color: "#475569" }
+      }
     >
       {children}
     </button>

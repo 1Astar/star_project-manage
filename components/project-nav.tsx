@@ -33,11 +33,14 @@ export function ProjectNav({ routeId }: { routeId: string }) {
             key={tab.label}
             href={href}
             className={cn(
-              "rounded-xl px-3 py-1.5 text-sm font-medium transition",
-              active
-                ? "bg-indigo-600 text-white"
-                : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+              "tab-pill",
+              active ? "tab-pill-active" : "tab-pill-idle"
             )}
+            style={
+              active
+                ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+                : { backgroundColor: "#ffffff", color: "#334155" }
+            }
           >
             {tab.label}
           </Link>

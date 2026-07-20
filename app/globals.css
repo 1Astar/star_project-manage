@@ -78,3 +78,114 @@ textarea {
   height: 100%;
   background: linear-gradient(90deg, #4f46e5, #6366f1);
 }
+
+/*
+ * 按钮 / Tab / Chip：颜色全部 !important + -webkit-text-fill-color，
+ * 避免部分环境 button 继承深色字叠深蓝底变成「纯黑块」。
+ * 选中态只用浅底深字，不再用「深蓝底 + 白字」。
+ */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #4338ca !important;
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+  -webkit-text-fill-color: #1e293b;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #cbd5e1 !important;
+  cursor: pointer;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #f8fafc !important;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tab-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease;
+  text-decoration: none !important;
+}
+
+.tab-pill-active {
+  background-color: #e0e7ff !important;
+  color: #312e81 !important;
+  -webkit-text-fill-color: #312e81;
+  box-shadow: inset 0 0 0 1px #a5b4fc;
+}
+
+.tab-pill-idle {
+  background-color: #ffffff !important;
+  color: #334155 !important;
+  -webkit-text-fill-color: #334155;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.tab-pill-idle:hover {
+  background-color: #f8fafc !important;
+}
+
+.chip-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+}
+
+.chip-pill-active {
+  background-color: #e0e7ff !important;
+  color: #312e81 !important;
+  -webkit-text-fill-color: #312e81;
+  box-shadow: inset 0 0 0 1px #a5b4fc;
+}
+
+.chip-pill-idle {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  -webkit-text-fill-color: #475569;
+  box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+
+.chip-pill-idle:hover {
+  background-color: #f8fafc !important;
+}

@@ -658,6 +658,28 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
   const snapshot = await getStudioSnapshot();
   if (!snapshot.projects.some((p) => p.id === input.projectId)) throw new Error("关联项目不存在");
 
+  const { resolveModuleForImport } = await import("@/lib/studio/infer-modules");
+  const {
+    appendPendingModuleMarker,
+    needsModuleFill,
+  } = await import("@/lib/studio/inbound-rules");
+
+  const textForInfer = [input.title, input.after, input.before, input.reason]
+    .filter(Boolean)
+    .join("\n");
+  const resolved = resolveModuleForImport(input.module, textForInfer, input.projectId);
+  let decision = input.decision ?? "";
+  let reason = input.reason ?? "";
+  if (
+    needsModuleFill({ relatedProjectId: input.projectId, module: resolved.module })
+  ) {
+    decision = appendPendingModuleMarker(decision);
+  } else if (resolved.inferred && !reason.includes("关键词推断")) {
+    reason = reason
+      ? `${reason}；板块由关键词推断为「${resolved.module}」`
+      : `板块由关键词推断为「${resolved.module}」`;
+  }
+
   const log: EvolutionLog = {
     id: studioId("evo-"),
     title: input.title.trim(),
@@ -665,9 +687,9 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
     logType: input.logType,
     before: input.before ?? "",
     after: input.after ?? "",
-    reason: input.reason ?? "",
-    decision: input.decision ?? "",
-    module: (input.module ?? "").trim(),
+    reason,
+    decision,
+    module: resolved.module,
     releaseTag: input.releaseTag?.trim() || null,
     createdAt: nowIso(),
   };
@@ -1144,6 +1166,9 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
   synced: number;
   releases: StudioRelease[];
   changelogFilled: number;
+  /** 从各版 Release body 条目导入为演进的数量 */
+  evolutionImported: number;
+  evolutionSkipped: number;
 }> {
   const snapshot = await getStudioSnapshot();
   const project = snapshot.projects.find((p) => p.id === projectId);
@@ -1260,7 +1285,7 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     return compareVersionTags(b.tag, a.tag);
   });
 
-  return writeSupabase(
+  const synced = await writeSupabase(
     async () => {
       const client = sb();
       await client.from("studio_releases").delete().eq("project_id", projectId);
@@ -1282,6 +1307,14 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
       return { synced: next.length, releases: next, changelogFilled };
     }
   );
+
+  // 同步后：把各版说明条目导入为带 releaseTag 的演进，并关键词推断板块
+  const bodyImport = await importReleaseBodiesAsEvolution(projectId);
+  return {
+    ...synced,
+    evolutionImported: bodyImport.imported,
+    evolutionSkipped: bodyImport.skipped,
+  };
 }
 
 /**
@@ -1384,4 +1417,151 @@ export async function publishStudioProjectRelease(input: {
     modules: modulesForReleaseTag(tag, evolution),
     attachedEvolutionIds,
   };
+}
+
+/**
+ * 从 CHANGELOG.md（或传入 markdown）导入各版本条目为演进：
+ * 每条带 releaseTag，并按关键词推断板块。
+ */
+export async function importChangelogAsEvolution(input: {
+  projectId: string;
+  markdown?: string;
+  /** 默认读仓库根 CHANGELOG.md */
+  fromRepoFile?: boolean;
+}): Promise<{
+  imported: number;
+  skipped: number;
+  inferredModules: number;
+  pendingModules: number;
+  items: Array<{ id: string; title: string; releaseTag: string | null; module: string }>;
+}> {
+  const {
+    buildChangelogEvolutionItems,
+    filterNewChangelogItems,
+    readRepoChangelog,
+  } = await import("@/lib/studio/import-changelog");
+
+  const snapshot = await getStudioSnapshot();
+  if (!snapshot.projects.some((p) => p.id === input.projectId)) {
+    throw new Error("项目不存在");
+  }
+
+  const md =
+    input.markdown?.trim() ||
+    (input.fromRepoFile !== false && !input.markdown ? readRepoChangelog() : "");
+  if (!md.trim()) throw new Error("无 CHANGELOG 内容可导入");
+
+  const built = buildChangelogEvolutionItems(md, input.projectId);
+  const fresh = filterNewChangelogItems(built, snapshot.evolutionLogs, input.projectId);
+  const skipped = built.length - fresh.length;
+
+  const items: Array<{
+    id: string;
+    title: string;
+    releaseTag: string | null;
+    module: string;
+  }> = [];
+  let inferredModules = 0;
+  let pendingModules = 0;
+
+  for (const item of fresh) {
+    if (item.module) inferredModules += 1;
+    else pendingModules += 1;
+    const log = await createStudioEvolution({
+      title: item.title,
+      projectId: input.projectId,
+      logType: item.logType,
+      after: item.after,
+      reason: item.reason,
+      decision: item.decision,
+      module: item.module || undefined,
+      releaseTag: item.releaseTag,
+    });
+    items.push({
+      id: log.id,
+      title: log.title,
+      releaseTag: log.releaseTag,
+      module: log.module,
+    });
+  }
+
+  return {
+    imported: items.length,
+    skipped,
+    inferredModules,
+    pendingModules,
+    items,
+  };
+}
+
+/**
+ * 从已同步的 GitHub Release/Tag body 条目导入为演进（带 releaseTag + 关键词板块）。
+ * 用于「同步版本」后把各版说明拆成可追溯需求/变更。
+ */
+export async function importReleaseBodiesAsEvolution(
+  projectId: string
+): Promise<{
+  imported: number;
+  skipped: number;
+  inferredModules: number;
+  pendingModules: number;
+}> {
+  const { stripBulletDecor } = await import("@/lib/studio/import-changelog");
+  const { resolveModuleForImport } = await import("@/lib/studio/infer-modules");
+
+  const snapshot = await getStudioSnapshot();
+  if (!snapshot.projects.some((p) => p.id === projectId)) {
+    throw new Error("项目不存在");
+  }
+
+  const releases = (snapshot.releases ?? []).filter((r) => r.projectId === projectId);
+  const have = new Set(
+    snapshot.evolutionLogs
+      .filter((e) => e.projectId === projectId)
+      .map((e) => `${e.releaseTag ?? ""}::${e.title}`)
+  );
+
+  let imported = 0;
+  let skipped = 0;
+  let inferredModules = 0;
+  let pendingModules = 0;
+
+  for (const rel of releases) {
+    const bullets = (rel.body ?? "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("- "))
+      .map((l) => l.replace(/^-\s*/, "").trim())
+      .filter((l) => l && !/完整变更见/.test(l) && !/^\*\*涉及板块/.test(l));
+
+    for (const bullet of bullets) {
+      const clean = stripBulletDecor(bullet);
+      const title =
+        clean.length > 80 ? `${clean.slice(0, 77)}…` : clean || `${rel.tag} 变更`;
+      const key = `${rel.tag}::${title}`;
+      if (have.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      const resolved = resolveModuleForImport(null, `${title}\n${bullet}`, projectId);
+      if (resolved.module) inferredModules += 1;
+      else pendingModules += 1;
+
+      const log = await createStudioEvolution({
+        title,
+        projectId,
+        logType: "feature_add",
+        after: bullet,
+        reason: resolved.module
+          ? `自 Release ${rel.tag} 说明导入；板块推断为「${resolved.module}」`
+          : `自 Release ${rel.tag} 说明导入；未能推断板块`,
+        module: resolved.module || undefined,
+        releaseTag: rel.tag,
+      });
+      have.add(`${log.releaseTag ?? ""}::${log.title}`);
+      imported += 1;
+    }
+  }
+
+  return { imported, skipped, inferredModules, pendingModules };
 }
