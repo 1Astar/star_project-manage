@@ -10,6 +10,13 @@
 
 ---
 
+## v1.9.1 · 2026-07-20
+
+- **Tag 同步增强**：无 Release body 时用相邻 Tag 的 commits 生成「本版变更」；补 Tag 发布时间
+- **发版时间线**：展示本版更新内容 + 板块徽章；无板块时弱提示
+- **MCP**：`capture_idea` / `add_evolution` / `add_decision` 强化板块字段；缺板块返回 warning
+- **发版**：新 MCP `publish_release` + `POST .../releases/publish` — 按板块汇总演进并创建 GitHub Release，未挂版本演进可挂到本 tag
+
 ## v1.9.0 · 2026-07-20
 
 - **迭代记录升级**：`/projects/[id]/evolution` 多 tab — 项目发版时间线 + 功能板块过滤

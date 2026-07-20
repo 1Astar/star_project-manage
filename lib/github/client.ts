@@ -143,3 +143,71 @@ export async function fetchGitHubTags(
   url.searchParams.set("per_page", String(perPage));
   return githubFetch<GitHubTag[]>(url.toString());
 }
+
+/** 单个 commit 元信息（取作者时间） */
+export async function fetchCommitDate(
+  repoFullName: string,
+  sha: string
+): Promise<string | null> {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const data = await githubFetch<{
+    commit?: { author?: { date?: string }; committer?: { date?: string } };
+  }>(`https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(sha)}`);
+  return data.commit?.author?.date ?? data.commit?.committer?.date ?? null;
+}
+
+/** base...head 之间的 commits（不含 base，含 head） */
+export async function fetchCompareCommits(
+  repoFullName: string,
+  base: string,
+  head: string
+): Promise<GitHubCommit[]> {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const url = `https://api.github.com/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+  const data = await githubFetch<{ commits?: GitHubCommit[] }>(url);
+  return data.commits ?? [];
+}
+
+export type CreateGitHubReleaseInput = {
+  tag: string;
+  name?: string;
+  body?: string;
+  /** 若 tag 尚不存在，用该 commitish 创建（分支名或 sha） */
+  targetCommitish?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  generateReleaseNotes?: boolean;
+};
+
+/** 创建 GitHub Release（tag 已存在或一并指定 target_commitish） */
+export async function createGitHubRelease(
+  repoFullName: string,
+  input: CreateGitHubReleaseInput
+): Promise<GitHubRelease> {
+  const { owner, repo } = parseRepoFullName(repoFullName);
+  const payload: Record<string, unknown> = {
+    tag_name: input.tag,
+    name: input.name || input.tag,
+    body: input.body ?? "",
+    draft: Boolean(input.draft),
+    prerelease: Boolean(input.prerelease),
+  };
+  if (input.targetCommitish) payload.target_commitish = input.targetCommitish;
+  if (input.generateReleaseNotes) payload.generate_release_notes = true;
+
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getGitHubToken()}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`创建 Release 失败 (${res.status})：${body.slice(0, 300)}`);
+  }
+  return (await res.json()) as GitHubRelease;
+}
