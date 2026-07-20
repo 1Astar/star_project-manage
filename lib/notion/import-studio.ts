@@ -14,6 +14,11 @@ import {
   parseProjectBodyFromBlocks,
 } from "@/lib/notion/parse";
 import type { StudioSnapshot } from "@/lib/studio/store";
+import {
+  appendPendingModuleMarker,
+  needsModuleFill,
+  type PendingModuleItem,
+} from "@/lib/studio/inbound-rules";
 import type {
   Asset,
   AssetType,
@@ -164,8 +169,11 @@ export interface NotionImportResult {
     evolutionLogs: number;
     tasks: number;
     assets: number;
+    /** 缺板块但仍导入的条数 */
+    pendingModuleFill: number;
   };
   warnings: string[];
+  pendingModuleFill: PendingModuleItem[];
 }
 
 function projectIdFromNotion(notionPageId: string) {
@@ -547,6 +555,58 @@ export async function fetchNotionStudioSnapshot(
     projectColumnDefs: [],
   };
 
+  const pendingModuleFill: PendingModuleItem[] = [];
+
+  snapshot.ideas = snapshot.ideas.map((idea) => {
+    if (
+      !needsModuleFill({
+        relatedProjectId: idea.relatedProjectId,
+        module: idea.relatedModule,
+      })
+    ) {
+      return idea;
+    }
+    pendingModuleFill.push({
+      kind: "idea",
+      id: idea.id,
+      title: idea.title,
+      projectId: idea.relatedProjectId,
+      reason: "已关联项目但未填板块",
+    });
+    return {
+      ...idea,
+      decisionNotes: appendPendingModuleMarker(idea.decisionNotes),
+    };
+  });
+
+  snapshot.evolutionLogs = snapshot.evolutionLogs.map((log) => {
+    if (
+      !needsModuleFill({
+        relatedProjectId: log.projectId,
+        module: log.module,
+      })
+    ) {
+      return log;
+    }
+    pendingModuleFill.push({
+      kind: "evolution",
+      id: log.id,
+      title: log.title,
+      projectId: log.projectId,
+      reason: "演进未填板块",
+    });
+    return {
+      ...log,
+      decision: appendPendingModuleMarker(log.decision),
+    };
+  });
+
+  if (pendingModuleFill.length) {
+    warnings.push(
+      `${pendingModuleFill.length} 条已标记「待补齐·板块」（仍已导入，可事后补 relatedModule/module）`
+    );
+  }
+
   return {
     snapshot,
     stats: {
@@ -555,7 +615,9 @@ export async function fetchNotionStudioSnapshot(
       evolutionLogs: evolutionLogs.length,
       tasks: tasks.length,
       assets: assets.length,
+      pendingModuleFill: pendingModuleFill.length,
     },
     warnings,
+    pendingModuleFill,
   };
 }

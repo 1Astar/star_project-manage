@@ -68,6 +68,55 @@ function slimProject(project: NonNullable<Awaited<ReturnType<typeof getProjectBy
 
 export function registerWorkspaceTools(server: McpServer) {
   server.registerTool(
+    "get_ai_rules",
+    {
+      title: "Get AI Rules",
+      description:
+        "读取 Star PM 统一 AI 规则正文（docs/ai/CANONICAL_RULES.md）。大批量写入/改代码前应先调用。",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const { loadCanonicalAiRules } = await import("@/lib/studio/compare-sources");
+        const rules = await loadCanonicalAiRules();
+        await logAiAction({ action: "get_ai_rules", payload: { path: rules.path } });
+        return mcpJson({
+          ok: true,
+          path: rules.path,
+          content: rules.content,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "get_ai_rules 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "compare_sources",
+    {
+      title: "Compare Sources",
+      description:
+        "对比项目 Git / Vercel production / Studio 同步记录，判断谁最新，避免用旧版本覆盖。改代码前建议调用。",
+      inputSchema: {
+        projectId: z.string().min(1),
+      },
+    },
+    async (input) => {
+      try {
+        const { compareProjectSources } = await import("@/lib/studio/compare-sources");
+        const result = await compareProjectSources(input.projectId);
+        await logAiAction({
+          action: "compare_sources",
+          payload: { projectId: input.projectId, newest: result.newest, diverged: result.diverged },
+        });
+        return mcpJson({ ok: true, ...result });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "compare_sources 失败");
+      }
+    }
+  );
+
+  server.registerTool(
     "get_project",
     {
       title: "Get Project",

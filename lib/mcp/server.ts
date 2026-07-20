@@ -161,9 +161,11 @@ export function registerStarPmTools(server: McpServer) {
           message: result.parentAutoLinked
             ? `已进入灵感收件箱，并自动挂父：${result.parentLinkReason}`
             : "已进入灵感收件箱",
-          warning: input.relatedModule?.trim()
-            ? undefined
-            : "未填写 relatedModule（板块）。发版按板块追溯时会缺失，建议补写。",
+          warning: result.pendingModuleFill
+            ? "已标记【待补齐·板块】（已关联项目但未填 relatedModule），仍已入库。"
+            : input.relatedModule?.trim()
+              ? undefined
+              : "未填写 relatedModule（板块）。发版按板块追溯时会缺失，建议补写。",
           ...result,
         });
       } catch (error) {
