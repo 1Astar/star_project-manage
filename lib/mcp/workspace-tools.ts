@@ -5,6 +5,8 @@ import {
   createStudioAsset,
   createStudioEvolution,
   createStudioProject,
+  importChangelogAsEvolution,
+  importReleaseBodiesAsEvolution,
   updateStudioIdea,
   updateStudioProject,
 } from "@/lib/studio/mutations";
@@ -380,7 +382,9 @@ export function registerWorkspaceTools(server: McpServer) {
         module: z
           .string()
           .optional()
-          .describe("功能板块（强烈建议）：工作台/项目库/灵感/需求任务/迭代记录/资源中心/Git/设置"),
+          .describe(
+            "功能板块；留空时按标题/内容关键词自动推断（工作台/项目库/灵感/需求任务/迭代记录/资源中心/Git/设置）"
+          ),
         releaseTag: z.string().optional().describe("关联 GitHub Release/Tag，如 v1.9.1"),
       },
     },
@@ -405,7 +409,7 @@ export function registerWorkspaceTools(server: McpServer) {
           ok: true,
           warning: log.module?.trim()
             ? undefined
-            : "未填写 module（板块）。发版汇总时将归入「未分板块」，建议补写。",
+            : "未能填写或推断 module（板块）。发版汇总时将归入「未分板块」，建议补写。",
           evolution: {
             id: log.id,
             title: log.title,
@@ -593,6 +597,53 @@ export function registerWorkspaceTools(server: McpServer) {
         return mcpJson({ ok: true, ...result, project: slimProject(result.project) });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "generate_brief 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "import_changelog_evolution",
+    {
+      title: "Import Changelog Evolution",
+      description:
+        "将 CHANGELOG 或已同步 Release body 的各版本条目导入为演进：每条带 releaseTag，并按关键词推断功能板块。未传 markdown 时默认读仓库 CHANGELOG.md；传 fromReleases:true 则从已同步 Release 说明导入。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        markdown: z.string().optional().describe("可选：直接传 CHANGELOG 全文"),
+        fromReleases: z
+          .boolean()
+          .optional()
+          .describe("true=从已同步的 Release/Tag body 导入，忽略 markdown"),
+      },
+    },
+    async (input) => {
+      try {
+        if (input.fromReleases) {
+          const result = await importReleaseBodiesAsEvolution(input.projectId);
+          await logAiAction({
+            action: "import_release_bodies_evolution",
+            payload: { projectId: input.projectId, ...result },
+          });
+          return mcpJson({ ok: true, source: "releases", ...result });
+        }
+        const result = await importChangelogAsEvolution({
+          projectId: input.projectId,
+          markdown: input.markdown,
+          fromRepoFile: !input.markdown,
+        });
+        await logAiAction({
+          action: "import_changelog_evolution",
+          payload: {
+            projectId: input.projectId,
+            imported: result.imported,
+            skipped: result.skipped,
+          },
+        });
+        return mcpJson({ ok: true, source: "changelog", ...result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "import_changelog_evolution 失败"
+        );
       }
     }
   );

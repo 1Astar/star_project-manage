@@ -11,6 +11,7 @@ import {
   appendPendingModuleMarker,
   needsModuleFill,
 } from "@/lib/studio/inbound-rules";
+import { resolveModuleForImport } from "@/lib/studio/infer-modules";
 
 const PRIORITIES = new Set<IdeaPriority>(["P0", "P1", "P2", "P3"]);
 
@@ -71,10 +72,25 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
     }
   }
 
+  const moduleResolved = resolveModuleForImport(
+    fields.relatedModule,
+    [fields.title, fields.summary, fields.rawThought, fields.whyItMatters]
+      .filter(Boolean)
+      .join("\n"),
+    fields.relatedProjectId
+  );
   const pendingModuleFill = needsModuleFill({
     relatedProjectId: fields.relatedProjectId,
-    module: fields.relatedModule,
+    module: moduleResolved.module,
   });
+  let decisionNotes = fields.decisionNotes ?? "";
+  if (pendingModuleFill) {
+    decisionNotes = appendPendingModuleMarker(decisionNotes);
+  } else if (moduleResolved.inferred && !decisionNotes.includes("关键词推断")) {
+    decisionNotes = decisionNotes
+      ? `${decisionNotes}\n板块由关键词推断为「${moduleResolved.module}」`
+      : `板块由关键词推断为「${moduleResolved.module}」`;
+  }
 
   const idea = await createStudioIdea({
     title: fields.title,
@@ -94,12 +110,10 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
         : undefined,
     relatedProjectId: fields.relatedProjectId,
     relatedIdeaId,
-    relatedModule: fields.relatedModule,
+    relatedModule: moduleResolved.module,
     status: fields.status,
     suggestedNextStep: fields.suggestedNextStep,
-    decisionNotes: pendingModuleFill
-      ? appendPendingModuleMarker(fields.decisionNotes)
-      : fields.decisionNotes,
+    decisionNotes,
     evolutionNotes: fields.evolutionNotes,
     relatedAssetsNote: fields.relatedAssetsNote,
     occurredAt: fields.occurredAt,

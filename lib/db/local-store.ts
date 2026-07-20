@@ -39,6 +39,7 @@ import type {
   Iteration,
   LinkEntityType,
   LinkRelationType,
+  ModuleNode,
   PoolColumnDef,
   PoolColumnType,
   Project,
@@ -1995,6 +1996,106 @@ export async function updateProjectPoolTagOptions(projectId: string, tagOptions:
   project.pool_tag_options = tagOptions.map((t) => t.trim()).filter(Boolean);
   await saveDb(db);
   return project;
+}
+
+/** 项目下全部模块（各迭代），按 sort_order */
+export async function listProjectModules(projectId: string): Promise<ModuleNode[]> {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) return [];
+  const iterIds = new Set(
+    db.iterations.filter((i) => i.project_id === project.id).map((i) => i.id)
+  );
+  return db.modules
+    .filter((m) => iterIds.has(m.iteration_id))
+    .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh"));
+}
+
+/** 新增模块：顶级挂需求池迭代；子模块挂在父同迭代（最多两级） */
+export async function createProjectModule(input: {
+  projectId: string;
+  name: string;
+  parentId?: string | null;
+}): Promise<ModuleNode> {
+  const name = input.name.trim();
+  if (!name) throw new Error("模块名不能为空");
+
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === input.projectId || p.slug === input.projectId);
+  if (!project) throw new Error("项目不存在");
+
+  let iterationId: string;
+  let parentId: string | null = null;
+  let level: 1 | 2 = 1;
+
+  if (input.parentId) {
+    const parent = db.modules.find((m) => m.id === input.parentId);
+    if (!parent) throw new Error("父模块不存在");
+    const parentIter = db.iterations.find((i) => i.id === parent.iteration_id);
+    if (!parentIter || parentIter.project_id !== project.id) {
+      throw new Error("父模块不属于本项目");
+    }
+    if (parent.level !== 1) throw new Error("最多两级模块，请挂在一级模块下");
+    iterationId = parent.iteration_id;
+    parentId = parent.id;
+    level = 2;
+  } else {
+    const pool = await ensurePoolIteration(project.id);
+    iterationId = pool.id;
+  }
+
+  const siblings = db.modules.filter(
+    (m) => m.iteration_id === iterationId && m.parent_id === parentId
+  );
+  const mod: ModuleNode = {
+    id: uid("mod-"),
+    iteration_id: iterationId,
+    parent_id: parentId,
+    name,
+    level,
+    estimate_level: "requirement",
+    module_estimate_hours: null,
+    sort_order: siblings.length + 1,
+  };
+  db.modules.push(mod);
+  await saveDb(db);
+  return mod;
+}
+
+export async function updateProjectModule(input: {
+  moduleId: string;
+  name: string;
+}): Promise<ModuleNode> {
+  const name = input.name.trim();
+  if (!name) throw new Error("模块名不能为空");
+  const db = await readDb();
+  const mod = db.modules.find((m) => m.id === input.moduleId);
+  if (!mod) throw new Error("模块不存在");
+  mod.name = name;
+  await saveDb(db);
+  return mod;
+}
+
+export async function deleteProjectModule(moduleId: string): Promise<void> {
+  const db = await readDb();
+  const root = db.modules.find((m) => m.id === moduleId);
+  if (!root) throw new Error("模块不存在");
+
+  const toRemove = new Set<string>([moduleId]);
+  for (const m of db.modules) {
+    if (m.parent_id && toRemove.has(m.parent_id)) toRemove.add(m.id);
+  }
+  // 再扫一遍以防多层（当前最多两级）
+  for (const m of db.modules) {
+    if (m.parent_id && toRemove.has(m.parent_id)) toRemove.add(m.id);
+  }
+
+  db.modules = db.modules.filter((m) => !toRemove.has(m.id));
+  for (const r of db.requirements) {
+    if (r.module_l1_id && toRemove.has(r.module_l1_id)) r.module_l1_id = null;
+    if (r.module_l2_id && toRemove.has(r.module_l2_id)) r.module_l2_id = null;
+  }
+  await saveDb(db);
 }
 
 export async function claimShareAssignee(shareToken: string, displayName: string) {

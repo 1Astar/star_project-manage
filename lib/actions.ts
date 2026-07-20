@@ -8,6 +8,7 @@ import {
   createPoolColumnDef,
   createPoolRequirement,
   createPlanningIteration,
+  createProjectModule,
   createRequirementLink,
   createBug,
   createProjectMember,
@@ -15,6 +16,7 @@ import {
   deletePoolColumnDef,
   deletePoolRequirement,
   deletePoolRequirements,
+  deleteProjectModule,
   dedupePoolRequirements,
   deleteProjectMember,
   deleteRequirementLink,
@@ -23,6 +25,7 @@ import {
   getProjects,
   getShareLinkByToken,
   listBugsByProject,
+  listProjectModules,
   promotePoolRequirement,
   syncStudioIdeasIntoPool,
   toggleShareLink,
@@ -33,6 +36,7 @@ import {
   updatePoolRequirement,
   updateProjectGitSettings,
   updateProjectMember,
+  updateProjectModule,
   updateProjectPoolTagOptions,
   updateRequirement,
   updateRoleTaskWithPermission,
@@ -558,4 +562,47 @@ export async function updateTaskStatusAction(input: {
     projectId: input.projectId,
     shareToken: input.shareToken,
   });
+}
+
+export async function fetchProjectModules(projectId: string) {
+  return listProjectModules(projectId);
+}
+
+export async function createProjectModuleAction(input: {
+  projectId: string;
+  projectSlug: string;
+  name: string;
+  parentId?: string | null;
+}) {
+  const mod = await createProjectModule({
+    projectId: input.projectId,
+    name: input.name,
+    parentId: input.parentId,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return mod;
+}
+
+export async function updateProjectModuleAction(input: {
+  projectSlug: string;
+  moduleId: string;
+  name: string;
+}) {
+  const mod = await updateProjectModule({
+    moduleId: input.moduleId,
+    name: input.name,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return mod;
+}
+
+export async function deleteProjectModuleAction(input: {
+  projectSlug: string;
+  moduleId: string;
+}) {
+  await deleteProjectModule(input.moduleId);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
 }
