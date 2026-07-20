@@ -36,6 +36,11 @@ export function ProjectNav({ routeId }: { routeId: string }) {
               "tab-pill",
               active ? "tab-pill-active" : "tab-pill-idle"
             )}
+            style={
+              active
+                ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+                : { backgroundColor: "#ffffff", color: "#334155" }
+            }
           >
             {tab.label}
           </Link>

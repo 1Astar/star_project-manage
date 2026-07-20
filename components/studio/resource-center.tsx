@@ -178,6 +178,7 @@ export function ResourceCenter({ project, assets, releases }: Props) {
               onClick={syncReleases}
               title={project.githubRepo ? "从 GitHub 同步 Release/Tag" : "请先绑定 GitHub 仓库"}
               className="btn-secondary"
+              style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
             >
               {pending ? "同步中…" : "同步版本"}
             </button>

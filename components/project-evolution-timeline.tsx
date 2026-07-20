@@ -198,6 +198,7 @@ export function ProjectEvolutionTimeline({
             disabled={pending || !project.githubRepo}
             onClick={syncReleases}
             className="btn-secondary"
+            style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
             title={project.githubRepo ? "从 GitHub 同步 Release/Tag" : "请先配置 GitHub 仓库"}
           >
             {pending ? "同步中…" : "同步版本"}
@@ -206,6 +207,7 @@ export function ProjectEvolutionTimeline({
             type="button"
             onClick={() => setShowForm((v) => !v)}
             className="btn-secondary"
+            style={{ backgroundColor: "#ffffff", color: "#1e293b", border: "1px solid #cbd5e1" }}
           >
             {showForm ? "收起表单" : "+ 补一条演进"}
           </button>
@@ -496,6 +498,11 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn("tab-pill", active ? "tab-pill-active" : "tab-pill-idle")}
+      style={
+        active
+          ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+          : { backgroundColor: "#ffffff", color: "#334155" }
+      }
     >
       {children}
     </button>
@@ -515,12 +522,12 @@ function ChipButton({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "rounded-lg px-2.5 py-1 text-xs font-medium transition",
+      className={cn("chip-pill", active ? "chip-pill-active" : "chip-pill-idle")}
+      style={
         active
-          ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-          : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-      )}
+          ? { backgroundColor: "#e0e7ff", color: "#312e81" }
+          : { backgroundColor: "#ffffff", color: "#475569" }
+      }
     >
       {children}
     </button>
