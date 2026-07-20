@@ -65,9 +65,12 @@ export function StudioGitSettings({ project }: { project: Project }) {
             <input
               value={githubRepo}
               onChange={(e) => setGithubRepo(e.target.value)}
-              placeholder="1Astar/star_project-manage"
+              placeholder="1Astar/chris-phone 或完整 GitHub URL"
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
             />
+            <p className="mt-1 text-xs text-slate-400">
+              支持 owner/repo 或 https://github.com/owner/repo
+            </p>
           </label>
           <label className="block text-sm">
             <span className="text-slate-500">分支</span>

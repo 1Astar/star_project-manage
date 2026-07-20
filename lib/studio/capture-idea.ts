@@ -7,6 +7,11 @@ import {
   findDuplicateCandidates,
   suggestParentIdea,
 } from "@/lib/studio/capture-relation";
+import {
+  appendPendingModuleMarker,
+  needsModuleFill,
+} from "@/lib/studio/inbound-rules";
+import { resolveModuleForImport } from "@/lib/studio/infer-modules";
 
 const PRIORITIES = new Set<IdeaPriority>(["P0", "P1", "P2", "P3"]);
 
@@ -18,6 +23,8 @@ export type CaptureIdeaResult = {
   parentLinkReason: string | null;
   parentAlternatives: Array<{ id: string; title: string; score: number; reason: string }>;
   duplicateSkipped: boolean;
+  /** 已关联项目但缺板块 → 待补齐 */
+  pendingModuleFill: boolean;
 };
 
 export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureIdeaResult> {
@@ -65,6 +72,26 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
     }
   }
 
+  const moduleResolved = resolveModuleForImport(
+    fields.relatedModule,
+    [fields.title, fields.summary, fields.rawThought, fields.whyItMatters]
+      .filter(Boolean)
+      .join("\n"),
+    fields.relatedProjectId
+  );
+  const pendingModuleFill = needsModuleFill({
+    relatedProjectId: fields.relatedProjectId,
+    module: moduleResolved.module,
+  });
+  let decisionNotes = fields.decisionNotes ?? "";
+  if (pendingModuleFill) {
+    decisionNotes = appendPendingModuleMarker(decisionNotes);
+  } else if (moduleResolved.inferred && !decisionNotes.includes("关键词推断")) {
+    decisionNotes = decisionNotes
+      ? `${decisionNotes}\n板块由关键词推断为「${moduleResolved.module}」`
+      : `板块由关键词推断为「${moduleResolved.module}」`;
+  }
+
   const idea = await createStudioIdea({
     title: fields.title,
     rawInput: fields.rawThought,
@@ -83,10 +110,10 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
         : undefined,
     relatedProjectId: fields.relatedProjectId,
     relatedIdeaId,
-    relatedModule: fields.relatedModule,
+    relatedModule: moduleResolved.module,
     status: fields.status,
     suggestedNextStep: fields.suggestedNextStep,
-    decisionNotes: fields.decisionNotes,
+    decisionNotes,
     evolutionNotes: fields.evolutionNotes,
     relatedAssetsNote: fields.relatedAssetsNote,
     occurredAt: fields.occurredAt,
@@ -102,5 +129,6 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
       ? parentAlternatives.filter((a) => a.id !== relatedIdeaId).slice(0, 3)
       : parentAlternatives.slice(0, 5),
     duplicateSkipped: force,
+    pendingModuleFill,
   };
 }

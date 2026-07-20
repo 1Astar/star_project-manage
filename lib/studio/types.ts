@@ -144,6 +144,8 @@ export interface Project {
   body: ProjectBody;
   /** 父项目 id；仅支持一层，null 为顶层 */
   parentId: string | null;
+  /** 功能板块名单；空则用项目默认（见 project-modules） */
+  featureModules: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -157,6 +159,10 @@ export interface EvolutionLog {
   after: string;
   reason: string;
   decision: string;
+  /** 功能板块（如「资源中心」） */
+  module: string;
+  /** 可选挂到某个 Release/Tag */
+  releaseTag: string | null;
   createdAt: string;
 }
 

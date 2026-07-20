@@ -14,6 +14,12 @@ import {
   parseProjectBodyFromBlocks,
 } from "@/lib/notion/parse";
 import type { StudioSnapshot } from "@/lib/studio/store";
+import {
+  appendPendingModuleMarker,
+  needsModuleFill,
+  type PendingModuleItem,
+} from "@/lib/studio/inbound-rules";
+import { resolveModuleForImport } from "@/lib/studio/infer-modules";
 import type {
   Asset,
   AssetType,
@@ -164,8 +170,11 @@ export interface NotionImportResult {
     evolutionLogs: number;
     tasks: number;
     assets: number;
+    /** 缺板块但仍导入的条数 */
+    pendingModuleFill: number;
   };
   warnings: string[];
+  pendingModuleFill: PendingModuleItem[];
 }
 
 function projectIdFromNotion(notionPageId: string) {
@@ -246,6 +255,7 @@ async function mapNotionPageToProject(
     portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
     customFields: {},
     parentId: null,
+    featureModules: [],
     body,
     createdAt: page.created_time || now,
     updatedAt: now,
@@ -337,6 +347,8 @@ function mapEvolutionPage(page: NotionPage, projectIdByNotion: Map<string, strin
     after: getPropertyText(page, "变化后", "After"),
     reason: getPropertyText(page, "为什么", "原因", "Reason"),
     decision: getPropertyText(page, "结论", "决策", "Decision"),
+    module: getPropertyText(page, "板块", "模块", "Module"),
+    releaseTag: getPropertyText(page, "版本", "Release", "Tag") || null,
     createdAt: page.created_time || new Date().toISOString(),
   };
 }
@@ -458,6 +470,7 @@ function mapDatabasePages(
         portfolioValue: getPropertyText(page, "作品集价值", "作品集"),
         customFields: {},
         parentId: null,
+        featureModules: [],
         body: {
           ...EMPTY_BODY,
           initialThought: getPropertyText(page, "初始想法", "想法"),
@@ -543,6 +556,79 @@ export async function fetchNotionStudioSnapshot(
     projectColumnDefs: [],
   };
 
+  const pendingModuleFill: PendingModuleItem[] = [];
+  let inferredModuleCount = 0;
+
+  snapshot.ideas = snapshot.ideas.map((idea) => {
+    const resolved = resolveModuleForImport(
+      idea.relatedModule,
+      [idea.title, idea.oneLineIdea, idea.rawInput, idea.whyItMatters]
+        .filter(Boolean)
+        .join("\n"),
+      idea.relatedProjectId
+    );
+    if (resolved.inferred) inferredModuleCount += 1;
+    const withModule = { ...idea, relatedModule: resolved.module };
+    if (
+      !needsModuleFill({
+        relatedProjectId: withModule.relatedProjectId,
+        module: withModule.relatedModule,
+      })
+    ) {
+      return withModule;
+    }
+    pendingModuleFill.push({
+      kind: "idea",
+      id: withModule.id,
+      title: withModule.title,
+      projectId: withModule.relatedProjectId,
+      reason: "已关联项目但未填板块（关键词未能推断）",
+    });
+    return {
+      ...withModule,
+      decisionNotes: appendPendingModuleMarker(withModule.decisionNotes),
+    };
+  });
+
+  snapshot.evolutionLogs = snapshot.evolutionLogs.map((log) => {
+    const resolved = resolveModuleForImport(
+      log.module,
+      [log.title, log.after, log.before, log.reason].filter(Boolean).join("\n"),
+      log.projectId
+    );
+    if (resolved.inferred) inferredModuleCount += 1;
+    const withModule = { ...log, module: resolved.module };
+    if (
+      !needsModuleFill({
+        relatedProjectId: withModule.projectId,
+        module: withModule.module,
+      })
+    ) {
+      return withModule;
+    }
+    pendingModuleFill.push({
+      kind: "evolution",
+      id: withModule.id,
+      title: withModule.title,
+      projectId: withModule.projectId,
+      reason: "演进未填板块（关键词未能推断）",
+    });
+    return {
+      ...withModule,
+      decision: appendPendingModuleMarker(withModule.decision),
+    };
+  });
+
+  if (inferredModuleCount) {
+    warnings.push(`已按条目关键词推断板块 ${inferredModuleCount} 条`);
+  }
+
+  if (pendingModuleFill.length) {
+    warnings.push(
+      `${pendingModuleFill.length} 条已标记「待补齐·板块」（仍已导入，可事后补 relatedModule/module）`
+    );
+  }
+
   return {
     snapshot,
     stats: {
@@ -551,7 +637,9 @@ export async function fetchNotionStudioSnapshot(
       evolutionLogs: evolutionLogs.length,
       tasks: tasks.length,
       assets: assets.length,
+      pendingModuleFill: pendingModuleFill.length,
     },
     warnings,
+    pendingModuleFill,
   };
 }

@@ -26,6 +26,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "作品集核心项目：手势交互 + 文化学习 + 情绪叙事",
     customFields: {},
     parentId: null,
+    featureModules: [],
     body: {
       initialThought:
         "啊啊啊我想做一个塔罗手势抽牌，还能学小六壬和梅花易数！用摄像头识别手势，抽牌过程要有仪式感。",
@@ -70,6 +71,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "展示产品全流程管理能力 + 技术全栈",
     customFields: {},
     parentId: null,
+    featureModules: [],
     body: {
       initialThought: "宠物 App 和 AI 控制器的工时表散落在 Excel，需要一个轻量 PM 工具。",
       whyThought: "团队只有 1 个后端，需要免登录分享链接让协作方更新任务。",
@@ -107,6 +109,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "商业产品实战经验",
     customFields: {},
     parentId: null,
+    featureModules: [],
     body: {
       initialThought: "优化宠物 App 主页结构、专注横幅、推送模块。",
       whyThought: "公司主线产品，直接影响用户留存。",
@@ -144,6 +147,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "IoT / 控制器商业交付",
     customFields: {},
     parentId: null,
+    featureModules: [],
     body: {
       initialThought: "AI 控制器与水泵交付需要分线管理。",
       whyThought: "控制器是平台，水泵是垂直场景子项目。",
@@ -181,6 +185,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "垂直场景交付案例",
     customFields: {},
     parentId: "proj-ai-controller",
+    featureModules: [],
     body: {
       initialThought: "水泵应作为 AI 控制器下的子项目独立推进。",
       whyThought: "独立看板与需求池，同时在项目库缩进展示。",
@@ -218,6 +223,7 @@ export const mockProjects: Project[] = [
     portfolioValue: "教育 + 文化赛道探索",
     customFields: {},
     parentId: null,
+    featureModules: [],
     body: {
       initialThought: "把古诗词做成闯关游戏，配合节气主题。",
       whyThought: "和「随心而行」有文化学习交集，但用户群不同。",
@@ -392,6 +398,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "随心而行 — 占问过程中学习传统文化",
     reason: "单纯塔罗容易撞，学习 + 图鉴 + 手札更有长期价值和作品集深度",
     decision: "P1 先做塔罗抽牌和结果页，小六壬/梅花易数停车",
+    module: '',
+    releaseTag: null,
     createdAt: "2026-03-28T10:00:00.000Z",
   },
   {
@@ -403,6 +411,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "规划分层：牌面 → 解读 → 学习延伸 → 手札入口",
     reason: "自测和反馈都认为「像调试页」",
     decision: "下一步：优化 UI 层级和文案结构",
+    module: '',
+    releaseTag: null,
     createdAt: "2026-04-02T15:00:00.000Z",
   },
   {
@@ -414,6 +424,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "摄像头手势识别 + 抽牌动画 + 基础结果展示",
     reason: "MVP 第一步验证技术可行性",
     decision: "进入结果页优化阶段",
+    module: '',
+    releaseTag: null,
     createdAt: "2026-06-15T09:00:00.000Z",
   },
   {
@@ -425,6 +437,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "Supabase PostgreSQL 持久化",
     reason: "Vercel 部署需要云数据库，团队需共享数据",
     decision: "本地开发也走 Supabase，保留 seed 降级",
+    module: '',
+    releaseTag: null,
     createdAt: "2026-07-07T14:00:00.000Z",
   },
   {
@@ -436,6 +450,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "并行 Idea 收件箱 + 演进记录 + Notion-like 项目页",
     reason: "需要记录灵感演进，不只是任务管理",
     decision: "Supabase 持久化 + tasks 页三块区域已上线",
+    module: '',
+    releaseTag: null,
     createdAt: T,
   },
   {
@@ -447,6 +463,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     after: "停车场观望，可能合并到随心而行",
     reason: "和 Moonpie 文化学习线重叠，精力不够双线",
     decision: "等 P0 完成后再评估",
+    module: '',
+    releaseTag: null,
     createdAt: "2026-07-05T10:00:00.000Z",
   },
 ];

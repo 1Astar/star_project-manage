@@ -13,6 +13,7 @@ import {
   type ResourceCategoryId,
 } from "@/lib/studio/asset-categories";
 import type { Asset, AssetType, Project, StudioRelease } from "@/lib/studio/types";
+import { partitionReleaseTags } from "@/lib/studio/release-notes";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -77,6 +78,16 @@ export function ResourceCenter({ project, assets, releases }: Props) {
     ? releases.find((r) => r.tag === versionTag)
     : null;
 
+  const { semver: semverReleases, process: processReleases } = useMemo(
+    () =>
+      partitionReleaseTags(
+        [...releases].sort((a, b) =>
+          (b.publishedAt ?? b.syncedAt).localeCompare(a.publishedAt ?? a.syncedAt)
+        )
+      ),
+    [releases]
+  );
+
   function persistVersion(tag: string) {
     setVersionTag(tag);
     try {
@@ -100,7 +111,17 @@ export function ResourceCenter({ project, assets, releases }: Props) {
         if (!res.ok) {
           throw new Error(json.error || "同步失败");
         }
-        setMessage(`已同步 ${json.synced ?? 0} 个版本`);
+        setMessage(`已同步 ${json.synced ?? 0} 个版本${
+          typeof (json as { changelogFilled?: number }).changelogFilled === "number" &&
+          (json as { changelogFilled?: number }).changelogFilled! > 0
+            ? `（${(json as { changelogFilled?: number }).changelogFilled} 个 Tag 已补 commits 说明）`
+            : ""
+        }${
+          typeof (json as { evolutionImported?: number }).evolutionImported === "number" &&
+          (json as { evolutionImported?: number }).evolutionImported! > 0
+            ? `；导入 ${(json as { evolutionImported?: number }).evolutionImported} 条版本需求`
+            : ""
+        }`);
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "同步失败");
@@ -127,13 +148,28 @@ export function ResourceCenter({ project, assets, releases }: Props) {
                 className="max-w-[180px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs"
               >
                 <option value="">全部（默认分支）</option>
-                {releases.map((r) => (
-                  <option key={r.id} value={r.tag}>
-                    {r.name || r.tag}
-                    {r.source === "tag" ? " · Tag" : ""}
-                    {r.isPrerelease ? " · pre" : ""}
-                  </option>
-                ))}
+                {semverReleases.length > 0 ? (
+                  <optgroup label="语义化版本">
+                    {semverReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.name || r.tag}
+                        {r.source === "tag" ? " · Tag" : ""}
+                        {r.isPrerelease ? " · pre" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {processReleases.length > 0 ? (
+                  <optgroup label="过程 Tag">
+                    {processReleases.map((r) => (
+                      <option key={r.id} value={r.tag}>
+                        {r.name || r.tag}
+                        {r.source === "tag" ? " · Tag" : ""}
+                        {r.isPrerelease ? " · pre" : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
               </select>
             </label>
             <button
@@ -141,7 +177,7 @@ export function ResourceCenter({ project, assets, releases }: Props) {
               disabled={pending || !project.githubRepo}
               onClick={syncReleases}
               title={project.githubRepo ? "从 GitHub 同步 Release/Tag" : "请先绑定 GitHub 仓库"}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="btn-secondary"
             >
               {pending ? "同步中…" : "同步版本"}
             </button>

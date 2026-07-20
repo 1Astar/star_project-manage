@@ -1,3 +1,16 @@
+# Star PM Agent 说明
+
+## 必读（统一规则）
+
+**先读** [`docs/ai/CANONICAL_RULES.md`](./docs/ai/CANONICAL_RULES.md)。
+
+改代码前用 MCP `compare_sources` 比对 Git / Vercel / Studio，避免覆盖更新版本。  
+写入灵感/演进请带板块；导入缺板块进「待补齐」仍可导入。
+
+MCP：`get_ai_rules` · `compare_sources` · `publish_release`
+
+---
+
 <!-- VERCEL BEST PRACTICES START -->
 ## Best practices for developing on Vercel
 

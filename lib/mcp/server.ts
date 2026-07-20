@@ -74,7 +74,7 @@ export function registerStarPmTools(server: McpServer) {
     {
       title: "Capture Idea",
       description:
-        "将脑暴灵感写入 Star PM 收件箱。入库前会标题查重；未指定 relatedIdeaId 时尝试自动挂父 Idea。疑似重复时拒绝写入（可 force:true）。",
+        "将脑暴灵感写入 Star PM 收件箱。强烈建议填写 relatedModule（功能板块），便于发版按板块追溯。入库前会标题查重；未指定 relatedIdeaId 时尝试自动挂父 Idea。疑似重复时拒绝写入（可 force:true）。",
       inputSchema: {
         title: z.string().min(1).describe("灵感标题"),
         rawThought: z.string().optional().describe("原始想法全文"),
@@ -92,7 +92,10 @@ export function registerStarPmTools(server: McpServer) {
           .optional()
           .describe("关联项目 ID，如 proj-star-pm"),
         relatedIdeaId: z.string().nullable().optional().describe("父 Idea ID；缺省时可能自动推断"),
-        relatedModule: z.string().optional().describe("关联模块名称"),
+        relatedModule: z
+          .string()
+          .optional()
+          .describe("功能板块（强烈建议）：工作台/项目库/灵感/需求任务/迭代记录/资源中心/Git/设置 等"),
         sourceChat: z.string().optional().describe("来源聊天"),
         sourceMethod: z.string().optional().describe("来源方式：ChatGPT/手动/GitHub/Notion"),
         decisionNotes: z.string().optional().describe("决策记录"),
@@ -158,6 +161,9 @@ export function registerStarPmTools(server: McpServer) {
           message: result.parentAutoLinked
             ? `已进入灵感收件箱，并自动挂父：${result.parentLinkReason}`
             : "已进入灵感收件箱",
+          warning: result.pendingModuleFill
+            ? "已标记【待补齐·板块】（已关联项目但未填且未能推断 relatedModule），仍已入库。"
+            : undefined,
           ...result,
         });
       } catch (error) {

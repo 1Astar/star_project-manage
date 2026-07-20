@@ -1,4 +1,4 @@
-import { buildRepoUrl } from "@/lib/github/client";
+import { buildRepoUrl, parseRepoFullName } from "@/lib/github/client";
 import type { Project } from "@/lib/studio/types";
 
 export interface StudioGitActivity {
@@ -60,10 +60,12 @@ export function normalizeRepoRelativePath(codePath: string | null | undefined): 
  * 未配分支 / 仓库则抛错。
  */
 export function resolveProjectGitScope(project: Project): ProjectGitScope {
-  const repoFullName = project.githubRepo?.trim();
-  if (!repoFullName) {
+  const rawRepo = project.githubRepo?.trim();
+  if (!rawRepo) {
     throw new Error("项目未配置 GitHub 仓库（githubRepo）");
   }
+  const { owner, repo } = parseRepoFullName(rawRepo);
+  const repoFullName = `${owner}/${repo}`;
   const branch = project.githubBranch?.trim();
   if (!branch) {
     throw new Error("项目未配置分支（githubBranch），请在项目 Git 设置中填写");

@@ -10,6 +10,43 @@
 
 ---
 
+## v1.9.4 · 2026-07-20
+
+- **概况页**：仿禅道紧凑两列；左侧进度 / 模块树 / 动态，右侧统计侧栏
+- **模块树**：一级 + 子模块（最多两级），概况页可增删改
+- **关键词推断板块**：灵感 / Notion / 演进写入缺板块时按条目关键词推断
+- **版本需求导入**：「同步版本」后把各版 Release 说明条目导入为演进；可选 CHANGELOG 全量导入
+- **按钮对比度**：选中 Tab 改浅底深字；主按钮强制白字，避免深蓝底看不见文案
+- **概况动态**：去掉「白昼 / 星辰」说明文案
+
+## v1.9.3 · 2026-07-20
+
+- **发版时间线**：默认只展示语义化版本 Tag（如 `v1.2.3`）；`stage/`、`nest/` 等过程 Tag 折叠在「过程 Tag」
+- **资源中心 / 关联版本下拉**：语义化与过程 Tag 分组
+
+## v1.9.2 · 2026-07-20
+
+- **统一 AI 规则**：`docs/ai/CANONICAL_RULES.md` + `AGENTS.md` / `.cursor/rules/star-pm-ai.mdc` 指针
+- **MCP**：`get_ai_rules`、`compare_sources`（Git / Vercel / Studio 谁最新）
+- **导入校验**：缺板块标记「待补齐·板块」仍可导入；Notion 导入返回 `pendingModuleFill`
+- **capture_idea**：关联项目但无板块时同样标记待补齐
+
+## v1.9.1 · 2026-07-20
+
+- **Tag 同步增强**：无 Release body 时用相邻 Tag 的 commits 生成「本版变更」；补 Tag 发布时间
+- **发版时间线**：展示本版更新内容 + 板块徽章；无板块时弱提示
+- **MCP**：`capture_idea` / `add_evolution` / `add_decision` 强化板块字段；缺板块返回 warning
+- **发版**：新 MCP `publish_release` + `POST .../releases/publish` — 按板块汇总演进并创建 GitHub Release，未挂版本演进可挂到本 tag
+
+## v1.9.0 · 2026-07-20
+
+- **迭代记录升级**：`/projects/[id]/evolution` 多 tab — 项目发版时间线 + 功能板块过滤
+- **发版时间线**：同步 GitHub Release/Tag；节点挂演进 / 迭代计划；展示本版涉及板块；未挂版本单独分区
+- **板块标签**：演进 `module` + 可选 `releaseTag`；灵感沿用 `relatedModule`；项目可配 `featureModules`
+- **变更原因弱提醒**：可空，表单与列表空原因时弱提示（不阻断保存）
+- **MCP**：`add_evolution` 支持 `module` / `releaseTag`
+- **Migration**：`028_evolution_modules.sql`
+
 ## v1.8.0 · 2026-07-19
 
 - **项目父子树形**：`studio_projects.parent_id` / `projects.parent_id`（仅一层）
