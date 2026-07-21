@@ -9,5 +9,8 @@ create index if not exists studio_evolution_logs_module_idx
 create index if not exists studio_evolution_logs_release_tag_idx
   on studio_evolution_logs(project_id, release_tag);
 
+alter table studio_ideas
+  add column if not exists related_module text not null default '';
+
 alter table studio_projects
   add column if not exists feature_modules jsonb not null default '[]'::jsonb;

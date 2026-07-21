@@ -23,7 +23,12 @@ export function DefaultGitSettingsPanel() {
         });
         const data = await res.json();
         if (!res.ok) {
-          setError(data.error ?? "应用失败");
+          const raw = typeof data.error === "string" ? data.error : "应用失败";
+          setError(
+            /feature_modules|schema cache/i.test(raw)
+              ? "数据库缺少 feature_modules 列。请在 Supabase 执行迁移 028_evolution_modules.sql 后重试。"
+              : raw
+          );
           return;
         }
         setMessage(`已应用到 ${data.count} 个未绑定项目：${(data.projects as string[]).join("、") || "无"}`);
