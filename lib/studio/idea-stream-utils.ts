@@ -58,6 +58,7 @@ export function formatIdeaTime(iso: string): string {
 export function formatIdeaDateTime(iso: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     timeZone: TZ,
+    year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
