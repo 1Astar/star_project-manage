@@ -185,6 +185,93 @@ export function inferModulesFromText(
   return hit;
 }
 
+/** 变更方向（产品/体验/技术/交付）— 用于发版说明逐条打标 */
+export const CHANGE_DIRECTION_HINTS: ModuleHint[] = [
+  {
+    module: "产品",
+    patterns: [
+      /需求/,
+      /看板/,
+      /\bBug\b/i,
+      /提 Bug/,
+      /灵感/,
+      /项目库/,
+      /工作台/,
+      /功能/,
+      /业务/,
+      /验收/,
+      /指派/,
+      /归属/,
+    ],
+  },
+  {
+    module: "体验",
+    patterns: [
+      /布局/,
+      /按钮/,
+      /可读/,
+      /\bUI\b/i,
+      /交互/,
+      /左右/,
+      /侧栏/,
+      /一屏/,
+      /压紧/,
+      /空白/,
+      /可读性/,
+    ],
+  },
+  {
+    module: "技术",
+    patterns: [
+      /\bAPI\b/i,
+      /迁移/,
+      /schema/i,
+      /加密/,
+      /重构/,
+      /\bMCP\b/,
+      /类型/,
+      /推断/,
+      /commits?/i,
+      /归一/,
+      /compare_sources/,
+      /feature_modules/,
+    ],
+  },
+  {
+    module: "交付",
+    patterns: [
+      /发版/,
+      /Release/i,
+      /\bTag\b/,
+      /同步版本/,
+      /部署/,
+      /CHANGELOG/i,
+      /semver/i,
+      /过程 Tag/,
+      /publish_release/,
+    ],
+  },
+];
+
+export type ChangeDirection = "产品" | "体验" | "技术" | "交付";
+
+/** 推断单条变更的方向标签；无命中默认「产品」 */
+export function inferChangeDirection(text: string): ChangeDirection {
+  const raw = (text ?? "").trim();
+  if (!raw) return "产品";
+  let best: { module: ChangeDirection; score: number } | null = null;
+  for (const hint of CHANGE_DIRECTION_HINTS) {
+    let score = 0;
+    for (const p of hint.patterns) {
+      if (p.test(raw)) score += 1;
+    }
+    if (score > 0 && (!best || score > best.score)) {
+      best = { module: hint.module as ChangeDirection, score };
+    }
+  }
+  return best?.module ?? "产品";
+}
+
 /** 写入前：有显式板块用显式；否则按关键词推断；仍无则返回空串 */
 export function resolveModuleForImport(
   explicit: string | null | undefined,

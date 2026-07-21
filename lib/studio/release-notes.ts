@@ -45,13 +45,65 @@ function parseVersionParts(tag: string): number[] | null {
   return m.slice(1).filter((x) => x !== undefined).map((x) => Number(x));
 }
 
+/** 优先解析 `- ` 列表；否则按换行 / 分号拆成条目（兼容发版时写的整段说明） */
+export function extractReleaseBodyItems(body: string): string[] {
+  const raw = (body ?? "").trim();
+  if (!raw) return [];
+
+  const bullets = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("- ") || l.startsWith("* "))
+    .map((l) => l.replace(/^[-*]\s*/, "").trim())
+    .filter(
+      (l) =>
+        l &&
+        !/完整变更见/.test(l) &&
+        !/^\*\*涉及板块/.test(l) &&
+        !/^#{1,6}\s/.test(l) &&
+        !/^本版变更/.test(l)
+    );
+
+  if (bullets.length) return bullets;
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^#+\s/.test(l) && !/完整变更见/.test(l) && !/^本版变更/.test(l));
+
+  if (lines.length >= 2) return lines;
+
+  const parts = raw
+    .split(/[；;]\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 4);
+  if (parts.length >= 2) return parts;
+
+  return [raw];
+}
+
+/** 有 `- ` / `* ` 列表才算结构化说明；整段短文仍可用 commits 补全 */
+export function hasStructuredReleaseBody(body: string | null | undefined): boolean {
+  const raw = (body ?? "").trim();
+  if (!raw) return false;
+  return raw.split(/\r?\n/).some((l) => {
+    const t = l.trim();
+    return t.startsWith("- ") || t.startsWith("* ");
+  });
+}
+
 export function formatCommitsAsChangelog(commits: GitHubCommit[], limit = 40): string {
-  const lines = commits
-    .map((c) => (c.commit?.message ?? "").split("\n")[0]?.trim() ?? "")
-    .filter(Boolean)
+  const rows = commits
+    .map((c) => {
+      const msg = (c.commit?.message ?? "").split("\n")[0]?.trim() ?? "";
+      const date = c.commit?.author?.date ?? "";
+      return { msg, date };
+    })
+    .filter((r) => r.msg)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""))
     .slice(0, limit);
-  if (!lines.length) return "";
-  return ["### 本版变更（commits）", ...lines.map((l) => `- ${l}`)].join("\n");
+  if (!rows.length) return "";
+  return ["### 本版变更（commits）", ...rows.map((r) => `- ${r.msg}`)].join("\n");
 }
 
 export function modulesForReleaseTag(
