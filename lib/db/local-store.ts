@@ -836,9 +836,19 @@ export async function getRequirementDetail(requirementId: string) {
   const requirement = db.requirements.find((r) => r.id === requirementId);
   if (!requirement) return null;
   const project = db.projects.find((p) => p.id === requirement.project_id);
+  const iteration = db.iterations.find((i) => i.id === requirement.iteration_id) ?? null;
+  const moduleL1 = requirement.module_l1_id
+    ? db.modules.find((m) => m.id === requirement.module_l1_id) ?? null
+    : null;
+  const moduleL2 = requirement.module_l2_id
+    ? db.modules.find((m) => m.id === requirement.module_l2_id) ?? null
+    : null;
   return {
     project,
     requirement,
+    iteration,
+    moduleL1,
+    moduleL2,
     role_tasks: db.role_tasks.filter((t) => t.requirement_id === requirementId),
     acceptance_items: db.acceptance_items.filter((a) => a.requirement_id === requirementId),
     test_records: db.test_records.filter((t) => t.requirement_id === requirementId),

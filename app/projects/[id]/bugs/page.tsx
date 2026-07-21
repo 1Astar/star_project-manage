@@ -7,10 +7,13 @@ import { getProjectMembers } from "@/lib/db/local-store";
 
 export default async function ProjectBugsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ new?: string; req?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
   const ctx = await resolveProjectRoute(id);
   if (!ctx.studio && !ctx.pmBundle) notFound();
 
@@ -48,6 +51,8 @@ export default async function ProjectBugsPage({
       bugs={bugs}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
+      initialShowCreate={sp.new === "1" || Boolean(sp.req)}
+      initialRequirementId={sp.req?.trim() || ""}
     />
   );
 }

@@ -153,23 +153,27 @@ export function BugCreateForm({
   projectSlug,
   members,
   requirements,
+  initialRequirementId = "",
+  initialTitle = "",
 }: {
   projectId: string;
   projectSlug: string;
   members: MemberOption[];
   requirements: BugFormOption[];
+  initialRequirementId?: string;
+  initialTitle?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [fields, setFields] = useState<SharedFields>({
-    title: "",
+    title: initialTitle,
     reproSteps: "",
     description: "",
     severity: 3,
     bugType: "code",
     assignee: "",
-    requirementId: "",
+    requirementId: initialRequirementId,
     status: "pending",
   });
 
@@ -275,11 +279,15 @@ export function BugCreateForm({
 export function BugDetailEditor({
   bug,
   projectSlug,
+  projectName,
+  requirementTitle,
   members,
   requirements,
 }: {
   bug: Bug;
   projectSlug: string;
+  projectName: string;
+  requirementTitle?: string | null;
   members: MemberOption[];
   requirements: BugFormOption[];
 }) {
@@ -417,9 +425,32 @@ export function BugDetailEditor({
               requirements={requirements}
               showStatus
             />
-            <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-500">
-              <div>创建 {new Date(bug.created_at).toLocaleString("zh-CN")}</div>
-              <div className="mt-1">更新 {new Date(bug.updated_at).toLocaleString("zh-CN")}</div>
+            <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+              <h3 className="mb-2 font-semibold text-slate-500">归属</h3>
+              <div className="space-y-1.5 text-slate-700">
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500">项目</span>
+                  <span className="text-right">{projectName}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-500">需求</span>
+                  {bug.requirement_id ? (
+                    <a
+                      href={`/projects/${projectSlug}/requirements/${bug.requirement_id}`}
+                      className="max-w-[160px] truncate text-right text-indigo-600 hover:underline"
+                    >
+                      {requirementTitle || "查看需求"}
+                    </a>
+                  ) : (
+                    <span className="text-slate-400">未关联</span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 border-t border-slate-100 pt-2 text-slate-400">
+                创建 {new Date(bug.created_at).toLocaleString("zh-CN")}
+                <br />
+                更新 {new Date(bug.updated_at).toLocaleString("zh-CN")}
+              </div>
             </section>
           </>
         }

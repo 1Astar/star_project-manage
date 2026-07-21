@@ -21,14 +21,25 @@ export default async function RequirementDetailPage({
   const tasks = detail.role_tasks;
   const acceptanceItems = detail.acceptance_items;
   const comments = detail.comments;
+  const relatedBugs = detail.bugs.map((b) => ({
+    id: b.id,
+    title: b.title,
+    status: b.status,
+  }));
 
   const backHref = `/projects/${ctx.routeId}/tasks?req=${requirement.id}`;
 
   return (
     <RequirementNotionPage
       projectSlug={slug}
+      projectRouteId={ctx.routeId}
+      projectName={project.name}
       requirement={requirement}
       backHref={backHref}
+      iterationName={detail.iteration?.name ?? null}
+      moduleL1Name={detail.moduleL1?.name ?? null}
+      moduleL2Name={detail.moduleL2?.name ?? null}
+      relatedBugs={relatedBugs}
       sidebar={
         <>
           <section className="rounded-xl border border-slate-200 bg-white p-3">
