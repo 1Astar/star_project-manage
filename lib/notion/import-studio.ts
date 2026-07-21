@@ -560,12 +560,18 @@ export async function fetchNotionStudioSnapshot(
   let inferredModuleCount = 0;
 
   snapshot.ideas = snapshot.ideas.map((idea) => {
+    const proj = idea.relatedProjectId
+      ? projects.find((p) => p.id === idea.relatedProjectId)
+      : undefined;
     const resolved = resolveModuleForImport(
       idea.relatedModule,
       [idea.title, idea.oneLineIdea, idea.rawInput, idea.whyItMatters]
         .filter(Boolean)
         .join("\n"),
-      idea.relatedProjectId
+      idea.relatedProjectId,
+      proj
+        ? { featureModules: proj.featureModules, githubRepo: proj.githubRepo }
+        : undefined
     );
     if (resolved.inferred) inferredModuleCount += 1;
     const withModule = { ...idea, relatedModule: resolved.module };
@@ -591,10 +597,14 @@ export async function fetchNotionStudioSnapshot(
   });
 
   snapshot.evolutionLogs = snapshot.evolutionLogs.map((log) => {
+    const proj = projects.find((p) => p.id === log.projectId);
     const resolved = resolveModuleForImport(
       log.module,
       [log.title, log.after, log.before, log.reason].filter(Boolean).join("\n"),
-      log.projectId
+      log.projectId,
+      proj
+        ? { featureModules: proj.featureModules, githubRepo: proj.githubRepo }
+        : undefined
     );
     if (resolved.inferred) inferredModuleCount += 1;
     const withModule = { ...log, module: resolved.module };

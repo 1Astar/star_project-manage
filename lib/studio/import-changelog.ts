@@ -49,9 +49,14 @@ export type ChangelogImportItem = {
 /** 把 CHANGELOG 拆成可写入演进的条目（不直接写库） */
 export function buildChangelogEvolutionItems(
   md: string,
-  projectId: string
+  projectId: string,
+  opts?: { featureModules?: string[] | null; githubRepo?: string | null }
 ): ChangelogImportItem[] {
-  const allowed = resolveFeatureModules(projectId, null);
+  const allowed = resolveFeatureModules(
+    projectId,
+    opts?.featureModules,
+    opts?.githubRepo
+  );
   const sections = parseChangelogSections(md);
   const items: ChangelogImportItem[] = [];
 
@@ -63,6 +68,7 @@ export function buildChangelogEvolutionItems(
       const module =
         inferModuleFromText(`${title}\n${bullet}`, {
           projectId,
+          githubRepo: opts?.githubRepo,
           allowed,
         }) || "";
       items.push({

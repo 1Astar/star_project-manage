@@ -1,5 +1,5 @@
 import { normalizeCapturePayload, type IdeaCapturePayload } from "@/lib/studio/idea-capture";
-import { getAllIdeas } from "@/lib/studio/data";
+import { getAllIdeas, getAllProjects } from "@/lib/studio/data";
 import { createStudioIdea } from "@/lib/studio/mutations";
 import type { IdeaPriority } from "@/lib/studio/types";
 import {
@@ -33,6 +33,9 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
   const skipParentAuto = Boolean(payload.skipParentAuto);
 
   const existing = await getAllIdeas();
+  const relatedProject = fields.relatedProjectId
+    ? (await getAllProjects()).find((p) => p.id === fields.relatedProjectId)
+    : undefined;
 
   if (!force) {
     const duplicates = findDuplicateCandidates(existing, fields.title, {
@@ -77,7 +80,13 @@ export async function captureIdea(payload: IdeaCapturePayload): Promise<CaptureI
     [fields.title, fields.summary, fields.rawThought, fields.whyItMatters]
       .filter(Boolean)
       .join("\n"),
-    fields.relatedProjectId
+    fields.relatedProjectId,
+    relatedProject
+      ? {
+          featureModules: relatedProject.featureModules,
+          githubRepo: relatedProject.githubRepo,
+        }
+      : undefined
   );
   const pendingModuleFill = needsModuleFill({
     relatedProjectId: fields.relatedProjectId,
