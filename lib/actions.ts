@@ -26,6 +26,8 @@ import {
   getShareLinkByToken,
   listBugsByProject,
   listProjectModules,
+  listRequirementMigrateTargets,
+  migratePoolRequirements,
   promotePoolRequirement,
   syncStudioIdeasIntoPool,
   toggleShareLink,
@@ -271,6 +273,37 @@ export async function dedupePoolRequirementsAction(
   revalidatePath(`/projects/${projectSlug}/pool`);
   revalidatePath(`/projects/${projectSlug}/tasks`);
   return { deleted: n };
+}
+
+export async function listRequirementMigrateTargetsAction() {
+  return listRequirementMigrateTargets();
+}
+
+export async function migratePoolRequirementsAction(input: {
+  requirementIds: string[];
+  targetProjectId: string;
+  targetIterationId: string;
+  sourceProjectSlug: string;
+  targetProjectSlug?: string;
+}) {
+  const result = await migratePoolRequirements({
+    requirementIds: input.requirementIds,
+    targetProjectId: input.targetProjectId,
+    targetIterationId: input.targetIterationId,
+    actor: { name: "产品", role: "admin" },
+  });
+  revalidatePath(`/projects/${input.sourceProjectSlug}/pool`);
+  revalidatePath(`/projects/${input.sourceProjectSlug}/tasks`);
+  revalidatePath(`/projects/${input.sourceProjectSlug}/board`);
+  revalidatePath(`/projects/${input.sourceProjectSlug}`);
+  if (input.targetProjectSlug && input.targetProjectSlug !== input.sourceProjectSlug) {
+    revalidatePath(`/projects/${input.targetProjectSlug}/pool`);
+    revalidatePath(`/projects/${input.targetProjectSlug}/tasks`);
+    revalidatePath(`/projects/${input.targetProjectSlug}/board`);
+    revalidatePath(`/projects/${input.targetProjectSlug}`);
+  }
+  revalidatePath("/boards/requirements");
+  return result;
 }
 
 export async function promotePoolRequirementAction(input: {

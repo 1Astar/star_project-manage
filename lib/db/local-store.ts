@@ -10,6 +10,7 @@ import {
   upsertProjectRow,
   upsertRequirementRow,
   upsertRequirementAttachmentRow,
+  upsertAcceptanceItemRow,
   deleteRequirementAttachmentRow,
   upsertActivityLogRow,
   upsertRequirementLinkRow,
@@ -1986,6 +1987,203 @@ export async function promotePoolRequirement(
 
   await saveDb(db);
   return req;
+}
+
+/** 对话框用：项目列表 + 各项目「需求池」与规划迭代 */
+export async function listRequirementMigrateTargets(): Promise<{
+  projects: Array<{ id: string; name: string; slug: string }>;
+  plansByProjectId: Record<
+    string,
+    Array<{ id: string; name: string; isPool: boolean }>
+  >;
+}> {
+  const projectsRaw = await getProjects();
+  for (const p of projectsRaw) {
+    await ensurePoolIteration(p.id);
+  }
+
+  const db = await readDb();
+  const projects = [...db.projects]
+    .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"))
+    .map((p) => ({ id: p.id, name: p.name, slug: p.slug }));
+
+  const plansByProjectId: Record<
+    string,
+    Array<{ id: string; name: string; isPool: boolean }>
+  > = {};
+
+  for (const p of db.projects) {
+    const pool = db.iterations.find(
+      (i) => i.project_id === p.id && i.name === POOL_ITERATION_NAME
+    );
+    const planning = db.iterations
+      .filter((i) => i.project_id === p.id && i.name !== POOL_ITERATION_NAME)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((i) => ({ id: i.id, name: i.name, isPool: false }));
+    plansByProjectId[p.id] = [
+      ...(pool ? [{ id: pool.id, name: POOL_ITERATION_NAME, isPool: true }] : []),
+      ...planning,
+    ];
+  }
+
+  return { projects, plansByProjectId };
+}
+
+function collectPoolSubtreeIds(
+  seedIds: string[],
+  requirements: Requirement[]
+): Set<string> {
+  const byParent = new Map<string, string[]>();
+  for (const r of requirements) {
+    if (!r.parent_id) continue;
+    const list = byParent.get(r.parent_id) ?? [];
+    list.push(r.id);
+    byParent.set(r.parent_id, list);
+  }
+  const out = new Set<string>();
+  const stack = [...seedIds];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (out.has(id)) continue;
+    out.add(id);
+    for (const childId of byParent.get(id) ?? []) stack.push(childId);
+  }
+  return out;
+}
+
+/**
+ * 需求池多选迁移：可换项目 / 计划（需求池或一期二期等）。
+ * 选中父时整棵子树一并迁；父未迁走时子节点断开 parent_id。
+ */
+export async function migratePoolRequirements(input: {
+  requirementIds: string[];
+  targetProjectId: string;
+  /** 目标迭代 id（含目标项目的需求池迭代） */
+  targetIterationId: string;
+  actor?: { name: string; role?: string };
+}): Promise<{ moved: number; ids: string[] }> {
+  const uniqueSeeds = [...new Set(input.requirementIds.filter(Boolean))];
+  if (!uniqueSeeds.length) return { moved: 0, ids: [] };
+
+  const db = await readDb();
+  const targetProject = db.projects.find(
+    (p) => p.id === input.targetProjectId || p.slug === input.targetProjectId
+  );
+  if (!targetProject) throw new Error("目标项目不存在");
+
+  const poolIteration = await ensurePoolIteration(targetProject.id);
+  const targetIteration = db.iterations.find((i) => i.id === input.targetIterationId);
+  if (!targetIteration || targetIteration.project_id !== targetProject.id) {
+    throw new Error("目标计划无效");
+  }
+
+  const toPool = targetIteration.name === POOL_ITERATION_NAME;
+  if (toPool && targetIteration.id !== poolIteration.id) {
+    throw new Error("目标需求池无效");
+  }
+
+  const subtreeIds = collectPoolSubtreeIds(uniqueSeeds, db.requirements);
+  const toMove = db.requirements.filter((r) => subtreeIds.has(r.id) && r.in_pool);
+  if (!toMove.length) throw new Error("没有可迁移的需求池条目");
+
+  const moveSet = new Set(toMove.map((r) => r.id));
+  const actorName = input.actor?.name ?? "产品";
+  const actorRole = input.actor?.role ?? "admin";
+  const stamp = nowIso();
+  const logs: ActivityLog[] = [];
+  const newAcceptance: AcceptanceItem[] = [];
+
+  for (const req of toMove) {
+    const oldProjectId = req.project_id;
+    const oldIter = db.iterations.find((i) => i.id === req.iteration_id);
+    const oldLabel = `${oldProjectId}/${oldIter?.name ?? req.iteration_id}`;
+
+    if (req.parent_id && !moveSet.has(req.parent_id)) {
+      req.parent_id = null;
+    }
+
+    req.project_id = targetProject.id;
+    req.iteration_id = targetIteration.id;
+    req.in_pool = toPool;
+    req.updated_at = stamp;
+
+    if (!toPool) {
+      const hasAcc = db.acceptance_items.some((a) => a.requirement_id === req.id);
+      if (!hasAcc) {
+        const acceptance: AcceptanceItem = {
+          id: uid("acc-"),
+          requirement_id: req.id,
+          description: `${req.title} - 功能符合 PRD`,
+          passed: null,
+          note: req.optimization_notes,
+          sort_order: 1,
+        };
+        db.acceptance_items.push(acceptance);
+        newAcceptance.push(acceptance);
+      }
+    }
+
+    logs.push(
+      await logActivity(db, {
+        project_id: targetProject.id,
+        entity_type: "requirement",
+        entity_id: req.id,
+        field_name: "migrate",
+        old_value: oldLabel,
+        new_value: `${targetProject.id}/${targetIteration.name}`,
+        actor_name: actorName,
+        actor_role: actorRole,
+      })
+    );
+
+    if (oldProjectId !== targetProject.id) {
+      // 源项目也留一条痕迹，便于审计
+      logs.push(
+        await logActivity(db, {
+          project_id: oldProjectId,
+          entity_type: "requirement",
+          entity_id: req.id,
+          field_name: "migrate_out",
+          old_value: oldLabel,
+          new_value: `${targetProject.id}/${targetIteration.name}`,
+          actor_name: actorName,
+          actor_role: actorRole,
+        })
+      );
+    }
+  }
+
+  const updatedAttachments: RequirementAttachment[] = [];
+  for (const att of db.requirement_attachments ?? []) {
+    if (moveSet.has(att.requirement_id) && att.project_id !== targetProject.id) {
+      att.project_id = targetProject.id;
+      updatedAttachments.push(att);
+    }
+  }
+
+  const updatedLinks: RequirementLink[] = [];
+  for (const link of db.requirement_links ?? []) {
+    const touchesMoved =
+      (link.source_type === "requirement" && moveSet.has(link.source_id)) ||
+      (link.target_type === "requirement" && moveSet.has(link.target_id));
+    if (touchesMoved && link.project_id !== targetProject.id) {
+      link.project_id = targetProject.id;
+      updatedLinks.push(link);
+    }
+  }
+
+  if (isSupabaseConfigured()) {
+    for (const req of toMove) await upsertRequirementRow(req);
+    for (const acc of newAcceptance) await upsertAcceptanceItemRow(acc);
+    for (const att of updatedAttachments) await upsertRequirementAttachmentRow(att);
+    for (const link of updatedLinks) await upsertRequirementLinkRow(link);
+    for (const log of logs) await persistActivityLog(log);
+    memoryDb = db;
+  } else {
+    await saveLocalDb(db);
+  }
+
+  return { moved: toMove.length, ids: toMove.map((r) => r.id) };
 }
 
 export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {

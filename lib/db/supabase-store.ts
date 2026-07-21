@@ -293,6 +293,12 @@ export async function upsertRequirementRow(requirement: Requirement): Promise<vo
   await upsertRows("requirements", [requirement]);
 }
 
+export async function upsertAcceptanceItemRow(
+  item: import("@/lib/types").AcceptanceItem
+): Promise<void> {
+  await upsertRows("acceptance_items", [item]);
+}
+
 export async function upsertActivityLogRow(log: import("@/lib/types").ActivityLog): Promise<void> {
   await upsertRows("activity_logs", [log]);
 }
