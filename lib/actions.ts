@@ -326,16 +326,51 @@ export async function createBugAction(input: {
   reproSteps?: string;
   assignee?: string;
   requirementId?: string | null;
+  severity?: import("@/lib/types").BugSeverity;
+  bugType?: import("@/lib/types").BugType;
 }) {
-  await createBug({
+  const bug = await createBug({
     project_id: input.projectId,
     requirement_id: input.requirementId,
     title: input.title,
     description: input.description,
     repro_steps: input.reproSteps,
     assignee: input.assignee,
+    severity: input.severity,
+    bug_type: input.bugType,
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs/${bug.id}`);
+  return bug;
+}
+
+export async function updateBugAction(input: {
+  bugId: string;
+  projectSlug: string;
+  updates: {
+    title?: string;
+    description?: string | null;
+    reproSteps?: string | null;
+    assignee?: string | null;
+    requirementId?: string | null;
+    status?: import("@/lib/types").TaskStatus;
+    severity?: import("@/lib/types").BugSeverity;
+    bugType?: import("@/lib/types").BugType;
+  };
+}) {
+  const { updateBug } = await import("@/lib/db/local-store");
+  await updateBug(input.bugId, {
+    title: input.updates.title,
+    description: input.updates.description,
+    repro_steps: input.updates.reproSteps,
+    assignee: input.updates.assignee,
+    requirement_id: input.updates.requirementId,
+    status: input.updates.status,
+    severity: input.updates.severity,
+    bug_type: input.updates.bugType,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
 }
 
 export async function updateBugStatusAction(input: {
@@ -345,10 +380,16 @@ export async function updateBugStatusAction(input: {
 }) {
   await updateBugStatus(input.bugId, input.status);
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
 }
 
 export async function fetchProjectBugs(projectId: string) {
   return listBugsByProject(projectId);
+}
+
+export async function fetchBugDetail(bugId: string) {
+  const { getBugById } = await import("@/lib/db/local-store");
+  return getBugById(bugId);
 }
 
 export async function createMemberAction(input: {

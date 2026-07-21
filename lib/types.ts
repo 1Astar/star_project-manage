@@ -325,6 +325,37 @@ export interface AcceptanceRecord {
   created_at: string;
 }
 
+/** 严重程度：1 最高 … 4 最低（对齐禅道） */
+export type BugSeverity = 1 | 2 | 3 | 4;
+
+export type BugType =
+  | "code"
+  | "ui"
+  | "performance"
+  | "security"
+  | "design"
+  | "config"
+  | "install"
+  | "other";
+
+export const BUG_SEVERITY_LABELS: Record<BugSeverity, string> = {
+  1: "1 · 致命",
+  2: "2 · 严重",
+  3: "3 · 一般",
+  4: "4 · 轻微",
+};
+
+export const BUG_TYPE_LABELS: Record<BugType, string> = {
+  code: "代码错误",
+  ui: "界面优化",
+  performance: "性能问题",
+  security: "安全相关",
+  design: "设计缺陷",
+  config: "配置相关",
+  install: "安装部署",
+  other: "其他",
+};
+
 export interface Bug {
   id: string;
   project_id: string;
@@ -334,6 +365,9 @@ export interface Bug {
   repro_steps: string | null;
   assignee: string | null;
   status: TaskStatus;
+  /** 1 最高 … 4 最低 */
+  severity: BugSeverity;
+  bug_type: BugType;
   created_at: string;
   updated_at: string;
 }
