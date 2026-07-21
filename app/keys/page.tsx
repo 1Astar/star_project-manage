@@ -1,6 +1,5 @@
 import { WorkbenchShell } from "@/components/workbench-shell";
-import { KeysUnlockGate } from "@/components/auth/keys-unlock-gate";
-import { getAdminSession, hasKeysUnlock } from "@/lib/auth/session";
+import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 
 const ENV_INDEX = [
@@ -23,44 +22,36 @@ export default async function KeysPage() {
     redirect("/?error=keys-forbidden");
   }
 
-  const unlocked = await hasKeysUnlock();
-
   return (
     <WorkbenchShell
       title="密钥索引"
-      subtitle="环境变量清单 — 不存储明文密钥，只记录用途与存放位置（需管理员二次验证）"
+      subtitle="环境变量清单 — 不存储明文密钥，只记录用途与存放位置（仅管理员）"
       role={session?.role ?? "admin"}
     >
-      {!unlocked ? (
-        <KeysUnlockGate title="解锁密钥索引" />
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-medium">变量</th>
-                  <th className="px-4 py-3 font-medium">用途</th>
-                  <th className="px-4 py-3 font-medium">存放位置</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {ENV_INDEX.map((row) => (
-                  <tr key={row.key}>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-800">{row.key}</td>
-                    <td className="px-4 py-3 text-slate-600">{row.purpose}</td>
-                    <td className="px-4 py-3 text-slate-500">{row.where}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-xs text-slate-400">
-            完整模板见仓库根目录 .env.example；OpenAI Key / Notion Token 保存在浏览器 localStorage（设置页配置）。
-            各项目的 API Key 等可存于「项目 → 更多操作 → 项目密钥」（Supabase 加密，需登录并二次验证）。
-          </p>
-        </>
-      )}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">变量</th>
+              <th className="px-4 py-3 font-medium">用途</th>
+              <th className="px-4 py-3 font-medium">存放位置</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {ENV_INDEX.map((row) => (
+              <tr key={row.key}>
+                <td className="px-4 py-3 font-mono text-xs text-slate-800">{row.key}</td>
+                <td className="px-4 py-3 text-slate-600">{row.purpose}</td>
+                <td className="px-4 py-3 text-slate-500">{row.where}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-4 text-xs text-slate-400">
+        完整模板见仓库根目录 .env.example；OpenAI Key / Notion Token 保存在浏览器 localStorage（设置页配置）。
+        各项目的 API Key 等可存于「项目 → 更多操作 → 项目密钥」（Supabase 加密，仅管理员）。
+      </p>
     </WorkbenchShell>
   );
 }

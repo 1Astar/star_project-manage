@@ -1,4 +1,4 @@
-import { requireKeysAccess } from "@/lib/auth/require-admin";
+import { requireAdminRole } from "@/lib/auth/require-admin";
 import {
   createProjectSecret,
   listProjectSecrets,
@@ -7,7 +7,7 @@ import {
 import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studio/route-utils";
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireKeysAccess();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const { id } = await context.params;
@@ -21,7 +21,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireKeysAccess();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const { id } = await context.params;

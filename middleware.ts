@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
   isKeysSensitivePath,
-  KEYS_UNLOCK_COOKIE_NAME,
-  peekKeysUnlock,
   peekSessionPayload,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/session-edge";
@@ -48,24 +46,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  const session = peekSessionPayload(token);
-  const keysPath = isKeysSensitivePath(pathname);
-
-  if (keysPath) {
+  if (isKeysSensitivePath(pathname)) {
+    const session = peekSessionPayload(token);
     if (!session || session.role !== "admin") {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "观看者无权访问密钥区" }, { status: 403 });
       }
       return NextResponse.redirect(new URL("/?error=keys-forbidden", request.url));
-    }
-    if (pathname.startsWith("/api/")) {
-      const unlock = request.cookies.get(KEYS_UNLOCK_COOKIE_NAME)?.value;
-      if (!peekKeysUnlock(unlock)) {
-        return NextResponse.json(
-          { error: "请先二次验证管理员密码以访问密钥区" },
-          { status: 403 }
-        );
-      }
     }
   }
 

@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { createHmac, timingSafeEqual } from "crypto";
 import {
-  KEYS_UNLOCK_COOKIE_NAME,
   SESSION_COOKIE_NAME,
   type AuthRole,
   type AuthSessionPeek,
@@ -12,15 +11,11 @@ export type AuthSession = AuthSessionPeek;
 
 export {
   isKeysSensitivePath,
-  KEYS_UNLOCK_COOKIE_NAME,
-  peekKeysUnlock,
   peekSessionPayload,
   SESSION_COOKIE_NAME,
 } from "@/lib/auth/session-edge";
 
 const MAX_AGE = 60 * 60 * 24 * 7;
-/** 密钥区二次验证有效期（秒） */
-export const KEYS_UNLOCK_MAX_AGE = 60 * 30;
 
 function getSecret(): string {
   return process.env.ADMIN_SESSION_SECRET ?? "dev-secret-change-in-production";
@@ -85,7 +80,6 @@ export async function setAdminSession(email: string, role: AuthRole = "admin"): 
 export async function clearAdminSession(): Promise<void> {
   const jar = await cookies();
   jar.delete(SESSION_COOKIE_NAME);
-  jar.delete(KEYS_UNLOCK_COOKIE_NAME);
 }
 
 export function getAdminAccount(): string {
@@ -116,35 +110,4 @@ export function resolveLoginRole(account: string, password: string): AuthRole | 
 
 export function isAuthRequired(): boolean {
   return process.env.REQUIRE_AUTH !== "false";
-}
-
-export async function hasKeysUnlock(): Promise<boolean> {
-  if (!isAuthRequired()) return true;
-  const jar = await cookies();
-  const token = jar.get(KEYS_UNLOCK_COOKIE_NAME)?.value;
-  if (!token) return false;
-  const data = verifySignedToken(token);
-  if (!data) return false;
-  if (typeof data.exp === "number" && data.exp < Date.now()) return false;
-  return data.unlocked === true;
-}
-
-export async function setKeysUnlock(): Promise<void> {
-  const jar = await cookies();
-  const token = signPayload({
-    unlocked: true,
-    exp: Date.now() + KEYS_UNLOCK_MAX_AGE * 1000,
-  });
-  jar.set(KEYS_UNLOCK_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: KEYS_UNLOCK_MAX_AGE,
-    path: "/",
-  });
-}
-
-export async function clearKeysUnlock(): Promise<void> {
-  const jar = await cookies();
-  jar.delete(KEYS_UNLOCK_COOKIE_NAME);
 }

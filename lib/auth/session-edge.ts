@@ -8,7 +8,6 @@ export type AuthSessionPeek = {
 };
 
 export const SESSION_COOKIE_NAME = "star-pm-session";
-export const KEYS_UNLOCK_COOKIE_NAME = "star-pm-keys-unlock";
 
 function decodeBase64UrlJson(payload: string): Record<string, unknown> | null {
   try {
@@ -32,16 +31,6 @@ export function peekSessionPayload(token: string): AuthSessionPeek | null {
   if (typeof data.exp === "number" && data.exp < Date.now()) return null;
   const role: AuthRole = data.role === "viewer" ? "viewer" : "admin";
   return { email: data.email, role };
-}
-
-export function peekKeysUnlock(token: string | undefined): boolean {
-  if (!token) return false;
-  const [payload] = token.split(".");
-  if (!payload) return false;
-  const data = decodeBase64UrlJson(payload);
-  if (!data || data.unlocked !== true) return false;
-  if (typeof data.exp === "number" && data.exp < Date.now()) return false;
-  return true;
 }
 
 export function isKeysSensitivePath(pathname: string): boolean {
