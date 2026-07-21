@@ -1,7 +1,38 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { DatabaseSnapshot } from "@/lib/db/types";
-import type { GitActivity, Iteration, Project, Requirement, RequirementAttachment, RequirementLink } from "@/lib/types";
+import type {
+  Bug,
+  BugSeverity,
+  BugType,
+  GitActivity,
+  Iteration,
+  Project,
+  Requirement,
+  RequirementAttachment,
+  RequirementLink,
+} from "@/lib/types";
+import { BUG_TYPE_LABELS } from "@/lib/types";
 
+function normalizeBug(row: Record<string, unknown>): Bug {
+  const severityRaw = Number(row.severity);
+  const severity = ([1, 2, 3, 4].includes(severityRaw) ? severityRaw : 3) as BugSeverity;
+  const typeRaw = String(row.bug_type ?? "code");
+  const bug_type = (typeRaw in BUG_TYPE_LABELS ? typeRaw : "code") as BugType;
+  return {
+    id: String(row.id),
+    project_id: String(row.project_id),
+    requirement_id: (row.requirement_id as string | null) ?? null,
+    title: String(row.title ?? ""),
+    description: (row.description as string | null) ?? null,
+    repro_steps: (row.repro_steps as string | null) ?? null,
+    assignee: (row.assignee as string | null) ?? null,
+    status: (row.status as Bug["status"]) ?? "pending",
+    severity,
+    bug_type,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+  };
+}
 function client() {
   const sb = createServiceClient();
   if (!sb) {
@@ -95,7 +126,9 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     acceptance_records: throwOnError(acceptance_records, "acceptance_records"),
     share_links: throwOnError(share_links, "share_links"),
     prototypes: throwOnError(prototypes, "prototypes"),
-    bugs: throwOnError(bugs, "bugs"),
+    bugs: throwOnError(bugs, "bugs").map((row) =>
+      normalizeBug(row as unknown as Record<string, unknown>)
+    ),
     notifications: throwOnError(notifications, "notifications"),
     activity_logs: throwOnError(activity_logs, "activity_logs"),
     comments,
@@ -112,6 +145,24 @@ async function upsertRows<T extends object>(table: string, rows: T[]) {
   const sb = client();
   const { error } = await sb.from(table).upsert(rows, { onConflict: "id" });
   if (error) throw new Error(`${table} upsert: ${error.message}`);
+}
+
+/** 新列未跑迁移 029 时回退，避免整库保存失败 */
+async function upsertBugs(rows: DatabaseSnapshot["bugs"]) {
+  if (!rows.length) return;
+  try {
+    await upsertRows("bugs", rows);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/severity|bug_type|schema cache|column/i.test(message)) {
+      await upsertRows(
+        "bugs",
+        rows.map(({ severity: _s, bug_type: _t, ...rest }) => rest)
+      );
+      return;
+    }
+    throw error;
+  }
 }
 
 async function deleteMissing(table: string, keepIds: string[]) {
@@ -151,7 +202,7 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await upsertRows("acceptance_records", snapshot.acceptance_records);
   await upsertRows("share_links", stripPlainToken);
   await upsertRows("prototypes", snapshot.prototypes);
-  await upsertRows("bugs", snapshot.bugs);
+  await upsertBugs(snapshot.bugs);
   await upsertRows("notifications", snapshot.notifications);
   await upsertRows("activity_logs", snapshot.activity_logs);
   if ((snapshot.comments ?? []).length) {

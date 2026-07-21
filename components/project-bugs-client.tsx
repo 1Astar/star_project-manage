@@ -1,11 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createBugAction, updateBugStatusAction } from "@/lib/actions";
+import { updateBugStatusAction } from "@/lib/actions";
+import { BugCreateForm, type BugFormOption, type MemberOption } from "@/components/bug-side-form";
 import { StudioBadge } from "@/components/studio/shell";
 import type { Bug, TaskStatus } from "@/lib/types";
-import { TASK_STATUS_LABELS } from "@/lib/types";
+import {
+  BUG_SEVERITY_LABELS,
+  BUG_TYPE_LABELS,
+  TASK_STATUS_LABELS,
+  type BugSeverity,
+} from "@/lib/types";
 
 const OPEN_STATUSES: TaskStatus[] = ["pending", "in_progress", "testing", "blocked"];
 const RESOLVED: TaskStatus[] = ["done", "acceptance"];
@@ -14,42 +21,24 @@ export function ProjectBugsClient({
   projectId,
   projectSlug,
   bugs: initialBugs,
+  members,
+  requirements,
 }: {
   projectId: string;
   projectSlug: string;
   bugs: Bug[];
+  members: MemberOption[];
+  requirements: BugFormOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [filter, setFilter] = useState<"all" | "open">("all");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const bugs =
     filter === "open"
       ? initialBugs.filter((b) => OPEN_STATUSES.includes(b.status))
       : initialBugs;
-
-  function submit() {
-    if (!title.trim()) return;
-    startTransition(async () => {
-      try {
-        await createBugAction({
-          projectId,
-          projectSlug,
-          title: title.trim(),
-          description: description.trim() || undefined,
-        });
-        setTitle("");
-        setDescription("");
-        setMessage("已提交 Bug");
-        router.refresh();
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "提交失败");
-      }
-    });
-  }
 
   function setStatus(bugId: string, status: TaskStatus) {
     startTransition(async () => {
@@ -59,65 +48,55 @@ export function ProjectBugsClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Bug 反馈</h2>
           <p className="text-xs text-slate-500">共 {initialBugs.length} 项</p>
         </div>
-        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setFilter("all")}
+              className={`rounded-lg px-3 py-1 ${filter === "all" ? "bg-white shadow-sm" : ""}`}
+            >
+              所有
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter("open")}
+              className={`rounded-lg px-3 py-1 ${filter === "open" ? "bg-white shadow-sm" : ""}`}
+            >
+              未解决
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => setFilter("all")}
-            className={`rounded-lg px-3 py-1 ${filter === "all" ? "bg-white shadow-sm" : ""}`}
+            onClick={() => setShowCreate((v) => !v)}
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white"
           >
-            所有
-          </button>
-          <button
-            type="button"
-            onClick={() => setFilter("open")}
-            className={`rounded-lg px-3 py-1 ${filter === "open" ? "bg-white shadow-sm" : ""}`}
-          >
-            未解决
+            {showCreate ? "收起表单" : "+ 提 Bug"}
           </button>
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <h3 className="mb-3 text-sm font-medium text-slate-700">+ 提 Bug</h3>
-        <div className="space-y-2">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Bug 标题"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="描述 / 复现步骤"
-            rows={3}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={pending || !title.trim()}
-              onClick={submit}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              提交
-            </button>
-            {message ? <span className="text-xs text-slate-500">{message}</span> : null}
-          </div>
-        </div>
-      </section>
+      {showCreate ? (
+        <BugCreateForm
+          projectId={projectId}
+          projectSlug={projectSlug}
+          members={members}
+          requirements={requirements}
+        />
+      ) : null}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
             <tr>
               <th className="px-3 py-2.5">标题</th>
+              <th className="px-3 py-2.5">严重</th>
+              <th className="px-3 py-2.5">类型</th>
               <th className="px-3 py-2.5">状态</th>
               <th className="px-3 py-2.5">创建</th>
               <th className="px-3 py-2.5">操作</th>
@@ -126,54 +105,68 @@ export function ProjectBugsClient({
           <tbody className="divide-y divide-slate-100">
             {bugs.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
                   暂无 Bug
                 </td>
               </tr>
             ) : (
-              bugs.map((bug) => (
-                <tr key={bug.id} className="hover:bg-slate-50/80">
-                  <td className="px-3 py-2.5">
-                    <div className="font-medium text-slate-800">{bug.title}</div>
-                    {bug.description ? (
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{bug.description}</p>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StudioBadge
-                      tone={RESOLVED.includes(bug.status) ? "success" : "warning"}
-                    >
-                      {TASK_STATUS_LABELS[bug.status]}
-                    </StudioBadge>
-                  </td>
-                  <td className="px-3 py-2.5 text-xs text-slate-400">
-                    {new Date(bug.created_at).toLocaleDateString("zh-CN")}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex flex-wrap gap-1">
-                      {!RESOLVED.includes(bug.status) ? (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setStatus(bug.id, "done")}
-                          className="rounded border border-emerald-200 px-2 py-0.5 text-[11px] text-emerald-700"
-                        >
-                          解决
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => setStatus(bug.id, "pending")}
-                          className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600"
-                        >
-                          重开
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
+              bugs.map((bug) => {
+                const severity = (bug.severity ?? 3) as BugSeverity;
+                return (
+                  <tr key={bug.id} className="hover:bg-slate-50/80">
+                    <td className="px-3 py-2.5">
+                      <Link
+                        href={`/projects/${projectSlug}/bugs/${bug.id}`}
+                        className="font-medium text-indigo-700 hover:underline"
+                      >
+                        {bug.title}
+                      </Link>
+                      {bug.assignee ? (
+                        <div className="mt-0.5 text-xs text-slate-500">指派 {bug.assignee}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-600">
+                      {BUG_SEVERITY_LABELS[severity] ?? severity}
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-600">
+                      {BUG_TYPE_LABELS[bug.bug_type] ?? bug.bug_type ?? "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <StudioBadge
+                        tone={RESOLVED.includes(bug.status) ? "success" : "warning"}
+                      >
+                        {TASK_STATUS_LABELS[bug.status]}
+                      </StudioBadge>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-400">
+                      {new Date(bug.created_at).toLocaleDateString("zh-CN")}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {!RESOLVED.includes(bug.status) ? (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setStatus(bug.id, "done")}
+                            className="rounded border border-emerald-200 px-2 py-0.5 text-[11px] text-emerald-700"
+                          >
+                            解决
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => setStatus(bug.id, "pending")}
+                            className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600"
+                          >
+                            重开
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

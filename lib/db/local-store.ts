@@ -35,6 +35,8 @@ import type {
   AcceptanceRecord,
   ActivityLog,
   Bug,
+  BugSeverity,
+  BugType,
   GitActivity,
   Iteration,
   LinkEntityType,
@@ -58,6 +60,7 @@ import type {
   TestRecord,
 } from "@/lib/types";
 import {
+  BUG_TYPE_LABELS,
   REQUIREMENT_CANCELLED_TAG,
   REQUIREMENT_POOL_DEFAULTS,
   deriveTaskStatusFromTags,
@@ -139,6 +142,22 @@ function normalizeRequirement(req: Requirement): Requirement {
   };
 }
 
+function normalizeBugRow(bug: Bug): Bug {
+  const severityRaw = Number(bug.severity);
+  const severity = ([1, 2, 3, 4].includes(severityRaw) ? severityRaw : 3) as BugSeverity;
+  const typeRaw = String(bug.bug_type ?? "code");
+  const bug_type = (typeRaw in BUG_TYPE_LABELS ? typeRaw : "code") as BugType;
+  return {
+    ...bug,
+    requirement_id: bug.requirement_id ?? null,
+    description: bug.description ?? null,
+    repro_steps: bug.repro_steps ?? null,
+    assignee: bug.assignee ?? null,
+    severity,
+    bug_type,
+  };
+}
+
 function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
   return {
     ...db,
@@ -155,6 +174,7 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     projects: db.projects.map(normalizeProject),
     requirements: db.requirements.map(normalizeRequirement),
     iterations: (db.iterations ?? []).map(normalizeIteration),
+    bugs: (db.bugs ?? []).map(normalizeBugRow),
   };
 }
 
@@ -852,6 +872,8 @@ export async function createBug(input: {
   description?: string;
   repro_steps?: string;
   assignee?: string;
+  severity?: BugSeverity;
+  bug_type?: BugType;
 }) {
   const db = await readDb();
   const bug: Bug = {
@@ -863,6 +885,8 @@ export async function createBug(input: {
     repro_steps: input.repro_steps ?? null,
     assignee: input.assignee ?? null,
     status: "pending",
+    severity: input.severity ?? 3,
+    bug_type: input.bug_type ?? "code",
     created_at: nowIso(),
     updated_at: nowIso(),
   };
@@ -874,7 +898,7 @@ export async function createBug(input: {
     type: "bug_created",
     title: `新 Bug：${input.title}`,
     body: input.description ?? null,
-    link: `/share/bug/${bug.id}`,
+    link: `/projects/${input.project_id}/bugs/${bug.id}`,
     is_read: false,
     created_at: nowIso(),
   });
@@ -892,27 +916,55 @@ export async function createBug(input: {
   return bug;
 }
 
-export async function updateBugStatus(bugId: string, status: TaskStatus) {
+export async function updateBug(
+  bugId: string,
+  patch: Partial<{
+    title: string;
+    description: string | null;
+    repro_steps: string | null;
+    assignee: string | null;
+    requirement_id: string | null;
+    status: TaskStatus;
+    severity: BugSeverity;
+    bug_type: BugType;
+  }>
+) {
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === bugId);
   if (!bug) throw new Error("Bug 不存在");
-  const before = bug.status;
-  bug.status = status;
+
+  const beforeStatus = bug.status;
+  if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
+  if (patch.description !== undefined) bug.description = patch.description;
+  if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+  if (patch.assignee !== undefined) bug.assignee = patch.assignee;
+  if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
+  if (patch.status !== undefined) bug.status = patch.status;
+  if (patch.severity !== undefined) bug.severity = patch.severity;
+  if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
+  if (bug.severity == null) bug.severity = 3;
+  if (!bug.bug_type) bug.bug_type = "code";
   bug.updated_at = nowIso();
-  if (before !== status) {
+
+  if (patch.status !== undefined && beforeStatus !== bug.status) {
     await logActivity(db, {
       project_id: bug.project_id,
       entity_type: "bug",
       entity_id: bug.id,
       field_name: "status",
-      old_value: before,
-      new_value: status,
+      old_value: beforeStatus,
+      new_value: bug.status,
       actor_name: "产品",
       actor_role: "admin",
     });
   }
+
   await saveDb(db);
   return bug;
+}
+
+export async function updateBugStatus(bugId: string, status: TaskStatus) {
+  return updateBug(bugId, { status });
 }
 
 export async function listBugsByProject(projectId: string) {
