@@ -5,8 +5,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
-import { inferModulesFromText } from "@/lib/studio/infer-modules";
-import { partitionReleaseTags } from "@/lib/studio/release-notes";
+import { inferChangeDirection, inferModulesFromText } from "@/lib/studio/infer-modules";
+import { extractReleaseBodyItems, partitionReleaseTags } from "@/lib/studio/release-notes";
 import {
   EVOLUTION_TYPE_LABELS,
   type EvolutionLog,
@@ -579,29 +579,65 @@ function ReleaseArticle({
           本版尚未关联板块。请用 MCP/站内写演进时填写板块，或发版时用 publish_release 汇总。
         </p>
       )}
-      {release.body ? (
-        <div className="mt-3 rounded-lg bg-slate-50 p-3">
-          <div className="text-xs font-medium text-slate-500">本版更新内容</div>
-          <pre className="mt-1 whitespace-pre-wrap font-sans text-sm text-slate-700">
-            {release.body.slice(0, 1200)}
-            {release.body.length > 1200 ? "…" : ""}
-          </pre>
-        </div>
-      ) : (
-        <p className="mt-3 text-xs text-slate-500">
-          暂无变更说明（无 Release body，且未能从 commits 推断）。
-        </p>
-      )}
-      {linkedEvo.length > 0 ? (
-        <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
-          <div className="text-xs font-medium text-slate-500">
-            板块演进（{linkedEvo.length}）
-          </div>
-          {linkedEvo.map((log) => (
-            <EvolutionCard key={log.id} log={log} compact />
-          ))}
-        </div>
-      ) : null}
+      {(() => {
+        // 优先：已挂本版的演进，按时间倒序；每条打方向标签（产品/体验/技术/交付）
+        if (linkedEvo.length > 0) {
+          const sorted = [...linkedEvo].sort((a, b) =>
+            (b.createdAt || "").localeCompare(a.createdAt || "")
+          );
+          return (
+            <div className="mt-3 rounded-lg bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-500">本版更新内容</div>
+              <ul className="mt-2 space-y-1.5">
+                {sorted.map((log) => (
+                  <li
+                    key={log.id}
+                    className="flex flex-wrap items-start gap-1.5 text-sm text-slate-700"
+                  >
+                    <StudioBadge tone="muted">
+                      {inferChangeDirection(`${log.title} ${log.after ?? ""}`)}
+                    </StudioBadge>
+                    {log.module?.trim() ? (
+                      <StudioBadge>{log.module.trim()}</StudioBadge>
+                    ) : null}
+                    <span className="min-w-0 flex-1">{log.title}</span>
+                    {log.createdAt ? (
+                      <span className="shrink-0 text-[11px] text-slate-400">
+                        {formatDate(log.createdAt)}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+        if (release.body?.trim()) {
+          const items = extractReleaseBodyItems(release.body);
+          return (
+            <div className="mt-3 rounded-lg bg-slate-50 p-3">
+              <div className="text-xs font-medium text-slate-500">本版更新内容</div>
+              <ul className="mt-2 space-y-1.5">
+                {items.map((text, idx) => (
+                  <li
+                    key={`${idx}-${text.slice(0, 24)}`}
+                    className="flex flex-wrap items-start gap-1.5 text-sm text-slate-700"
+                  >
+                    <StudioBadge tone="muted">{inferChangeDirection(text)}</StudioBadge>
+                    <span className="min-w-0 flex-1">{text.replace(/^feat:\s*/i, "")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+        return (
+          <p className="mt-3 text-xs text-slate-500">
+            暂无变更说明（无 Release body，且未能从 commits 推断）。
+          </p>
+        );
+      })()}
+
       {release.htmlUrl ? (
         <a
           href={release.htmlUrl}
