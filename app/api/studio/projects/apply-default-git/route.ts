@@ -1,9 +1,9 @@
-import { requireAdminSession } from "@/lib/auth/require-admin";
+import { requireAdminRole } from "@/lib/auth/require-admin";
 import { applyDefaultGitToUnboundProjects } from "@/lib/studio/git-settings";
 import { readStudioBody, studioErr, studioOk, mapStudioError } from "@/lib/studio/route-utils";
 
 export async function POST(request: Request) {
-  const auth = await requireAdminSession();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const body = await readStudioBody<{ repo?: string; branch?: string }>(request);
