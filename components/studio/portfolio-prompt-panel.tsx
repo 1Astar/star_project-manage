@@ -54,7 +54,7 @@ export function PortfolioPromptPanel({
         <div>
           <h3 className="text-sm font-semibold text-violet-900">作品集 Prompt 模板</h3>
           <p className="mt-1 text-xs text-violet-700/80">
-            Idea 补充 · Case Study；挂项目恢复/概览，不阻断 Idea → Project
+            全局模板 · Case Study；只在资产库维护，不挂各项目「项目恢复」
           </p>
         </div>
         <button
