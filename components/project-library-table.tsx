@@ -18,6 +18,15 @@ import {
   type StudioProjectColumnDef,
 } from "@/lib/studio/types";
 import { toProjectTree } from "@/lib/studio/project-tree";
+import {
+  DEFAULT_PROJECT_LIBRARY_WIDTHS,
+  moveIdInOrder,
+  readProjectLibraryOrder,
+  readProjectLibraryWidths,
+  sortProjectsByOrder,
+  writeProjectLibraryOrder,
+  writeProjectLibraryWidths,
+} from "@/lib/studio/project-library-prefs";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
@@ -329,6 +338,7 @@ export function ProjectLibraryTable({
   sourceIdeas?: SourceIdeaOption[];
   columnDefs?: StudioProjectColumnDef[];
 }) {
+  const router = useRouter();
   const activeTab =
     statusFilter === "mainline" ||
     statusFilter === "parking" ||
@@ -341,7 +351,198 @@ export function ProjectLibraryTable({
     return !effectiveNext(p);
   }).length;
 
-  const treeItems = useMemo(() => toProjectTree(projects), [projects]);
+  const [widths, setWidths] = useState(DEFAULT_PROJECT_LIBRARY_WIDTHS);
+  const [order, setOrder] = useState<string[]>([]);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{
+    id: string;
+    place: "before" | "after" | "child";
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    setWidths(readProjectLibraryWidths());
+    setOrder(readProjectLibraryOrder());
+  }, []);
+
+  const sortedProjects = useMemo(
+    () => sortProjectsByOrder(projects, order),
+    [projects, order]
+  );
+  const treeItems = useMemo(() => toProjectTree(sortedProjects), [sortedProjects]);
+
+  function persistOrder(next: string[]) {
+    setOrder(next);
+    writeProjectLibraryOrder(next);
+  }
+
+  function onResizeStart(key: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startW = widths[key] ?? DEFAULT_PROJECT_LIBRARY_WIDTHS[key] ?? 120;
+    resizeRef.current = { key, startX: e.clientX, startW };
+    let lastW = startW;
+    const onMove = (ev: MouseEvent) => {
+      const cur = resizeRef.current;
+      if (!cur) return;
+      lastW = Math.min(800, Math.max(48, cur.startW + (ev.clientX - cur.startX)));
+      setWidths((prev) => ({ ...prev, [cur.key]: lastW }));
+    };
+    const onUp = () => {
+      const cur = resizeRef.current;
+      resizeRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (cur) {
+        setWidths((prev) => {
+          const next = { ...prev, [cur.key]: lastW };
+          writeProjectLibraryWidths(next);
+          return next;
+        });
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  async function addChild(parent: Project) {
+    if (parent.parentId) {
+      setMsg("仅支持一层子项目，请挂到顶层项目下");
+      return;
+    }
+    const title = window.prompt(`在「${parent.title}」下新建子项目名称`);
+    if (!title?.trim()) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/studio/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          parentId: parent.id,
+          status: parent.status === "archived" ? "active" : parent.status,
+          priority: parent.priority,
+        }),
+      });
+      const data = (await res.json()) as { error?: string; project?: { id: string } };
+      if (!res.ok || !data.project) {
+        setMsg(data.error ?? "创建失败");
+        return;
+      }
+      const base = order.length ? order : treeItems.map((t) => t.project.id);
+      const idx = base.indexOf(parent.id);
+      const next = [...base];
+      if (!next.includes(data.project.id)) {
+        next.splice(idx >= 0 ? idx + 1 : next.length, 0, data.project.id);
+      }
+      persistOrder(next);
+      router.refresh();
+    } catch {
+      setMsg("创建失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function dropPlaceFromEvent(e: React.DragEvent, el: HTMLElement): "before" | "after" | "child" {
+    const rect = el.getBoundingClientRect();
+    const y = (e.clientY - rect.top) / rect.height;
+    if (y < 0.28) return "before";
+    if (y > 0.72) return "after";
+    return "child";
+  }
+
+  async function onDropRow(overId: string, place: "before" | "after" | "child") {
+    if (!dragId || dragId === overId) {
+      setDragId(null);
+      setDropHint(null);
+      return;
+    }
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const drag = byId.get(dragId);
+    const over = byId.get(overId);
+    if (!drag || !over) {
+      setDragId(null);
+      setDropHint(null);
+      return;
+    }
+
+    setBusy(true);
+    setMsg(null);
+    try {
+      if (place === "child") {
+        if (over.parentId) {
+          setMsg("不能挂到子项目下（仅一层）");
+          return;
+        }
+        if (projects.some((p) => p.parentId === drag.id)) {
+          setMsg("已有子项目的项不能再挂到别人下面");
+          return;
+        }
+        if (drag.parentId !== over.id) {
+          await patchProject(drag.id, { parentId: over.id });
+        }
+        const base = order.length ? order : treeItems.map((t) => t.project.id);
+        persistOrder(moveIdInOrder(base, dragId, overId, "after"));
+        router.refresh();
+        return;
+      }
+
+      const nextParent = over.parentId ?? null;
+      if ((drag.parentId ?? null) !== nextParent) {
+        if (nextParent && projects.some((p) => p.parentId === drag.id)) {
+          setMsg("已有子项目的项不能再挂到别人下面");
+          return;
+        }
+        await patchProject(drag.id, { parentId: nextParent });
+      }
+      const base = order.length ? order : treeItems.map((t) => t.project.id);
+      persistOrder(moveIdInOrder(base, dragId, overId, place));
+      router.refresh();
+    } catch {
+      setMsg("拖拽保存失败");
+    } finally {
+      setBusy(false);
+      setDragId(null);
+      setDropHint(null);
+    }
+  }
+
+  function colW(key: string) {
+    return widths[key] ?? DEFAULT_PROJECT_LIBRARY_WIDTHS[key] ?? 120;
+  }
+
+  function ResizableTh({
+    colKey,
+    children,
+    sticky,
+  }: {
+    colKey: string;
+    children: ReactNode;
+    sticky?: boolean;
+  }) {
+    return (
+      <th
+        className={cn(
+          "relative px-3 py-3 font-medium",
+          sticky &&
+            "sticky left-14 z-10 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+        )}
+        style={{ width: colW(colKey), minWidth: colW(colKey) }}
+      >
+        {children}
+        <span
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={(e) => onResizeStart(colKey, e)}
+          className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-indigo-400/50"
+        />
+      </th>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -364,7 +565,7 @@ export function ProjectLibraryTable({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs text-slate-400">
-            定位/下一步/阶段/优先级/状态/自定义列可点改 · 点项目名进详情
+            拖列宽 · 左侧 + 建子项目 · 拖手柄排序/挂子 · 点项目名进详情
           </p>
           <CreateProjectButton sourceIdeas={sourceIdeas} columnDefs={columnDefs} />
         </div>
@@ -381,35 +582,45 @@ export function ProjectLibraryTable({
         </p>
       ) : null}
 
+      {msg ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {msg}
+        </p>
+      ) : null}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="overflow-x-auto">
-          <table className="min-w-[1100px] w-full border-collapse text-sm">
+          <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-                <th className="sticky left-0 z-10 min-w-[200px] bg-slate-50 px-4 py-3 font-medium shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]">
+                <th
+                  className="sticky left-0 z-10 bg-slate-50 px-1 py-3"
+                  style={{ width: colW("actions"), minWidth: colW("actions") }}
+                />
+                <ResizableTh colKey="title" sticky>
                   项目名
-                </th>
-                <th className="min-w-[220px] px-3 py-3 font-medium">一句话定位</th>
-                <th className="min-w-[240px] px-3 py-3 font-medium">下一步</th>
-                <th className="min-w-[160px] px-3 py-3 font-medium">代码/目录</th>
-                <th className="min-w-[72px] px-3 py-3 font-medium">优先级</th>
-                <th className="min-w-[160px] px-3 py-3 font-medium">展示链接</th>
-                <th className="min-w-[88px] px-3 py-3 font-medium">状态</th>
-                <th className="min-w-[120px] px-3 py-3 font-medium">当前阶段</th>
-                <th className="min-w-[160px] px-3 py-3 font-medium">Git</th>
+                </ResizableTh>
+                <ResizableTh colKey="positioning">一句话定位</ResizableTh>
+                <ResizableTh colKey="next">下一步</ResizableTh>
+                <ResizableTh colKey="code">代码/目录</ResizableTh>
+                <ResizableTh colKey="priority">优先级</ResizableTh>
+                <ResizableTh colKey="demo">展示链接</ResizableTh>
+                <ResizableTh colKey="status">状态</ResizableTh>
+                <ResizableTh colKey="stage">当前阶段</ResizableTh>
+                <ResizableTh colKey="git">Git</ResizableTh>
                 {columnDefs.map((def) => (
-                  <th key={def.id} className="min-w-[120px] px-3 py-3 font-medium">
+                  <ResizableTh key={def.id} colKey={`custom:${def.id}`}>
                     {def.label}
-                  </th>
+                  </ResizableTh>
                 ))}
-                <th className="min-w-[100px] px-3 py-3 font-medium">更新</th>
+                <ResizableTh colKey="updated">更新</ResizableTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {projects.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10 + columnDefs.length}
+                    colSpan={11 + columnDefs.length}
                     className="px-4 py-12 text-center text-slate-400"
                   >
                     没有符合条件的项目
@@ -418,9 +629,66 @@ export function ProjectLibraryTable({
               ) : (
                 treeItems.map(({ project, depth, parentTitle }) => {
                   const demo = project.demoUrl || project.vercelUrl;
+                  const hint = dropHint?.id === project.id ? dropHint.place : null;
                   return (
-                    <tr key={project.id} className="group hover:bg-indigo-50/40">
-                      <td className="sticky left-0 z-10 bg-white px-4 py-3 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] group-hover:bg-indigo-50/40">
+                    <tr
+                      key={project.id}
+                      className={cn(
+                        "group hover:bg-indigo-50/40",
+                        dragId === project.id && "opacity-50",
+                        hint === "child" && "bg-indigo-50 ring-1 ring-inset ring-indigo-200"
+                      )}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (!dragId || dragId === project.id) return;
+                        const place = dropPlaceFromEvent(e, e.currentTarget);
+                        setDropHint({ id: project.id, place });
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const place =
+                          dropHint?.id === project.id
+                            ? dropHint.place
+                            : dropPlaceFromEvent(e, e.currentTarget);
+                        void onDropRow(project.id, place);
+                      }}
+                    >
+                      <td
+                        className={cn(
+                          "sticky left-0 z-10 bg-white px-1 py-2 group-hover:bg-indigo-50/40",
+                          hint === "before" && "border-t-2 border-indigo-400",
+                          hint === "after" && "border-b-2 border-indigo-400"
+                        )}
+                        style={{ width: colW("actions") }}
+                      >
+                        <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+                          <button
+                            type="button"
+                            title="新建子项目"
+                            disabled={busy || !!project.parentId}
+                            onClick={() => void addChild(project)}
+                            className="flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-indigo-600 disabled:opacity-30"
+                          >
+                            +
+                          </button>
+                          <span
+                            draggable
+                            title="拖拽排序或挂到其他项目下"
+                            onDragStart={() => setDragId(project.id)}
+                            onDragEnd={() => {
+                              setDragId(null);
+                              setDropHint(null);
+                            }}
+                            className="flex h-6 w-6 cursor-grab items-center justify-center rounded text-slate-300 active:cursor-grabbing"
+                          >
+                            ⋮⋮
+                          </span>
+                        </div>
+                      </td>
+                      <td
+                        className="sticky left-14 z-10 bg-white px-3 py-3 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)] group-hover:bg-indigo-50/40"
+                        style={{ width: colW("title") }}
+                      >
                         <div className={cn(depth === 1 && "ml-5 border-l-2 border-slate-200 pl-3")}>
                           {depth === 1 && parentTitle ? (
                             <div className="mb-0.5 text-[11px] text-slate-400">
@@ -435,7 +703,7 @@ export function ProjectLibraryTable({
                           </Link>
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("positioning") }}>
                         <InlineTextField
                           projectId={project.id}
                           field="positioning"
@@ -443,18 +711,21 @@ export function ProjectLibraryTable({
                           lineClamp
                         />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("next") }}>
                         <NextActionCell
                           project={project}
                           taskDraft={nextActionDrafts[project.id]}
                         />
                       </td>
-                      <td className="px-3 py-3 font-mono text-xs text-slate-500">
+                      <td
+                        className="px-3 py-3 font-mono text-xs text-slate-500"
+                        style={{ width: colW("code") }}
+                      >
                         <span className={project.codePath ? "" : "text-slate-300"}>
                           {empty(project.codePath)}
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("priority") }}>
                         <InlineSelectField
                           projectId={project.id}
                           field="priority"
@@ -465,7 +736,7 @@ export function ProjectLibraryTable({
                           )}
                         />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("demo") }}>
                         {demo ? (
                           <a
                             href={demo}
@@ -479,7 +750,7 @@ export function ProjectLibraryTable({
                           <span className="text-slate-300">空白</span>
                         )}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("status") }}>
                         <InlineSelectField
                           projectId={project.id}
                           field="status"
@@ -500,14 +771,14 @@ export function ProjectLibraryTable({
                           )}
                         />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3" style={{ width: colW("stage") }}>
                         <InlineTextField
                           projectId={project.id}
                           field="currentStage"
                           value={project.currentStage ?? ""}
                         />
                       </td>
-                      <td className="px-3 py-3 text-xs text-slate-500">
+                      <td className="px-3 py-3 text-xs text-slate-500" style={{ width: colW("git") }}>
                         {project.githubRepo ? (
                           <span className="truncate">{project.githubRepo}</span>
                         ) : (
@@ -515,7 +786,11 @@ export function ProjectLibraryTable({
                         )}
                       </td>
                       {columnDefs.map((def) => (
-                        <td key={def.id} className="px-3 py-3">
+                        <td
+                          key={def.id}
+                          className="px-3 py-3"
+                          style={{ width: colW(`custom:${def.id}`) }}
+                        >
                           <InlineCustomFieldCell
                             projectId={project.id}
                             def={def}
@@ -523,7 +798,10 @@ export function ProjectLibraryTable({
                           />
                         </td>
                       ))}
-                      <td className="px-3 py-3 tabular-nums text-xs text-slate-400">
+                      <td
+                        className="px-3 py-3 tabular-nums text-xs text-slate-400"
+                        style={{ width: colW("updated") }}
+                      >
                         {new Date(project.updatedAt).toLocaleDateString("zh-CN")}
                       </td>
                     </tr>
