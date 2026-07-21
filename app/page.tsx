@@ -2,10 +2,10 @@ import Link from "next/link";
 import { WorkbenchShell } from "@/components/workbench-shell";
 import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
 import { IdeaStarMap } from "@/components/studio/idea-star-map";
-import { ProjectLibraryCard } from "@/components/project-library-card";
 import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
 import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
+import { WorkbenchProjectLibrary } from "@/components/workbench-project-library";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
 import { getAdminSession } from "@/lib/auth/session";
 import {
@@ -29,7 +29,6 @@ import {
   EVOLUTION_TYPE_LABELS,
   PROJECT_STATUS_LABELS,
 } from "@/lib/studio/types";
-import { toProjectTree } from "@/lib/studio/project-tree";
 
 export default async function WorkbenchPage({
   searchParams,
@@ -72,14 +71,7 @@ export default async function WorkbenchPage({
     }))
   );
 
-  const libraryProjects = [...allProjects]
-    .filter((p) => p.status !== "archived")
-    .sort((a, b) => {
-      const order = { mainline: 0, active: 1, demo: 2, parking: 3, archived: 4 };
-      return order[a.status] - order[b.status] || a.priority.localeCompare(b.priority);
-    });
-
-  const libraryTree = toProjectTree(libraryProjects).slice(0, 4);
+  const libraryProjects = allProjects.filter((p) => p.status !== "archived");
 
   return (
     <WorkbenchShell
@@ -172,25 +164,10 @@ export default async function WorkbenchPage({
         <WorkbenchCompletedFeed items={completedWork} />
       </div>
 
-      <section className="mt-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-500">项目库</h2>
-          <Link href="/projects" className="text-xs text-indigo-600 hover:underline">
-            查看全部
-          </Link>
-        </div>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          {libraryTree.map(({ project: p, depth, parentTitle }) => (
-            <ProjectLibraryCard
-              key={p.id}
-              project={p}
-              depth={depth}
-              parentTitle={parentTitle}
-              nextActionDraft={nextActionDrafts[p.id]}
-            />
-          ))}
-        </div>
-      </section>
+      <WorkbenchProjectLibrary
+        projects={libraryProjects}
+        nextActionDrafts={nextActionDrafts}
+      />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-6">
