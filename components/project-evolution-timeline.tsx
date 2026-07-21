@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
+import { inferModulesFromText } from "@/lib/studio/infer-modules";
 import { partitionReleaseTags } from "@/lib/studio/release-notes";
 import {
   EVOLUTION_TYPE_LABELS,
@@ -100,14 +101,20 @@ export function ProjectEvolutionTimeline({
     return moduleStats.filter((s) => s.module === moduleFilter);
   }, [moduleStats, moduleFilter]);
 
-  function modulesForRelease(tag: string) {
+  function modulesForRelease(tag: string, body?: string | null) {
     const set = new Set<string>();
     for (const e of evolution) {
       if (e.releaseTag === tag && e.module?.trim()) set.add(e.module.trim());
     }
-    for (const idea of ideas) {
-      // ideas don't have releaseTag; skip unless module only shown in module tab
-      void idea;
+    // 尚无挂板块的演进时，直接从本版说明文案推断（避免「有说明却显示未关联板块」）
+    if (set.size === 0 && body?.trim()) {
+      for (const m of inferModulesFromText(body, {
+        projectId: project.id,
+        githubRepo: project.githubRepo,
+        allowed: modules,
+      })) {
+        set.add(m);
+      }
     }
     return Array.from(set);
   }
@@ -543,11 +550,11 @@ function ReleaseArticle({
   release: StudioRelease;
   evolution: EvolutionLog[];
   iterations: Iteration[];
-  modulesForRelease: (tag: string) => string[];
+  modulesForRelease: (tag: string, body?: string | null) => string[];
 }) {
   const linkedEvo = evolution.filter((e) => e.releaseTag === release.tag);
   const linkedIter = iterations.filter((i) => i.release_tag === release.tag);
-  const mods = modulesForRelease(release.tag);
+  const mods = modulesForRelease(release.tag, release.body);
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="flex flex-wrap items-center gap-2">
