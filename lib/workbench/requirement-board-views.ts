@@ -76,6 +76,9 @@ export function readReqBoardViewsState(): ReqBoardViewsState {
 export function writeReqBoardViewsState(state: ReqBoardViewsState): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REQ_BOARD_VIEWS_KEY, JSON.stringify(state));
+  void import("@/lib/ui/synced-pref").then(({ pushSyncedPref }) => {
+    pushSyncedPref("req-board-views-v1", state);
+  });
 }
 
 export function newViewId(): string {
