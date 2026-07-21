@@ -1,22 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BackButton } from "@/components/back-button";
 import { AppBrandFooter } from "@/components/app-brand-footer";
 import { LogoutButton } from "@/components/logout-button";
 import { appVersionLabel } from "@/lib/app-meta";
+import type { AuthRole } from "@/lib/auth/session-edge";
 import { cn } from "@/lib/utils";
 
 export const WORKBENCH_NAV = [
-  { href: "/", label: "今日工作台", icon: "◉" },
-  { href: "/projects", label: "项目库", icon: "▣" },
-  { href: "/stream", label: "灵感流", icon: "✦" },
-  { href: "/todos", label: "我的待办", icon: "☑" },
-  { href: "/evolution", label: "演进记录", icon: "↻" },
-  { href: "/assets", label: "资料 / 链接", icon: "🔗" },
-  { href: "/keys", label: "密钥索引", icon: "🔑" },
-  { href: "/settings", label: "设置", icon: "⚙" },
+  { href: "/", label: "今日工作台", icon: "◉", adminOnly: false },
+  { href: "/projects", label: "项目库", icon: "▣", adminOnly: false },
+  { href: "/stream", label: "灵感流", icon: "✦", adminOnly: false },
+  { href: "/todos", label: "我的待办", icon: "☑", adminOnly: false },
+  { href: "/evolution", label: "演进记录", icon: "↻", adminOnly: false },
+  { href: "/assets", label: "资料 / 链接", icon: "🔗", adminOnly: false },
+  { href: "/keys", label: "密钥索引", icon: "🔑", adminOnly: true },
+  { href: "/settings", label: "设置", icon: "⚙", adminOnly: false },
 ] as const;
 
 function isNavActive(pathname: string, href: string) {
@@ -30,14 +32,45 @@ export function WorkbenchShell({
   children,
   actions,
   nav,
+  role: roleProp,
 }: {
   title: string;
   subtitle?: string;
   children: React.ReactNode;
   actions?: React.ReactNode;
   nav?: React.ReactNode;
+  /** 服务端传入时可跳过 /api/auth/me */
+  role?: AuthRole;
 }) {
   const pathname = usePathname();
+  const [role, setRole] = useState<AuthRole | null>(roleProp ?? null);
+
+  useEffect(() => {
+    if (roleProp) {
+      setRole(roleProp);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = (await res.json()) as { role?: AuthRole };
+        if (!cancelled && (json.role === "admin" || json.role === "viewer")) {
+          setRole(json.role);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roleProp]);
+
+  const effectiveRole = role ?? "admin";
+  const navItems = WORKBENCH_NAV.filter(
+    (item) => !item.adminOnly || effectiveRole === "admin"
+  );
 
   return (
     <div className="flex min-h-screen bg-[#F7F8FA]">
@@ -50,11 +83,16 @@ export function WorkbenchShell({
             <span className="rounded-lg bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
               {appVersionLabel()}
             </span>
+            {effectiveRole === "viewer" ? (
+              <span className="rounded-lg bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
+                观看者
+              </span>
+            ) : null}
           </div>
           <div className="mt-1 text-sm font-bold text-slate-800">个人项目操作台</div>
         </div>
         <nav className="space-y-0.5">
-          {WORKBENCH_NAV.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}

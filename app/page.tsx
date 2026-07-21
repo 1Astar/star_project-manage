@@ -7,6 +7,7 @@ import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
 import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
+import { getAdminSession } from "@/lib/auth/session";
 import {
   getActiveRequirementsAcrossProjects,
   getRecentlyCompletedWork,
@@ -30,7 +31,13 @@ import {
 } from "@/lib/studio/types";
 import { toProjectTree } from "@/lib/studio/project-tree";
 
-export default async function WorkbenchPage() {
+export default async function WorkbenchPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string }>;
+}) {
+  const params = searchParams ? await searchParams : {};
+  const session = await getAdminSession();
   const [
     focus,
     mainline,
@@ -47,8 +54,7 @@ export default async function WorkbenchPage() {
     getTodayFocus(),
     getMainlineProject(),
     getRecentIdeas(5),
-    getRecentEvolution(5),
-    getAllProjects(),
+    getRecentEvolution(5),    getAllProjects(),
     getAllIdeas(),
     getPendingAlerts(),
     getRecentGitUpdates(5),
@@ -76,7 +82,16 @@ export default async function WorkbenchPage() {
   const libraryTree = toProjectTree(libraryProjects).slice(0, 4);
 
   return (
-    <WorkbenchShell title="今日工作台" subtitle="灵感 · 项目 · 任务 · 恢复现场">
+    <WorkbenchShell
+      title="今日工作台"
+      subtitle="灵感 · 项目 · 任务 · 恢复现场"
+      role={session?.role}
+    >
+      {params.error === "keys-forbidden" ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          观看者账号无法访问密钥索引 / 项目密钥。如需查看请使用管理员登录。
+        </p>
+      ) : null}
       <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
 
       <div className="mt-6">

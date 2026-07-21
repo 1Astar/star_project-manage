@@ -1,9 +1,9 @@
-import { requireAdminSession } from "@/lib/auth/require-admin";
+import { requireAdminRole } from "@/lib/auth/require-admin";
 import { exportStudioBackup, importStudioBackup, type StudioBackupPayload } from "@/lib/studio/backup";
 import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studio/route-utils";
 
 export async function GET() {
-  const auth = await requireAdminSession();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   try {
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminSession();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const body = await readStudioBody<StudioBackupPayload>(request);

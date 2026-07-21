@@ -37,8 +37,10 @@ export default function LoginForm() {
               {appVersionLabel()}
             </span>
           </div>
-          <h1 className="text-xl font-bold">管理员登录</h1>
-          <p className="mt-1 text-sm text-slate-500">账号 admin</p>
+          <h1 className="text-xl font-bold">登录</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            管理员或观看者账号（观看者无法打开密钥区）
+          </p>
         </div>
         <input
           name="account"
