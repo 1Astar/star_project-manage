@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { Project } from "@/lib/studio/types";
+import { parseFeatureModulesInput } from "@/lib/studio/project-modules";
 
 export function StudioGitSettings({ project }: { project: Project }) {
   const router = useRouter();
@@ -16,6 +17,9 @@ export function StudioGitSettings({ project }: { project: Project }) {
   const [demoUrl, setDemoUrl] = useState(project.demoUrl ?? "");
   const [localRunGuide, setLocalRunGuide] = useState(project.localRunGuide ?? "");
   const [vercelUrl, setVercelUrl] = useState(project.vercelUrl ?? "");
+  const [featureModulesText, setFeatureModulesText] = useState(
+    (project.featureModules ?? []).join("\n")
+  );
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -27,24 +31,37 @@ export function StudioGitSettings({ project }: { project: Project }) {
     }
     startTransition(async () => {
       try {
-        const res = await fetch(`/api/studio/projects/${project.id}/git`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            githubRepo: githubRepo || null,
-            githubBranch: githubBranch.trim() || null,
-            codePath: codePath || null,
-            demoUrl: demoUrl || null,
-            localRunGuide: localRunGuide || null,
-            vercelUrl: vercelUrl || null,
+        const modules = parseFeatureModulesInput(featureModulesText);
+        const [gitRes, projRes] = await Promise.all([
+          fetch(`/api/studio/projects/${project.id}/git`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              githubRepo: githubRepo || null,
+              githubBranch: githubBranch.trim() || null,
+              codePath: codePath || null,
+              demoUrl: demoUrl || null,
+              localRunGuide: localRunGuide || null,
+              vercelUrl: vercelUrl || null,
+            }),
           }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error ?? "保存失败");
+          fetch(`/api/studio/projects/${project.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ featureModules: modules }),
+          }),
+        ]);
+        const gitData = await gitRes.json();
+        const projData = await projRes.json();
+        if (!gitRes.ok) {
+          setError(gitData.error ?? "仓库保存失败");
           return;
         }
-        setMessage("已保存（有 PM 映射时同步镜像）");
+        if (!projRes.ok) {
+          setError(projData.error ?? "板块保存失败");
+          return;
+        }
+        setMessage("已保存（仓库 + 功能板块）");
         router.refresh();
       } catch {
         setError("网络错误");
@@ -82,15 +99,16 @@ export function StudioGitSettings({ project }: { project: Project }) {
             />
           </label>
         </div>
-          <label className="block text-sm">
-            <span className="text-slate-500">代码目录（monorepo 可选，勿填仓库 URL）</span>
-            <input
-              value={codePath}
-              onChange={(e) => setCodePath(e.target.value)}
-              placeholder="例：工具/private/工具/star-pm；整仓则留空"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
-            />
-          </label>        <label className="block text-sm">
+        <label className="block text-sm">
+          <span className="text-slate-500">代码目录（monorepo 可选，勿填仓库 URL）</span>
+          <input
+            value={codePath}
+            onChange={(e) => setCodePath(e.target.value)}
+            placeholder="例：工具/private/工具/star-pm；整仓则留空"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
+          />
+        </label>
+        <label className="block text-sm">
           <span className="text-slate-500">展示链接</span>
           <input
             value={demoUrl}
@@ -116,12 +134,25 @@ export function StudioGitSettings({ project }: { project: Project }) {
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
           />
         </label>
+        <label className="block text-sm">
+          <span className="text-slate-500">功能板块</span>
+          <textarea
+            value={featureModulesText}
+            onChange={(e) => setFeatureModulesText(e.target.value)}
+            rows={5}
+            placeholder={"每行一个，或逗号分隔\n例：对话聊天、相册图库、推送通知"}
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            按产品功能面配置（小手机里有什么能力），不是「产品/技术」这类横切标签。留空则按仓库用内置目录。
+          </p>
+        </label>
         <button
           type="submit"
           disabled={pending}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          {pending ? "保存中…" : "保存仓库配置"}
+          {pending ? "保存中…" : "保存仓库与板块"}
         </button>
       </form>
       {message ? <p className="mt-2 text-sm text-green-600">{message}</p> : null}

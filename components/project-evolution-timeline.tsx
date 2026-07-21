@@ -55,8 +55,8 @@ export function ProjectEvolutionTimeline({
   const [showForm, setShowForm] = useState(false);
 
   const modules = useMemo(
-    () => resolveFeatureModules(project.id, project.featureModules),
-    [project.id, project.featureModules]
+    () => resolveFeatureModules(project.id, project.featureModules, project.githubRepo),
+    [project.id, project.featureModules, project.githubRepo]
   );
 
   const [form, setForm] = useState({
@@ -189,7 +189,7 @@ export function ProjectEvolutionTimeline({
         <div>
           <h2 className="text-sm font-semibold text-slate-800">迭代记录</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            「同步版本」拉 Tag/Release、补全本版变更，并把各版说明条目导入为演进（关键词推断板块）；默认只展示语义化版本，过程 Tag 折叠。
+            「同步版本」拉 Tag/Release；仅在语义化版本之间用 commits 补变更；说明条目导入为演进并推断功能板块；过程 Tag 默认折叠。
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -432,7 +432,7 @@ export function ProjectEvolutionTimeline({
 
           {filteredModuleStats.length === 0 ? (
             <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-              还没有配置板块。可在项目设置里配置 featureModules。
+              还没有配置板块。可在项目「代码仓库」设置里填写功能板块（按产品功能面，如对话/相册）。
             </p>
           ) : (
             filteredModuleStats.map(({ module: m, evolution: ev, ideas: ids }) => (

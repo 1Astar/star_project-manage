@@ -656,7 +656,8 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
   if (!input.projectId) throw new Error("projectId 必填");
 
   const snapshot = await getStudioSnapshot();
-  if (!snapshot.projects.some((p) => p.id === input.projectId)) throw new Error("关联项目不存在");
+  const project = snapshot.projects.find((p) => p.id === input.projectId);
+  if (!project) throw new Error("关联项目不存在");
 
   const { resolveModuleForImport } = await import("@/lib/studio/infer-modules");
   const {
@@ -667,7 +668,10 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
   const textForInfer = [input.title, input.after, input.before, input.reason]
     .filter(Boolean)
     .join("\n");
-  const resolved = resolveModuleForImport(input.module, textForInfer, input.projectId);
+  const resolved = resolveModuleForImport(input.module, textForInfer, input.projectId, {
+    featureModules: project.featureModules,
+    githubRepo: project.githubRepo,
+  });
   let decision = input.decision ?? "";
   let reason = input.reason ?? "";
   if (
@@ -1171,7 +1175,7 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
   evolutionSkipped: number;
 }> {
   const snapshot = await getStudioSnapshot();
-  const project = snapshot.projects.find((p) => p.id === projectId);
+  let project = snapshot.projects.find((p) => p.id === projectId);
   if (!project) throw new Error("项目不存在");
   const repo = project.githubRepo?.trim();
   if (!repo) throw new Error("项目未配置 GitHub 仓库（githubRepo）");
@@ -1183,13 +1187,28 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     fetchCommitDate,
     fetchCompareCommits,
   } = await import("@/lib/github/client");
-  const { compareVersionTags, formatCommitsAsChangelog } = await import(
-    "@/lib/studio/release-notes"
+  const {
+    compareVersionTags,
+    formatCommitsAsChangelog,
+    isSemverReleaseTag,
+  } = await import("@/lib/studio/release-notes");
+  const { resolveFeatureModules, detectModuleCatalog } = await import(
+    "@/lib/studio/project-modules"
   );
+
+  // 未自定义板块时，按仓库目录写入默认功能面（如 chris-phone）
+  if (!project.featureModules?.length) {
+    const catalog = detectModuleCatalog(project.id, repo);
+    if (catalog !== "generic") {
+      const defaults = resolveFeatureModules(project.id, null, repo);
+      await updateStudioProject(projectId, { featureModules: defaults });
+      project = { ...project, featureModules: defaults };
+    }
+  }
 
   const [ghReleases, ghTags] = await Promise.all([
     fetchGitHubReleases(repo),
-    fetchGitHubTags(repo, 50),
+    fetchGitHubTags(repo, 100),
   ]);
 
   const syncedAt = nowIso();
@@ -1232,17 +1251,16 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     });
   }
 
-  // 升序版本，便于算「上一版 → 本版」commits
+  // 全部 Tag 可补发布时间；变更说明只在「语义化版本」相邻之间算 commits
+  // （避免 stage/ nest/ 过程 Tag 插在中间导致 compare 失败或空结果）
   const ascending = [...byTag.keys()].sort(compareVersionTags);
+  const semverAscending = ascending.filter(isSemverReleaseTag);
   let changelogFilled = 0;
-  const FILL_LIMIT = 20;
+  const FILL_LIMIT = 40;
 
-  for (let i = ascending.length - 1; i >= 0 && changelogFilled < FILL_LIMIT; i--) {
-    const tag = ascending[i];
+  for (const tag of ascending) {
     const current = byTag.get(tag);
     if (!current) continue;
-
-    // Tag 缺发布时间 → 用 commit 日期
     if (!current.publishedAt && tagSha.get(tag)) {
       try {
         const date = await fetchCommitDate(repo, tagSha.get(tag)!);
@@ -1251,11 +1269,21 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
         /* ignore */
       }
     }
+  }
+
+  for (
+    let i = semverAscending.length - 1;
+    i >= 0 && changelogFilled < FILL_LIMIT;
+    i--
+  ) {
+    const tag = semverAscending[i];
+    const current = byTag.get(tag);
+    if (!current) continue;
 
     // 已有 Release 说明则不覆盖
     if (current.body?.trim()) continue;
 
-    const prev = i > 0 ? ascending[i - 1] : null;
+    const prev = i > 0 ? semverAscending[i - 1] : null;
     try {
       if (prev) {
         const commits = await fetchCompareCommits(repo, prev, tag);
@@ -1510,7 +1538,8 @@ export async function importReleaseBodiesAsEvolution(
   const { resolveModuleForImport } = await import("@/lib/studio/infer-modules");
 
   const snapshot = await getStudioSnapshot();
-  if (!snapshot.projects.some((p) => p.id === projectId)) {
+  const project = snapshot.projects.find((p) => p.id === projectId);
+  if (!project) {
     throw new Error("项目不存在");
   }
 
@@ -1543,7 +1572,10 @@ export async function importReleaseBodiesAsEvolution(
         skipped += 1;
         continue;
       }
-      const resolved = resolveModuleForImport(null, `${title}\n${bullet}`, projectId);
+      const resolved = resolveModuleForImport(null, `${title}\n${bullet}`, projectId, {
+        featureModules: project.featureModules,
+        githubRepo: project.githubRepo,
+      });
       if (resolved.module) inferredModules += 1;
       else pendingModules += 1;
 

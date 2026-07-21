@@ -3,9 +3,12 @@
  */
 
 import {
+  CHRIS_PHONE_FEATURE_MODULES,
   DEFAULT_FEATURE_MODULES,
   GENERIC_FEATURE_MODULES,
+  detectModuleCatalog,
   resolveFeatureModules,
+  type ModuleCatalogId,
 } from "@/lib/studio/project-modules";
 
 export type ModuleHint = {
@@ -46,7 +49,51 @@ export const STAR_PM_MODULE_HINTS: ModuleHint[] = [
   },
 ];
 
-/** 通用项目关键词 */
+/** Chris Phone 功能面关键词（对齐 CHRIS_PHONE_FEATURE_MODULES） */
+export const CHRIS_PHONE_MODULE_HINTS: ModuleHint[] = [
+  {
+    module: "对话聊天",
+    patterns: [/对话/, /聊天/, /\bchat\b/i, /消息/, /session/i, /companion/i],
+  },
+  {
+    module: "相册图库",
+    patterns: [/相册/, /图库/, /gallery/i, /album/i, /\bimage\b/i, /照片/, /图片过期/, /三层/],
+  },
+  {
+    module: "浏览器",
+    patterns: [/浏览器/, /browse/i, /browser/i, /intention.?gate/i, /clone.?ui/i],
+  },
+  {
+    module: "口袋文件",
+    patterns: [/口袋/, /文件/, /pocket/i, /\bfiles?\b/i, /资料夹/],
+  },
+  {
+    module: "日记心情",
+    patterns: [/日记/, /心情/, /diary/i, /\bmood\b/i, /year.?mood/i, /sealed/i],
+  },
+  {
+    module: "指令命令",
+    patterns: [/指令/, /命令/, /command/i, /float/i, /proactive/i, /action.?chip/i, /云.?SSE/i],
+  },
+  {
+    module: "推送通知",
+    patterns: [/推送/, /通知/, /\bpush\b/i, /VAPID/i, /web.?push/i, /resubscribe/i, /订阅/],
+  },
+  {
+    module: "记忆星座",
+    patterns: [/记忆/, /星座/, /memory/i, /constellation/i, /desire/i, /欲望/],
+  },
+  {
+    module: "OpenCLI",
+    patterns: [/OpenCLI/i, /opencli/i, /gateway/i, /autostart/i, /diagnose/i],
+  },
+  {
+    module: "系统壳",
+    patterns: [/系统壳/, /壳/, /terminal/i, /countdown/i, /\bcat\b/i, /thinking/i, /bulb/i, /ombre/i],
+  },
+];
+
+/** 通用项目关键词（横切标签，仅作兜底） */
 export const GENERIC_MODULE_HINTS: ModuleHint[] = [
   { module: "产品", patterns: [/产品/, /定位/, /需求/, /PRD/, /用户/] },
   { module: "体验", patterns: [/体验/, /UI/, /交互/, /视觉/, /设计/] },
@@ -54,9 +101,17 @@ export const GENERIC_MODULE_HINTS: ModuleHint[] = [
   { module: "交付", patterns: [/交付/, /发版/, /上线/, /部署/, /Release/, /验收/] },
 ];
 
-function hintsForProject(projectId: string | null | undefined): ModuleHint[] {
-  if (projectId === "proj-star-pm") return STAR_PM_MODULE_HINTS;
+function hintsForCatalog(catalog: ModuleCatalogId): ModuleHint[] {
+  if (catalog === "star-pm") return STAR_PM_MODULE_HINTS;
+  if (catalog === "chris-phone") return CHRIS_PHONE_MODULE_HINTS;
   return GENERIC_MODULE_HINTS;
+}
+
+function hintsForProject(
+  projectId: string | null | undefined,
+  githubRepo?: string | null
+): ModuleHint[] {
+  return hintsForCatalog(detectModuleCatalog(projectId, githubRepo));
 }
 
 /**
@@ -67,13 +122,14 @@ export function inferModuleFromText(
   text: string,
   opts?: {
     projectId?: string | null;
+    githubRepo?: string | null;
     allowed?: string[] | null;
   }
 ): string | null {
   const raw = (text ?? "").trim();
   if (!raw) return null;
 
-  const hints = hintsForProject(opts?.projectId);
+  const hints = hintsForProject(opts?.projectId, opts?.githubRepo);
   const allowed = (opts?.allowed ?? []).map((m) => m.trim()).filter(Boolean);
   const allowSet = allowed.length > 0 ? new Set(allowed) : null;
 
@@ -88,23 +144,43 @@ export function inferModuleFromText(
       best = { module: hint.module, score };
     }
   }
+
+  // 自定义板块名：文案里直接出现板块名也算命中
+  if (allowed.length > 0) {
+    for (const m of allowed) {
+      if (m.length >= 2 && raw.includes(m)) {
+        const score = 10;
+        if (!best || score > best.score) best = { module: m, score };
+      }
+    }
+  }
+
   return best?.module ?? null;
 }
 
 /** 推断可能命中的多个板块（发版汇总用） */
 export function inferModulesFromText(
   text: string,
-  opts?: { projectId?: string | null; allowed?: string[] | null }
+  opts?: {
+    projectId?: string | null;
+    githubRepo?: string | null;
+    allowed?: string[] | null;
+  }
 ): string[] {
   const raw = (text ?? "").trim();
   if (!raw) return [];
-  const hints = hintsForProject(opts?.projectId);
+  const hints = hintsForProject(opts?.projectId, opts?.githubRepo);
   const allowed = (opts?.allowed ?? []).map((m) => m.trim()).filter(Boolean);
   const allowSet = allowed.length > 0 ? new Set(allowed) : null;
   const hit: string[] = [];
   for (const hint of hints) {
     if (allowSet && !allowSet.has(hint.module)) continue;
     if (hint.patterns.some((p) => p.test(raw))) hit.push(hint.module);
+  }
+  if (allowed.length > 0) {
+    for (const m of allowed) {
+      if (m.length >= 2 && raw.includes(m) && !hit.includes(m)) hit.push(m);
+    }
   }
   return hit;
 }
@@ -113,18 +189,37 @@ export function inferModulesFromText(
 export function resolveModuleForImport(
   explicit: string | null | undefined,
   text: string,
-  projectId?: string | null
+  projectId?: string | null,
+  opts?: {
+    featureModules?: string[] | null;
+    githubRepo?: string | null;
+  }
 ): { module: string; inferred: boolean } {
   const given = (explicit ?? "").trim();
   if (given) return { module: given, inferred: false };
-  const allowed = projectId
-    ? resolveFeatureModules(projectId, null)
-    : [...DEFAULT_FEATURE_MODULES];
-  const inferred = inferModuleFromText(text, { projectId, allowed });
+  const allowed = resolveFeatureModules(
+    projectId ?? "",
+    opts?.featureModules,
+    opts?.githubRepo
+  );
+  const inferred = inferModuleFromText(text, {
+    projectId,
+    githubRepo: opts?.githubRepo,
+    allowed,
+  });
   return { module: inferred ?? "", inferred: Boolean(inferred) };
 }
 
-export function defaultModulesCatalog(projectId?: string | null): string[] {
-  if (projectId === "proj-star-pm") return [...DEFAULT_FEATURE_MODULES];
-  return [...GENERIC_FEATURE_MODULES];
+export function defaultModulesCatalog(
+  projectId?: string | null,
+  githubRepo?: string | null
+): string[] {
+  return resolveFeatureModules(projectId ?? "", null, githubRepo);
 }
+
+/** 测试/文档用：暴露各目录名单 */
+export const CATALOG_MODULE_LISTS = {
+  "star-pm": DEFAULT_FEATURE_MODULES,
+  "chris-phone": CHRIS_PHONE_FEATURE_MODULES,
+  generic: GENERIC_FEATURE_MODULES,
+} as const;
