@@ -108,7 +108,8 @@ const COLUMN_TYPES: { value: PoolColumnType; label: string }[] = [
 ];
 
 const TITLE_STICKY_PX = 220;
-const CHECKBOX_PX = 88;
+/** 左侧操作列（+ / 勾选 / 拖拽）宽度；须与 sticky 名称列的 left 一致 */
+const CHECKBOX_PX = 96;
 const TITLE_LEFT = CHECKBOX_PX;
 
 type SortKey =
@@ -1217,11 +1218,12 @@ export function RequirementPoolTable({
       ) : null}
 
       <div className="max-h-[70vh] overflow-auto">
-        <table className="min-w-[1080px] w-full border-collapse text-sm">
+        <table className="min-w-[1080px] w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
           <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
             <tr>
               <th
-                className="sticky left-0 z-30 w-[72px] bg-slate-50 px-1 py-2.5 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+                className="sticky left-0 z-30 bg-slate-50 px-1 py-2.5 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+                style={{ width: CHECKBOX_PX, minWidth: CHECKBOX_PX, maxWidth: CHECKBOX_PX }}
                 aria-label="选择与拖拽"
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1376,6 +1378,7 @@ export function RequirementPoolTable({
                         "sticky left-0 z-[2] px-1 py-2.5 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]",
                         active ? "bg-indigo-50" : "bg-white"
                       )}
+                      style={{ width: CHECKBOX_PX, minWidth: CHECKBOX_PX, maxWidth: CHECKBOX_PX }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-center gap-0.5">
