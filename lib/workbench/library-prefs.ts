@@ -41,6 +41,9 @@ export function readWorkbenchLibraryPrefs(): WorkbenchLibraryPrefs {
 export function writeWorkbenchLibraryPrefs(prefs: WorkbenchLibraryPrefs): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(WORKBENCH_LIBRARY_PREFS_KEY, JSON.stringify(prefs));
+  void import("@/lib/ui/synced-pref").then(({ pushSyncedPref }) => {
+    pushSyncedPref("workbench-library-v1", prefs);
+  });
 }
 
 /** 默认排序：状态 → 优先级，再展成父→子树 */

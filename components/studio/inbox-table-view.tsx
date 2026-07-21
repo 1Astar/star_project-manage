@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { StudioBadge } from "@/components/studio/shell";
 import { ConvertIdeaButton } from "@/components/studio/convert-idea-button";
 import { formatIdeaDateTime, ideaOccurredAt } from "@/lib/studio/idea-stream-utils";
@@ -15,6 +15,7 @@ import {
   type IdeaType,
 } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
+import { ResizableTh, useColWidths } from "@/lib/ui/col-widths";
 
 export type InboxTableRow = {
   idea: Idea;
@@ -46,22 +47,6 @@ function priorityTone(priority: string) {
   return "default" as const;
 }
 
-function readWidths(): Record<string, number> {
-  if (typeof window === "undefined") return { ...DEFAULT_WIDTHS };
-  try {
-    const raw = window.localStorage.getItem(WIDTHS_KEY);
-    if (!raw) return { ...DEFAULT_WIDTHS };
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const next = { ...DEFAULT_WIDTHS };
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === "number" && v >= 48 && v <= 800) next[k] = v;
-    }
-    return next;
-  } catch {
-    return { ...DEFAULT_WIDTHS };
-  }
-}
-
 function toggleInList<T extends string>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 }
@@ -77,17 +62,14 @@ export function InboxTableView({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [widths, setWidths] = useState(DEFAULT_WIDTHS);
+  const { colW, onResizeStart } = useColWidths(WIDTHS_KEY, DEFAULT_WIDTHS, {
+    syncKey: "idea-table-widths-v1",
+  });
   const [query, setQuery] = useState("");
   const [priorities, setPriorities] = useState<IdeaPriority[]>([]);
   const [types, setTypes] = useState<IdeaType[]>([]);
   const [statuses, setStatuses] = useState<IdeaStatus[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
-  const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
-
-  useEffect(() => {
-    setWidths(readWidths());
-  }, []);
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -123,42 +105,6 @@ export function InboxTableView({
     setSelected(allSelected ? new Set() : new Set(visibleIds));
   }
 
-  function colW(key: string) {
-    return widths[key] ?? DEFAULT_WIDTHS[key] ?? 100;
-  }
-
-  function onResizeStart(key: string, e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    const startW = colW(key);
-    resizeRef.current = { key, startX: e.clientX, startW };
-    let lastW = startW;
-    const onMove = (ev: MouseEvent) => {
-      const cur = resizeRef.current;
-      if (!cur) return;
-      lastW = Math.min(800, Math.max(48, cur.startW + (ev.clientX - cur.startX)));
-      setWidths((prev) => ({ ...prev, [cur.key]: lastW }));
-    };
-    const onUp = () => {
-      const cur = resizeRef.current;
-      resizeRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (!cur) return;
-      setWidths((prev) => {
-        const next = { ...prev, [cur.key]: lastW };
-        try {
-          window.localStorage.setItem(WIDTHS_KEY, JSON.stringify(next));
-        } catch {
-          /* ignore */
-        }
-        return next;
-      });
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }
-
   async function bulkArchive() {
     const ids = [...selected];
     if (!ids.length) return;
@@ -184,34 +130,6 @@ export function InboxTableView({
     } finally {
       setPending(false);
     }
-  }
-
-  function ResizableTh({
-    colKey,
-    children,
-    sticky,
-  }: {
-    colKey: string;
-    children: React.ReactNode;
-    sticky?: boolean;
-  }) {
-    return (
-      <th
-        className={cn(
-          "relative px-4 py-3 font-medium",
-          sticky && "sticky left-10 z-10 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
-        )}
-        style={{ width: colW(colKey), minWidth: colW(colKey) }}
-      >
-        {children}
-        <span
-          role="separator"
-          aria-orientation="vertical"
-          onMouseDown={(e) => onResizeStart(colKey, e)}
-          className="absolute right-0 top-0 z-20 h-full w-1.5 cursor-col-resize hover:bg-indigo-400/50"
-        />
-      </th>
-    );
   }
 
   return (
@@ -363,17 +281,39 @@ export function InboxTableView({
                     aria-label="全选"
                   />
                 </th>
-                <ResizableTh colKey="title" sticky>
+                <ResizableTh
+                  colKey="title"
+                  width={colW("title")}
+                  onResizeStart={onResizeStart}
+                  sticky
+                  className="left-10 px-4"
+                >
                   标题
                 </ResizableTh>
-                <ResizableTh colKey="oneLine">一句话想法</ResizableTh>
-                <ResizableTh colKey="type">类型</ResizableTh>
-                <ResizableTh colKey="priority">优先级</ResizableTh>
-                <ResizableTh colKey="status">状态</ResizableTh>
-                <ResizableTh colKey="occurred">发生时间</ResizableTh>
-                <ResizableTh colKey="completed">完成时间</ResizableTh>
-                <ResizableTh colKey="related">关联</ResizableTh>
-                <ResizableTh colKey="actions">操作</ResizableTh>
+                <ResizableTh colKey="oneLine" width={colW("oneLine")} onResizeStart={onResizeStart} className="px-4">
+                  一句话想法
+                </ResizableTh>
+                <ResizableTh colKey="type" width={colW("type")} onResizeStart={onResizeStart} className="px-4">
+                  类型
+                </ResizableTh>
+                <ResizableTh colKey="priority" width={colW("priority")} onResizeStart={onResizeStart} className="px-4">
+                  优先级
+                </ResizableTh>
+                <ResizableTh colKey="status" width={colW("status")} onResizeStart={onResizeStart} className="px-4">
+                  状态
+                </ResizableTh>
+                <ResizableTh colKey="occurred" width={colW("occurred")} onResizeStart={onResizeStart} className="px-4">
+                  发生时间
+                </ResizableTh>
+                <ResizableTh colKey="completed" width={colW("completed")} onResizeStart={onResizeStart} className="px-4">
+                  完成时间
+                </ResizableTh>
+                <ResizableTh colKey="related" width={colW("related")} onResizeStart={onResizeStart} className="px-4">
+                  关联
+                </ResizableTh>
+                <ResizableTh colKey="actions" width={colW("actions")} onResizeStart={onResizeStart} className="px-4">
+                  操作
+                </ResizableTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

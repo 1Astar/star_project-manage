@@ -26,8 +26,13 @@ export function WorkbenchProjectLibrary({
   const [dragId, setDragId] = useState<string | null>(null);
 
   useEffect(() => {
-    setPrefs(readWorkbenchLibraryPrefs());
-    setReady(true);
+    const apply = () => {
+      setPrefs(readWorkbenchLibraryPrefs());
+      setReady(true);
+    };
+    apply();
+    window.addEventListener("star-pm:prefs-hydrated", apply);
+    return () => window.removeEventListener("star-pm:prefs-hydrated", apply);
   }, []);
 
   const persist = useCallback((next: WorkbenchLibraryPrefs) => {

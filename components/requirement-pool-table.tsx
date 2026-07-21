@@ -509,6 +509,23 @@ export function RequirementPoolTable({
     } catch {
       /* ignore */
     }
+
+    const onHydrated = () => {
+      try {
+        const widthsRaw = localStorage.getItem(storageWidthsKey(projectId));
+        if (!widthsRaw) return;
+        const parsed = JSON.parse(widthsRaw) as Record<string, unknown>;
+        const next = { ...DEFAULT_POOL_COL_WIDTHS };
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === "number" && v >= 48 && v <= 800) next[k] = v;
+        }
+        setColWidths(next);
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("star-pm:prefs-hydrated", onHydrated);
+    return () => window.removeEventListener("star-pm:prefs-hydrated", onHydrated);
   }, [projectId, customKeySet]);
 
   // 新建自定义列后自动加入可见列与顺序
@@ -849,11 +866,17 @@ export function RequirementPoolTable({
       if (!cur) return;
       setColWidths((prev) => {
         const next = { ...prev, [cur.key]: lastW };
-        try {
-          localStorage.setItem(storageWidthsKey(projectId), JSON.stringify(next));
-        } catch {
-          /* ignore */
-        }
+        void import("@/lib/ui/synced-pref")
+          .then(({ writePoolColWidthsSynced }) => {
+            writePoolColWidthsSynced(projectId, next);
+          })
+          .catch(() => {
+            try {
+              localStorage.setItem(storageWidthsKey(projectId), JSON.stringify(next));
+            } catch {
+              /* ignore */
+            }
+          });
         return next;
       });
     };

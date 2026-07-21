@@ -50,6 +50,17 @@ export function readProjectLibraryWidths(): Record<string, number> {
 export function writeProjectLibraryWidths(widths: Record<string, number>): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(PROJECT_LIBRARY_WIDTHS_KEY, JSON.stringify(widths));
+  void import("@/lib/ui/synced-pref").then(({ pushSyncedPref }) => {
+    pushSyncedPref("project-library-col-widths", widths);
+  });
+}
+
+export function writeProjectLibraryOrder(order: string[]): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PROJECT_LIBRARY_ORDER_KEY, JSON.stringify(order));
+  void import("@/lib/ui/synced-pref").then(({ pushSyncedPref }) => {
+    pushSyncedPref("project-library-order", order);
+  });
 }
 
 export function readProjectLibraryOrder(): string[] {
@@ -62,11 +73,6 @@ export function readProjectLibraryOrder(): string[] {
   } catch {
     return [];
   }
-}
-
-export function writeProjectLibraryOrder(order: string[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROJECT_LIBRARY_ORDER_KEY, JSON.stringify(order));
 }
 
 /** 按自定义顺序排序；未出现在 order 中的接在末尾 */

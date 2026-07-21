@@ -8,6 +8,7 @@ import { AppBrandFooter } from "@/components/app-brand-footer";
 import { LogoutButton } from "@/components/logout-button";
 import { appVersionLabel } from "@/lib/app-meta";
 import type { AuthRole } from "@/lib/auth/session-edge";
+import { PrefsHydrator } from "@/components/prefs-hydrator";
 import { cn } from "@/lib/utils";
 
 export const WORKBENCH_NAV = [
@@ -75,6 +76,7 @@ export function WorkbenchShell({
 
   return (
     <div className="flex min-h-screen bg-[#F7F8FA]">
+      <PrefsHydrator />
       <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white p-4 md:flex">
         <div className="mb-6 px-2">
           <div className="flex flex-wrap items-center gap-2">

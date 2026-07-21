@@ -45,13 +45,18 @@ export function GlobalRequirementBoard({ initialItems, projects }: Props) {
   const [filterOpen, setFilterOpen] = useState(false);
 
   useEffect(() => {
-    const state = readReqBoardViewsState();
-    setSavedViews(state.views);
-    setActiveViewId(state.activeViewId);
-    if (state.activeViewId) {
-      const found = state.views.find((v) => v.id === state.activeViewId);
-      if (found) setFilters(found.filters);
-    }
+    const apply = () => {
+      const state = readReqBoardViewsState();
+      setSavedViews(state.views);
+      setActiveViewId(state.activeViewId);
+      if (state.activeViewId) {
+        const found = state.views.find((v) => v.id === state.activeViewId);
+        if (found) setFilters(found.filters);
+      }
+    };
+    apply();
+    window.addEventListener("star-pm:prefs-hydrated", apply);
+    return () => window.removeEventListener("star-pm:prefs-hydrated", apply);
   }, []);
 
   function persistViews(nextViews: ReqBoardSavedView[], nextActive: string | null) {
