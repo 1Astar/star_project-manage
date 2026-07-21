@@ -1280,8 +1280,8 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     const current = byTag.get(tag);
     if (!current) continue;
 
-    // 已有 Release 说明则不覆盖
-    if (current.body?.trim()) continue;
+    // 已有结构化 Release 说明（含 `- ` 列表）则不覆盖
+    if (hasStructuredReleaseBody(current.body)) continue;
 
     const prev = i > 0 ? semverAscending[i - 1] : null;
     try {
@@ -1556,12 +1556,7 @@ export async function importReleaseBodiesAsEvolution(
   let pendingModules = 0;
 
   for (const rel of releases) {
-    const bullets = (rel.body ?? "")
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.startsWith("- "))
-      .map((l) => l.replace(/^-\s*/, "").trim())
-      .filter((l) => l && !/完整变更见/.test(l) && !/^\*\*涉及板块/.test(l));
+    const bullets = extractReleaseBodyItems(rel.body ?? "");
 
     for (const bullet of bullets) {
       const clean = stripBulletDecor(bullet);
@@ -1596,4 +1591,45 @@ export async function importReleaseBodiesAsEvolution(
   }
 
   return { imported, skipped, inferredModules, pendingModules };
+}
+
+/** 优先解析 `- ` 列表；否则按换行 / 分号拆成条目（兼容发版时写的整段说明） */
+export function extractReleaseBodyItems(body: string): string[] {
+  const raw = (body ?? "").trim();
+  if (!raw) return [];
+
+  const bullets = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("- ") || l.startsWith("* "))
+    .map((l) => l.replace(/^[-*]\s*/, "").trim())
+    .filter((l) => l && !/完整变更见/.test(l) && !/^\*\*涉及板块/.test(l));
+
+  if (bullets.length) return bullets;
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^#+\s/.test(l) && !/完整变更见/.test(l));
+
+  if (lines.length >= 2) return lines;
+
+  // 单段：按中文分号 / 句号粗拆，否则整段一条
+  const parts = raw
+    .split(/[；;]\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 4);
+  if (parts.length >= 2) return parts;
+
+  return [raw];
+}
+
+/** 有 `- ` / `* ` 列表才算结构化说明；整段短文仍可用 commits 补全 */
+export function hasStructuredReleaseBody(body: string | null | undefined): boolean {
+  const raw = (body ?? "").trim();
+  if (!raw) return false;
+  return raw.split(/\r?\n/).some((l) => {
+    const t = l.trim();
+    return t.startsWith("- ") || t.startsWith("* ");
+  });
 }

@@ -29,7 +29,7 @@ export const STAR_PM_MODULE_HINTS: ModuleHint[] = [
   },
   {
     module: "需求任务",
-    patterns: [/需求/, /任务/, /看板/, /迭代计划/, /甘特/, /需求池/],
+    patterns: [/需求/, /任务/, /看板/, /迭代计划/, /甘特/, /需求池/, /\bBug\b/i, /提 Bug/, /严重程度/],
   },
   {
     module: "迭代记录",
@@ -45,7 +45,7 @@ export const STAR_PM_MODULE_HINTS: ModuleHint[] = [
   },
   {
     module: "设置",
-    patterns: [/设置/, /密钥/, /AI 规则/, /CANONICAL/, /\bMCP\b/, /Migration/, /环境变量/],
+    patterns: [/设置/, /密钥/, /二次验证/, /观看者/, /AI 规则/, /CANONICAL/, /\bMCP\b/, /Migration/, /环境变量/, /feature_modules/],
   },
 ];
 
