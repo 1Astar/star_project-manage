@@ -7,7 +7,6 @@ import { ConvertIdeaButton } from "@/components/studio/convert-idea-button";
 import {
   IDEA_TYPE_EMOJI,
   IDEA_DATE_GROUP_LABELS,
-  formatIdeaTime,
   formatIdeaDateTime,
   groupIdeasByDate,
   ideaOccurredAt,
@@ -77,10 +76,10 @@ export function IdeaStreamTimeline({
                     )}
                   >
                     <span
-                      className="shrink-0 pt-0.5 text-xs tabular-nums text-slate-400"
+                      className="shrink-0 pt-0.5 text-[11px] tabular-nums leading-5 text-slate-400"
                       title="灵感发生时间"
                     >
-                      {formatIdeaTime(ideaOccurredAt(idea))}
+                      {formatIdeaDateTime(ideaOccurredAt(idea))}
                     </span>
                     <span className="shrink-0 text-base" title={idea.type}>
                       {IDEA_TYPE_EMOJI[idea.type]}
