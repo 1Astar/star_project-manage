@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export const WORKBENCH_NAV = [
   { href: "/", label: "今日工作台", icon: "◉", adminOnly: false },
   { href: "/projects", label: "项目库", icon: "▣", adminOnly: false },
+  { href: "/boards/requirements", label: "需求总览", icon: "▥", adminOnly: false },
   { href: "/stream", label: "灵感流", icon: "✦", adminOnly: false },
   { href: "/todos", label: "我的待办", icon: "☑", adminOnly: false },
   { href: "/evolution", label: "演进记录", icon: "↻", adminOnly: false },

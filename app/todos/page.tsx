@@ -14,9 +14,14 @@ export default async function TodosPage() {
       title="我的待办"
       subtitle="任务、待验收与未读通知 — 全局唯一入口"
       actions={
-        <Link href="/notifications" className="text-sm text-indigo-600 hover:underline">
-          通知中心 →
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/boards/requirements" className="text-sm text-indigo-600 hover:underline">
+            需求总览 →
+          </Link>
+          <Link href="/notifications" className="text-sm text-indigo-600 hover:underline">
+            通知中心 →
+          </Link>
+        </div>
       }
     >
       <div className="grid gap-6 lg:grid-cols-3">
