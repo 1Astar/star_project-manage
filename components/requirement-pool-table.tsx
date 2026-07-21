@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import type { PoolColumnDef, PoolColumnType, Requirement, RequirementAttachment, RequirementType } from "@/lib/types";
 import { REQUIREMENT_DONE_TAG, REQUIREMENT_TYPE_LABELS } from "@/lib/types";
-import { createPoolColumnAction, deletePoolColumnAction } from "@/lib/actions";
+import { createPoolColumnAction, deletePoolColumnAction, listRequirementMigrateTargetsAction } from "@/lib/actions";
 import {
   childrenOf,
   displayEstimateHours,
@@ -137,6 +137,12 @@ type Props = {
   onOpenLightbox: (url: string) => void;
   onAddChild: (parentId: string) => void;
   onBulkDelete: (ids: string[]) => void;
+  onBulkMigrate: (input: {
+    requirementIds: string[];
+    targetProjectId: string;
+    targetIterationId: string;
+    targetProjectSlug: string;
+  }) => void;
   onDedupe: () => void;
   onInlineSave: (
     requirementId: string,
@@ -411,6 +417,7 @@ export function RequirementPoolTable({
   onOpenLightbox,
   onAddChild,
   onBulkDelete,
+  onBulkMigrate,
   onDedupe,
   onInlineSave,
   onReorder,
@@ -438,6 +445,14 @@ export function RequirementPoolTable({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [collapseReady, setCollapseReady] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [migrateLoading, setMigrateLoading] = useState(false);
+  const [migrateTargetProjectId, setMigrateTargetProjectId] = useState(projectId);
+  const [migrateTargetPlanId, setMigrateTargetPlanId] = useState("");
+  const [migrateTargets, setMigrateTargets] = useState<{
+    projects: Array<{ id: string; name: string; slug: string }>;
+    plansByProjectId: Record<string, Array<{ id: string; name: string; isPool: boolean }>>;
+  } | null>(null);
   const [newColLabel, setNewColLabel] = useState("");
   const [newColType, setNewColType] = useState<PoolColumnType>("text");
   const [newColOptions, setNewColOptions] = useState("");
@@ -616,6 +631,64 @@ export function RequirementPoolTable({
     () => requirements.some((r) => r.parent_id),
     [requirements]
   );
+
+  const migrateSubtreeCount = useMemo(() => {
+    if (!selected.size) return 0;
+    const byParent = new Map<string, string[]>();
+    for (const r of requirements) {
+      if (!r.parent_id) continue;
+      const list = byParent.get(r.parent_id) ?? [];
+      list.push(r.id);
+      byParent.set(r.parent_id, list);
+    }
+    const out = new Set<string>();
+    const stack = [...selected];
+    while (stack.length) {
+      const id = stack.pop()!;
+      if (out.has(id)) continue;
+      out.add(id);
+      for (const childId of byParent.get(id) ?? []) stack.push(childId);
+    }
+    return out.size;
+  }, [selected, requirements]);
+
+  const migratePlans = migrateTargets?.plansByProjectId[migrateTargetProjectId] ?? [];
+
+  useEffect(() => {
+    if (!migrateOpen) return;
+    let cancelled = false;
+    setMigrateLoading(true);
+    listRequirementMigrateTargetsAction()
+      .then((targets) => {
+        if (cancelled) return;
+        setMigrateTargets(targets);
+        const nextProjectId = targets.projects.some((p) => p.id === projectId)
+          ? projectId
+          : targets.projects[0]?.id ?? projectId;
+        setMigrateTargetProjectId(nextProjectId);
+        const plans = targets.plansByProjectId[nextProjectId] ?? [];
+        const pool = plans.find((p) => p.isPool) ?? plans[0];
+        setMigrateTargetPlanId(pool?.id ?? "");
+      })
+      .catch(() => {
+        if (!cancelled) setDropMsg("加载迁移目标失败");
+      })
+      .finally(() => {
+        if (!cancelled) setMigrateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [migrateOpen, projectId]);
+
+  useEffect(() => {
+    if (!migrateTargets) return;
+    const plans = migrateTargets.plansByProjectId[migrateTargetProjectId] ?? [];
+    if (!plans.some((p) => p.id === migrateTargetPlanId)) {
+      const pool = plans.find((p) => p.isPool) ?? plans[0];
+      setMigrateTargetPlanId(pool?.id ?? "");
+    }
+  }, [migrateTargetProjectId, migrateTargets, migrateTargetPlanId]);
 
   const columns = useMemo((): DisplayColumn[] => {
     const result: DisplayColumn[] = [];
@@ -1083,18 +1156,28 @@ export function RequirementPoolTable({
           </p>
         ) : null}
         {selected.size > 0 ? (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              if (!confirm(`删除选中的 ${selected.size} 条需求？`)) return;
-              onBulkDelete([...selected]);
-              setSelected(new Set());
-            }}
-            className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 disabled:opacity-50"
-          >
-            删除选中 ({selected.size})
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={pending || migrateLoading}
+              onClick={() => setMigrateOpen(true)}
+              className="rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-800 disabled:opacity-50"
+            >
+              迁移 ({selected.size})
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (!confirm(`删除选中的 ${selected.size} 条需求？`)) return;
+                onBulkDelete([...selected]);
+                setSelected(new Set());
+              }}
+              className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 disabled:opacity-50"
+            >
+              删除选中 ({selected.size})
+            </button>
+          </>
         ) : null}
         <button
           type="button"
@@ -1915,6 +1998,92 @@ export function RequirementPoolTable({
           </tbody>
         </table>
       </div>
+
+      {migrateOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pool-migrate-title"
+            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+          >
+            <h3 id="pool-migrate-title" className="text-base font-semibold text-slate-900">
+              迁移需求
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              已选 {selected.size} 条
+              {migrateSubtreeCount > selected.size
+                ? `，含子需求共 ${migrateSubtreeCount} 条将一并迁移`
+                : null}
+              。先选项目，再选计划（默认本项目需求池）。
+            </p>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs font-medium text-slate-700">
+                目标项目
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm"
+                  value={migrateTargetProjectId}
+                  disabled={migrateLoading || !migrateTargets}
+                  onChange={(e) => setMigrateTargetProjectId(e.target.value)}
+                >
+                  {(migrateTargets?.projects ?? []).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-medium text-slate-700">
+                目标计划
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm"
+                  value={migrateTargetPlanId}
+                  disabled={migrateLoading || !migratePlans.length}
+                  onChange={(e) => setMigrateTargetPlanId(e.target.value)}
+                >
+                  {migratePlans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.isPool ? "需求池" : p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                onClick={() => setMigrateOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={
+                  pending || migrateLoading || !migrateTargetProjectId || !migrateTargetPlanId
+                }
+                className="rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                onClick={() => {
+                  const target = migrateTargets?.projects.find(
+                    (p) => p.id === migrateTargetProjectId
+                  );
+                  if (!target || !migrateTargetPlanId) return;
+                  onBulkMigrate({
+                    requirementIds: [...selected],
+                    targetProjectId: migrateTargetProjectId,
+                    targetIterationId: migrateTargetPlanId,
+                    targetProjectSlug: target.slug,
+                  });
+                  setMigrateOpen(false);
+                  setSelected(new Set());
+                }}
+              >
+                确认迁移
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

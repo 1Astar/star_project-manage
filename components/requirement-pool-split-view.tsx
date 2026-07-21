@@ -9,6 +9,7 @@ import {
   deletePoolRequirementsAction,
   dedupePoolRequirementsAction,
   forceCloseRequirementAction,
+  migratePoolRequirementsAction,
   promotePoolRequirementAction,
   saveRequirementDetailAction,
 } from "@/lib/actions";
@@ -187,6 +188,30 @@ export function RequirementPoolSplitView({
                 router.refresh();
               } catch (error) {
                 setMessage(error instanceof Error ? error.message : "删除失败");
+              }
+            });
+          }}
+          onBulkMigrate={({
+            requirementIds,
+            targetProjectId,
+            targetIterationId,
+            targetProjectSlug,
+          }) => {
+            startTransition(async () => {
+              try {
+                const result = await migratePoolRequirementsAction({
+                  requirementIds,
+                  targetProjectId,
+                  targetIterationId,
+                  sourceProjectSlug: projectSlug,
+                  targetProjectSlug,
+                });
+                setRequirements((prev) => prev.filter((r) => !result.ids.includes(r.id)));
+                if (drawerReqId && result.ids.includes(drawerReqId)) closeDrawer();
+                setMessage(`已迁移 ${result.moved} 条`);
+                router.refresh();
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "迁移失败");
               }
             });
           }}
