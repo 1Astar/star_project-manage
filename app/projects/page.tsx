@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import { WorkbenchShell } from "@/components/workbench-shell";
-import { ProjectLibraryTable } from "@/components/project-library-table";
+import { ProjectLibraryViews } from "@/components/project-library-views";
 import {
   getAllIdeas,
   getAllProjects,
@@ -15,7 +16,7 @@ const CONVERTIBLE = new Set(["inbox", "reviewing", "parked"]);
 export default async function ProjectsLibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; view?: string }>;
 }) {
   const { status: statusFilter } = await searchParams;
   const [allProjects, nextActionDrafts, allIdeas, columnDefs] = await Promise.all([
@@ -53,16 +54,18 @@ export default async function ProjectsLibraryPage({
   return (
     <WorkbenchShell
       title="项目库"
-      subtitle="自研 / 作品 / 工作项目归档 · 多列表格可左右滑动 · 点项目名进入"
+      subtitle="表格可调列宽 · 左侧 + 建子项目 · 拖拽排序/挂子 · 可切看板"
     >
       <div className="mt-2">
-        <ProjectLibraryTable
-          projects={treeProjects}
-          statusFilter={statusFilter ?? null}
-          nextActionDrafts={nextActionDrafts}
-          sourceIdeas={sourceIdeas}
-          columnDefs={columnDefs}
-        />
+        <Suspense fallback={<div className="h-40 rounded-xl bg-slate-50" />}>
+          <ProjectLibraryViews
+            projects={treeProjects}
+            statusFilter={statusFilter ?? null}
+            nextActionDrafts={nextActionDrafts}
+            sourceIdeas={sourceIdeas}
+            columnDefs={columnDefs}
+          />
+        </Suspense>
       </div>
     </WorkbenchShell>
   );

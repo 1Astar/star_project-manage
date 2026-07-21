@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   RequirementStatusKanban,
   requirementColumn,
   type RequirementKanbanItem,
 } from "@/components/requirement-status-kanban";
+import { GlobalRequirementTable } from "@/components/global-requirement-table";
 import type { RequirementBoardItem } from "@/lib/db/local-store";
 import { REQUIREMENT_DONE_TAG } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,6 +20,8 @@ type Props = {
 
 export function GlobalRequirementBoard({ initialItems, projects }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view") === "table" ? "table" : "board";
   const [projectId, setProjectId] = useState("");
   const [hideDone, setHideDone] = useState(true);
 
@@ -38,9 +42,42 @@ export function GlobalRequirementBoard({ initialItems, projects }: Props) {
       }));
   }, [initialItems, projectId, hideDone]);
 
+  function hrefFor(next: "board" | "table") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "board") params.delete("view");
+    else params.set("view", "table");
+    const qs = params.toString();
+    return qs ? `/boards/requirements?${qs}` : "/boards/requirements";
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <Link
+            href={hrefFor("board")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium",
+              view === "board"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-800"
+            )}
+          >
+            看板
+          </Link>
+          <Link
+            href={hrefFor("table")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-sm font-medium",
+              view === "table"
+                ? "bg-white text-indigo-700 shadow-sm"
+                : "text-slate-600 hover:text-slate-800"
+            )}
+          >
+            表格
+          </Link>
+        </div>
+
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
           <span>项目</span>
           <select
@@ -68,13 +105,17 @@ export function GlobalRequirementBoard({ initialItems, projects }: Props) {
         <span className="text-xs text-slate-400">共 {kanbanItems.length} 条叶子需求</span>
       </div>
 
-      <RequirementStatusKanban
-        items={kanbanItems}
-        showProjectName
-        onOpen={(reqId, slug) => {
-          router.push(`/projects/${slug}/requirements/${reqId}`);
-        }}
-      />
+      {view === "table" ? (
+        <GlobalRequirementTable items={kanbanItems} />
+      ) : (
+        <RequirementStatusKanban
+          items={kanbanItems}
+          showProjectName
+          onOpen={(reqId, slug) => {
+            router.push(`/projects/${slug}/requirements/${reqId}`);
+          }}
+        />
+      )}
     </div>
   );
 }
