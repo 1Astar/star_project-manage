@@ -156,7 +156,7 @@ export default async function StreamPage({
   return (
     <WorkbenchShell
       title="灵感流"
-      subtitle="脑暴洪水 · 时间线速记 · AI 批量整理"
+      subtitle="脑暴洪水 · 表格可调列宽与筛选 · 时间线速记"
       actions={<InboxSyncButton />}
       nav={
         <Suspense fallback={<div className="h-9" />}>
