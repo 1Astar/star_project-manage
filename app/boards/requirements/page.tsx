@@ -12,7 +12,7 @@ export default async function GlobalRequirementsBoardPage() {
   return (
     <WorkbenchShell
       title="需求总览"
-      subtitle="看板 / 表格切换 · 跨项目叶子需求 · 可按项目筛选"
+      subtitle="多条件筛选 · 存视图 · 看板/表格切换"
       role={session?.role}
       actions={
         <Link href="/todos" className="text-sm text-indigo-600 hover:underline">
