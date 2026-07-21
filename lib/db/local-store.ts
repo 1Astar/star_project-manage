@@ -68,6 +68,7 @@ import {
   defaultReqTypeForDepth,
   depthOf,
   deriveParentStatusTags,
+  isLeafRequirement,
 } from "@/lib/requirement-tree";
 
 export type { DatabaseSnapshot } from "@/lib/db/types";
@@ -338,6 +339,55 @@ export async function readDb(): Promise<DatabaseSnapshot> {
 
 export async function writeDb(db: DatabaseSnapshot): Promise<void> {
   await saveDb(db);
+}
+
+export type RequirementBoardItem = {
+  requirement: Requirement;
+  project_id: string;
+  project_name: string;
+  project_slug: string;
+};
+
+/** 跨项目需求看板：叶子需求 + 所属项目 */
+export async function getAllRequirementsBoard(): Promise<{
+  items: RequirementBoardItem[];
+  projects: Array<{ id: string; name: string; slug: string }>;
+}> {
+  const db = await readDb();
+  const projectMap = new Map(db.projects.map((p) => [p.id, p]));
+  const byProject = new Map<string, Requirement[]>();
+  for (const r of db.requirements) {
+    const list = byProject.get(r.project_id) ?? [];
+    list.push(r);
+    byProject.set(r.project_id, list);
+  }
+
+  const items: RequirementBoardItem[] = [];
+  for (const [projectId, reqs] of byProject) {
+    const project = projectMap.get(projectId);
+    if (!project) continue;
+    for (const r of reqs) {
+      if (!isLeafRequirement(r, reqs)) continue;
+      items.push({
+        requirement: r,
+        project_id: project.id,
+        project_name: project.name,
+        project_slug: project.slug,
+      });
+    }
+  }
+
+  items.sort((a, b) => {
+    const byProjectName = a.project_name.localeCompare(b.project_name, "zh");
+    if (byProjectName) return byProjectName;
+    return a.requirement.title.localeCompare(b.requirement.title, "zh");
+  });
+
+  const projects = db.projects
+    .map((p: Project) => ({ id: p.id, name: p.name, slug: p.slug }))
+    .sort((a, b) => a.name.localeCompare(b.name, "zh"));
+
+  return { items, projects };
 }
 
 export async function getProjects(): Promise<Project[]> {

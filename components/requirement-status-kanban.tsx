@@ -41,7 +41,6 @@ export function requirementColumn(req: Requirement): string {
     if (tags.includes(col)) return col;
   }
   if (tags.some((t) => KNOWN_STATUS.has(t) || t.length > 0)) {
-    // 未列入标准列的自建状态 → 落「其他」
     return "其他";
   }
   return "待开始";
@@ -55,72 +54,93 @@ function applyColumnTag(prev: string[], column: string): string[] {
   return [column, ...retained];
 }
 
-type Props = {
+export type RequirementKanbanItem = {
+  req: Requirement;
   projectSlug: string;
-  requirements: Requirement[];
-  onOpen?: (reqId: string) => void;
+  projectName: string;
 };
 
-export function RequirementStatusKanban({ projectSlug, requirements: initial, onOpen }: Props) {
+type Props = {
+  /** 单项目模式（兼容旧用法） */
+  projectSlug?: string;
+  requirements?: Requirement[];
+  /** 跨项目模式 */
+  items?: RequirementKanbanItem[];
+  showProjectName?: boolean;
+  onOpen?: (reqId: string, projectSlug: string) => void;
+};
+
+export function RequirementStatusKanban({
+  projectSlug,
+  requirements: initialReqs,
+  items: initialItems,
+  showProjectName = false,
+  onOpen,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [requirements, setRequirements] = useState(initial);
+  const [items, setItems] = useState<RequirementKanbanItem[]>(() =>
+    buildItems(projectSlug, initialReqs, initialItems)
+  );
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    setRequirements(initial);
-  }, [initial]);
+    setItems(buildItems(projectSlug, initialReqs, initialItems));
+  }, [projectSlug, initialReqs, initialItems]);
 
-  const boardReqs = useMemo(
-    () => requirements.filter((r) => isLeafRequirement(r, requirements)),
-    [requirements]
-  );
+  const boardItems = useMemo(() => {
+    if (initialItems?.length) return items;
+    const reqs = items.map((i) => i.req);
+    return items.filter((i) => isLeafRequirement(i.req, reqs));
+  }, [items, initialItems]);
 
   const columns = useMemo(() => {
     const extras = new Set<string>();
-    for (const req of boardReqs) {
-      const col = requirementColumn(req);
-      if (col === "其他") extras.add("其他");
+    for (const item of boardItems) {
+      if (requirementColumn(item.req) === "其他") extras.add("其他");
     }
     const list: string[] = [...REQUIREMENT_KANBAN_COLUMNS];
     if (extras.has("其他")) list.push("其他");
     return list;
-  }, [boardReqs]);
+  }, [boardItems]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, Requirement[]>();
+    const map = new Map<string, RequirementKanbanItem[]>();
     for (const col of columns) map.set(col, []);
-    for (const req of boardReqs) {
-      const col = requirementColumn(req);
+    for (const item of boardItems) {
+      const col = requirementColumn(item.req);
       if (!map.has(col)) map.set(col, []);
-      map.get(col)!.push(req);
+      map.get(col)!.push(item);
     }
     return map;
-  }, [boardReqs, columns]);
+  }, [boardItems, columns]);
 
   function moveToColumn(reqId: string, column: string) {
-    const req = requirements.find((r) => r.id === reqId);
-    if (!req) return;
-    if (requirementColumn(req) === column) return;
+    const item = items.find((i) => i.req.id === reqId);
+    if (!item) return;
+    if (requirementColumn(item.req) === column) return;
 
-    const nextTags = applyColumnTag(req.status_tags ?? [], column);
-    setRequirements((prev) =>
-      prev.map((r) => (r.id === reqId ? { ...r, status_tags: nextTags } : r))
+    const nextTags = applyColumnTag(item.req.status_tags ?? [], column);
+    const snapshot = items;
+    setItems((prev) =>
+      prev.map((i) =>
+        i.req.id === reqId ? { ...i, req: { ...i.req, status_tags: nextTags } } : i
+      )
     );
     setMessage(null);
     startTransition(async () => {
       try {
         await saveRequirementDetailAction({
           requirementId: reqId,
-          projectSlug,
+          projectSlug: item.projectSlug,
           updates: { status_tags: nextTags },
         });
         router.refresh();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "移动失败");
-        setRequirements(initial);
+        setItems(snapshot);
       }
     });
   }
@@ -137,7 +157,7 @@ export function RequirementStatusKanban({ projectSlug, requirements: initial, on
 
       <div className="flex gap-3 overflow-x-auto pb-2">
         {columns.map((col) => {
-          const items = grouped.get(col) ?? [];
+          const colItems = grouped.get(col) ?? [];
           const isOver = overColumn === col;
           return (
             <div
@@ -164,23 +184,23 @@ export function RequirementStatusKanban({ projectSlug, requirements: initial, on
               <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
                 <span className="text-sm font-semibold text-slate-800">{col}</span>
                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
-                  {items.length}
+                  {colItems.length}
                 </span>
               </div>
               <ul className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto p-2">
-                {items.length === 0 ? (
+                {colItems.length === 0 ? (
                   <li className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">
                     拖到此处
                   </li>
                 ) : (
-                  items.map((req) => (
-                    <li key={req.id}>
+                  colItems.map((item) => (
+                    <li key={item.req.id}>
                       <article
                         draggable
                         onDragStart={(e) => {
-                          e.dataTransfer.setData("text/req-id", req.id);
+                          e.dataTransfer.setData("text/req-id", item.req.id);
                           e.dataTransfer.effectAllowed = "move";
-                          setDraggingId(req.id);
+                          setDraggingId(item.req.id);
                         }}
                         onDragEnd={() => {
                           setDraggingId(null);
@@ -188,32 +208,39 @@ export function RequirementStatusKanban({ projectSlug, requirements: initial, on
                         }}
                         className={cn(
                           "cursor-grab rounded-lg border border-slate-200 bg-white p-3 shadow-sm active:cursor-grabbing",
-                          draggingId === req.id ? "opacity-60" : "hover:border-indigo-200"
+                          draggingId === item.req.id ? "opacity-60" : "hover:border-indigo-200"
                         )}
                       >
                         <button
                           type="button"
                           className="w-full text-left"
-                          onClick={() => onOpen?.(req.id)}
+                          onClick={() => onOpen?.(item.req.id, item.projectSlug)}
                         >
+                          {showProjectName ? (
+                            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-indigo-600">
+                              {item.projectName}
+                            </div>
+                          ) : null}
                           <div className="text-sm font-medium text-slate-900 hover:text-indigo-700">
-                            {req.title}
+                            {item.req.title}
                           </div>
-                          {req.priority ? (
+                          {item.req.priority ? (
                             <div className="mt-1.5">
-                              <StudioBadge tone={req.priority === "P0" ? "p0" : "muted"}>
-                                {req.priority}
+                              <StudioBadge
+                                tone={item.req.priority === "P0" ? "p0" : "muted"}
+                              >
+                                {item.req.priority}
                               </StudioBadge>
                             </div>
                           ) : null}
-                          {req.assignees?.length ? (
+                          {item.req.assignees?.length ? (
                             <p className="mt-1.5 text-[11px] text-slate-400">
-                              {req.assignees.join("、")}
+                              {item.req.assignees.join("、")}
                             </p>
                           ) : null}
-                          {req.next_step?.trim() ? (
+                          {item.req.next_step?.trim() ? (
                             <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
-                              {req.next_step}
+                              {item.req.next_step}
                             </p>
                           ) : null}
                         </button>
@@ -228,4 +255,18 @@ export function RequirementStatusKanban({ projectSlug, requirements: initial, on
       </div>
     </div>
   );
+}
+
+function buildItems(
+  projectSlug: string | undefined,
+  requirements: Requirement[] | undefined,
+  items: RequirementKanbanItem[] | undefined
+): RequirementKanbanItem[] {
+  if (items?.length) return items;
+  const slug = projectSlug ?? "";
+  return (requirements ?? []).map((req) => ({
+    req,
+    projectSlug: slug,
+    projectName: "",
+  }));
 }
