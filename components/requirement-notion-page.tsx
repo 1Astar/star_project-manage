@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRequirementDetailAction } from "@/lib/actions";
@@ -19,9 +20,16 @@ type Props = {
   projectSlug: string;
   requirement: Requirement;
   backHref: string;
+  /** 右侧栏追加：角色任务、测试核对等 */
+  sidebar?: ReactNode;
 };
 
-export function RequirementNotionPage({ projectSlug, requirement, backHref }: Props) {
+export function RequirementNotionPage({
+  projectSlug,
+  requirement,
+  backHref,
+  sidebar,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState(requirement.title);
@@ -81,8 +89,8 @@ export function RequirementNotionPage({ projectSlug, requirement, backHref }: Pr
     .filter(Boolean);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="mx-auto max-w-6xl space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <a href={backHref} className="text-sm text-indigo-600 hover:underline">
           ← 返回
         </a>
@@ -92,167 +100,184 @@ export function RequirementNotionPage({ projectSlug, requirement, backHref }: Pr
             type="button"
             disabled={pending}
             onClick={saveAll}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
             {pending ? "保存中…" : "保存"}
           </button>
         </div>
       </div>
 
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => {
-          if (title.trim() && title.trim() !== requirement.title) {
-            save({ title: title.trim() });
-          }
-        }}
-        className="w-full border-0 bg-transparent text-3xl font-bold text-slate-900 outline-none placeholder:text-slate-300"
-        placeholder="无标题需求"
-      />
-
-      <div className="flex flex-wrap gap-3 text-sm">
-        <label className="flex items-center gap-2 text-slate-500">
-          状态
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as TaskStatus)}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-800"
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {TASK_STATUS_LABELS[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 text-slate-500">
-          优先级
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,300px)]">
+        <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
           <input
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            placeholder="P0"
-            className="w-16 rounded-md border border-slate-200 px-2 py-1 text-slate-800"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => {
+              if (title.trim() && title.trim() !== requirement.title) {
+                save({ title: title.trim() });
+              }
+            }}
+            className="w-full border-0 bg-transparent text-xl font-bold text-slate-900 outline-none placeholder:text-slate-300"
+            placeholder="无标题需求"
           />
-        </label>
-        {requirement.in_pool ? (
-          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs text-amber-800">需求池</span>
-        ) : null}
-      </div>
 
-      <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">正文</h3>
-        <textarea
-          value={detailWork}
-          onChange={(e) => setDetailWork(e.target.value)}
-          rows={8}
-          placeholder="像 Notion 一样写需求说明、背景、方案…"
-          className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-relaxed text-slate-800 outline-none focus:border-indigo-300"
-        />
-      </section>
+          <section className="space-y-1.5 border-t border-slate-100 pt-3">
+            <h3 className="text-xs font-semibold text-slate-500">需求描述</h3>
+            <textarea
+              value={detailWork}
+              onChange={(e) => setDetailWork(e.target.value)}
+              rows={6}
+              placeholder="背景、方案、说明…"
+              className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none focus:border-indigo-300 focus:bg-white"
+            />
+          </section>
 
-      <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">验收标准</h3>
-        <textarea
-          value={acceptance}
-          onChange={(e) => setAcceptance(e.target.value)}
-          rows={4}
-          placeholder="可验收的完成标准"
-          className="w-full resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-300"
-        />
-      </section>
+          <section className="space-y-1.5 border-t border-slate-100 pt-3">
+            <h3 className="text-xs font-semibold text-slate-500">验收标准</h3>
+            <textarea
+              value={acceptance}
+              onChange={(e) => setAcceptance(e.target.value)}
+              rows={3}
+              placeholder="可验收的完成标准"
+              className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-300 focus:bg-white"
+            />
+          </section>
 
-      <section className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">场景</h3>
-          <textarea
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value)}
-            rows={3}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-300"
-          />
+          <section className="grid gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold text-slate-500">场景</h3>
+              <textarea
+                value={scenario}
+                onChange={(e) => setScenario(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-300"
+              />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-xs font-semibold text-slate-500">优化方向</h3>
+              <textarea
+                value={optimization}
+                onChange={(e) => setOptimization(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-300"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <h3 className="text-xs font-semibold text-slate-500">已知问题</h3>
+              <textarea
+                value={issues}
+                onChange={(e) => setIssues(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-300"
+              />
+            </div>
+          </section>
         </div>
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">优化方向</h3>
-          <textarea
-            value={optimization}
-            onChange={(e) => setOptimization(e.target.value)}
-            rows={3}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-300"
-          />
-        </div>
-        <div className="space-y-2 sm:col-span-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">已知问题</h3>
-          <textarea
-            value={issues}
-            onChange={(e) => setIssues(e.target.value)}
-            rows={3}
-            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-300"
-          />
-        </div>
-      </section>
 
-      <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-slate-800">相关资料</h3>
-        <label className="block space-y-1 text-sm">
-          <span className="text-slate-500">PRD 链接</span>
-          <input
-            value={prdLink}
-            onChange={(e) => setPrdLink(e.target.value)}
-            placeholder="https://"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-indigo-300"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="text-slate-500">原型链接</span>
-          <input
-            value={prototypeLink}
-            onChange={(e) => setPrototypeLink(e.target.value)}
-            placeholder="https://"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-indigo-300"
-          />
-        </label>
-        <label className="block space-y-1 text-sm">
-          <span className="text-slate-500">其他资料链接（每行一个）</span>
-          <textarea
-            value={relatedLinks}
-            onChange={(e) => setRelatedLinks(e.target.value)}
-            rows={4}
-            placeholder={"https://...\nhttps://..."}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 outline-none focus:border-indigo-300"
-          />
-        </label>
-        {relatedList.length > 0 || prdLink || prototypeLink ? (
-          <ul className="space-y-1 border-t border-slate-100 pt-3 text-sm">
-            {prdLink ? (
-              <li>
-                <a href={prdLink} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
-                  PRD →
-                </a>
-              </li>
-            ) : null}
-            {prototypeLink ? (
-              <li>
-                <a
-                  href={prototypeLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-600 hover:underline"
+        <aside className="space-y-3 lg:sticky lg:top-3 lg:self-start">
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <h3 className="mb-2 text-xs font-semibold text-slate-500">基本信息</h3>
+            <div className="space-y-2 text-sm">
+              <label className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-slate-500">状态</span>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                  className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-800"
                 >
-                  原型 →
-                </a>
-              </li>
-            ) : null}
-            {relatedList.map((url) => (
-              <li key={url}>
-                <a href={url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">
-                  {url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {TASK_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center justify-between gap-2">
+                <span className="shrink-0 text-slate-500">优先级</span>
+                <input
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  placeholder="P0"
+                  className="w-20 rounded-md border border-slate-200 px-2 py-1 text-right text-slate-800"
+                />
+              </label>
+              {requirement.in_pool ? (
+                <div className="text-xs text-amber-700">需求池</div>
+              ) : null}
+              <label className="block space-y-1">
+                <span className="text-slate-500">PRD</span>
+                <input
+                  value={prdLink}
+                  onChange={(e) => setPrdLink(e.target.value)}
+                  placeholder="https://"
+                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs outline-none focus:border-indigo-300"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-slate-500">原型</span>
+                <input
+                  value={prototypeLink}
+                  onChange={(e) => setPrototypeLink(e.target.value)}
+                  placeholder="https://"
+                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs outline-none focus:border-indigo-300"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-slate-500">其他链接</span>
+                <textarea
+                  value={relatedLinks}
+                  onChange={(e) => setRelatedLinks(e.target.value)}
+                  rows={2}
+                  placeholder="每行一个"
+                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs outline-none focus:border-indigo-300"
+                />
+              </label>
+              {relatedList.length > 0 || prdLink || prototypeLink ? (
+                <ul className="space-y-0.5 border-t border-slate-100 pt-2 text-xs">
+                  {prdLink ? (
+                    <li>
+                      <a
+                        href={prdLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        PRD →
+                      </a>
+                    </li>
+                  ) : null}
+                  {prototypeLink ? (
+                    <li>
+                      <a
+                        href={prototypeLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        原型 →
+                      </a>
+                    </li>
+                  ) : null}
+                  {relatedList.map((url) => (
+                    <li key={url} className="truncate">
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        {url}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+
+          {sidebar}
+        </aside>
+      </div>
     </div>
   );
 }
