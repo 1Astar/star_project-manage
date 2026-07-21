@@ -26,6 +26,8 @@ export default async function BugDetailPage({
     <BugDetailEditor
       bug={detail.bug}
       projectSlug={ctx.routeId}
+      projectName={detail.project.name}
+      requirementTitle={detail.requirement?.title ?? null}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
     />

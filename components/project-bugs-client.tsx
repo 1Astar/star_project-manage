@@ -23,17 +23,26 @@ export function ProjectBugsClient({
   bugs: initialBugs,
   members,
   requirements,
+  initialShowCreate = false,
+  initialRequirementId = "",
 }: {
   projectId: string;
   projectSlug: string;
   bugs: Bug[];
   members: MemberOption[];
   requirements: BugFormOption[];
+  initialShowCreate?: boolean;
+  initialRequirementId?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [filter, setFilter] = useState<"all" | "open">("all");
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useState(initialShowCreate);
+
+  const prefTitle = initialRequirementId
+    ? `【关联】${requirements.find((r) => r.id === initialRequirementId)?.title ?? ""}`.trim()
+    : "";
+
 
   const bugs =
     filter === "open"
@@ -87,6 +96,8 @@ export function ProjectBugsClient({
           projectSlug={projectSlug}
           members={members}
           requirements={requirements}
+          initialRequirementId={initialRequirementId}
+          initialTitle={prefTitle === "【关联】" ? "" : prefTitle}
         />
       ) : null}
 
