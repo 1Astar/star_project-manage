@@ -1,4 +1,4 @@
-/** Idea 补充：作品集 Case Study 生成 Prompt（挂项目恢复 / 概览） */
+/** Idea 补充：作品集 Case Study 生成 Prompt（仅全局资产库模板） */
 
 export const CASE_STUDY_SPINE = [
   "产品背景",
