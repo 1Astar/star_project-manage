@@ -107,8 +107,8 @@ const COLUMN_TYPES: { value: PoolColumnType; label: string }[] = [
   { value: "url", label: "链接" },
 ];
 
-const TITLE_STICKY_PX = 200;
-const CHECKBOX_PX = 72;
+const TITLE_STICKY_PX = 220;
+const CHECKBOX_PX = 88;
 const TITLE_LEFT = CHECKBOX_PX;
 
 type SortKey =
@@ -147,6 +147,7 @@ type Props = {
       product_estimate_hours: number | null;
       direct_hours: number | null;
       sort_order: number;
+      parent_id: string | null;
       due_date: string | null;
       submitted_at: string | null;
       detail_work: string | null;
@@ -162,6 +163,14 @@ type Props = {
     }>
   ) => void;
   onReorder: (orderedIds: string[]) => void;
+  /** 拖拽：排序 + 可选改父（挂子 / 同级） */
+  onTreeDrop?: (input: {
+    dragId: string;
+    overId: string;
+    place: "before" | "after" | "child";
+    orderedIds: string[];
+    nextParentId: string | null;
+  }) => void;
 };
 
 type DisplayColumn =
@@ -201,9 +210,56 @@ function storageOrderKey(projectId: string) {
   return `star-pm:pool-col-order:${projectId}`;
 }
 
+function storageWidthsKey(projectId: string) {
+  return `star-pm:pool-col-widths:${projectId}`;
+}
+
+const DEFAULT_POOL_COL_WIDTHS: Record<string, number> = {
+  title: 220,
+  req_type: 96,
+  next_step: 220,
+  status_tags: 110,
+  summary: 200,
+  detail_work: 200,
+  acceptance_criteria: 180,
+  assignees: 100,
+  priority: 72,
+  req_source: 96,
+  req_source_note: 120,
+  inspiration_source: 120,
+  hours: 72,
+  submitted_at: 110,
+  due_date: 110,
+  completed_at: 110,
+  optimization_notes: 160,
+  known_issues: 160,
+  difficulty_notes: 160,
+  scenario: 160,
+  prd_link: 120,
+  prototype_link: 120,
+  attachments: 88,
+};
+
 /** 旧版：类型徽章嵌在名称列内的偏好；迁移到「类型」列显隐后可忽略 */
 function storageTypeBadgeKey(projectId: string) {
   return `star-pm:pool-type-badge:${projectId}`;
+}
+
+function isAncestorOf(
+  requirements: Requirement[],
+  ancestorId: string,
+  nodeId: string
+): boolean {
+  const byId = new Map(requirements.map((r) => [r.id, r]));
+  let cur = byId.get(nodeId);
+  const seen = new Set<string>();
+  while (cur?.parent_id) {
+    if (cur.parent_id === ancestorId) return true;
+    if (seen.has(cur.id)) break;
+    seen.add(cur.id);
+    cur = byId.get(cur.parent_id);
+  }
+  return false;
 }
 
 function ensureReqTypeColumn(ids: ColumnId[], insert: boolean): ColumnId[] {
@@ -357,11 +413,13 @@ export function RequirementPoolTable({
   onDedupe,
   onInlineSave,
   onReorder,
+  onTreeDrop,
 }: Props) {
   const router = useRouter();
   const [colPending, startColTransition] = useTransition();
   const [visible, setVisible] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [colOrder, setColOrder] = useState<ColumnId[]>(DEFAULT_VISIBLE);
+  const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_POOL_COL_WIDTHS);
   const [colsOpen, setColsOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("sort_order");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -370,6 +428,11 @@ export function RequirementPoolTable({
   const [filterAssignee, setFilterAssignee] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragCol, setDragCol] = useState<ColumnId | null>(null);
+  const [dropHint, setDropHint] = useState<{
+    id: string;
+    place: "before" | "after" | "child";
+  } | null>(null);
+  const [dropMsg, setDropMsg] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [collapseReady, setCollapseReady] = useState(false);
@@ -377,6 +440,7 @@ export function RequirementPoolTable({
   const [newColLabel, setNewColLabel] = useState("");
   const [newColType, setNewColType] = useState<PoolColumnType>("text");
   const [newColOptions, setNewColOptions] = useState("");
+  const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
 
   const activeCustoms = useMemo(
     () =>
@@ -430,6 +494,18 @@ export function RequirementPoolTable({
       }
       // 仅保证名称列始终可见
       setVisible((prev) => (prev.includes("title") ? prev : ["title", ...prev]));
+
+      const widthsRaw = localStorage.getItem(storageWidthsKey(projectId));
+      if (widthsRaw) {
+        const parsed = JSON.parse(widthsRaw) as Record<string, unknown>;
+        if (parsed && typeof parsed === "object") {
+          const next = { ...DEFAULT_POOL_COL_WIDTHS };
+          for (const [k, v] of Object.entries(parsed)) {
+            if (typeof v === "number" && v >= 48 && v <= 800) next[k] = v;
+          }
+          setColWidths(next);
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -674,29 +750,115 @@ export function RequirementPoolTable({
 
   function onDragStart(id: string) {
     setDragId(id);
+    setDropMsg(null);
+  }
+
+  function dropPlaceFromEvent(
+    e: React.DragEvent,
+    el: HTMLElement
+  ): "before" | "after" | "child" {
+    const rect = el.getBoundingClientRect();
+    const y = (e.clientY - rect.top) / rect.height;
+    if (y < 0.28) return "before";
+    if (y > 0.72) return "after";
+    return "child";
   }
 
   function onDragOver(e: React.DragEvent, overId: string) {
     e.preventDefault();
     if (!dragId || dragId === overId) return;
+    const place = dropPlaceFromEvent(e, e.currentTarget as HTMLElement);
+    setDropHint({ id: overId, place });
   }
 
-  function onDrop(overId: string) {
-    if (!dragId || dragId === overId) {
+  function onDrop(overId: string, place: "before" | "after" | "child") {
+    const movingId = dragId;
+    if (!movingId || movingId === overId) {
       setDragId(null);
+      setDropHint(null);
       return;
     }
-    const ids = displayRows.map((r) => r.req.id);
-    const from = ids.indexOf(dragId);
-    const to = ids.indexOf(overId);
-    if (from < 0 || to < 0) {
+    const over = requirements.find((r) => r.id === overId);
+    if (!over) {
       setDragId(null);
+      setDropHint(null);
+      return;
+    }
+
+    if (place === "child" && isAncestorOf(requirements, movingId, overId)) {
+      setDropMsg("不能挂到自己的子节点下");
+      setDragId(null);
+      setDropHint(null);
+      return;
+    }
+
+    const nextParentId = place === "child" ? overId : over.parent_id ?? null;
+    const ids = displayRows.map((r) => r.req.id);
+    const from = ids.indexOf(movingId);
+    if (from < 0 || ids.indexOf(overId) < 0) {
+      setDragId(null);
+      setDropHint(null);
       return;
     }
     ids.splice(from, 1);
-    ids.splice(to, 0, dragId);
+    let insertAt = ids.indexOf(overId);
+    if (place === "after" || place === "child") insertAt += 1;
+    ids.splice(insertAt, 0, movingId);
+
     setDragId(null);
+    setDropHint(null);
+    if (onTreeDrop) {
+      onTreeDrop({
+        dragId: movingId,
+        overId,
+        place,
+        orderedIds: ids,
+        nextParentId,
+      });
+      return;
+    }
+    const prevParent =
+      requirements.find((r) => r.id === movingId)?.parent_id ?? null;
+    if (nextParentId !== prevParent) {
+      onInlineSave(movingId, { parent_id: nextParentId });
+    }
     onReorder(ids);
+  }
+
+  function colW(key: string) {
+    return colWidths[key] ?? DEFAULT_POOL_COL_WIDTHS[key] ?? 120;
+  }
+
+  function onResizeStart(key: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startW = colW(key);
+    resizeRef.current = { key, startX: e.clientX, startW };
+    let lastW = startW;
+    const onMove = (ev: MouseEvent) => {
+      const cur = resizeRef.current;
+      if (!cur) return;
+      lastW = Math.min(800, Math.max(48, cur.startW + (ev.clientX - cur.startX)));
+      setColWidths((prev) => ({ ...prev, [cur.key]: lastW }));
+    };
+    const onUp = () => {
+      const cur = resizeRef.current;
+      resizeRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      if (!cur) return;
+      setColWidths((prev) => {
+        const next = { ...prev, [cur.key]: lastW };
+        try {
+          localStorage.setItem(storageWidthsKey(projectId), JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   function onColDrop(overKey: ColumnId) {
@@ -886,11 +1048,16 @@ export function RequirementPoolTable({
               </form>
               <div className="my-1 border-t border-slate-100" />
               <p className="mt-1 px-2 text-[10px] text-slate-400">
-                仅「需求名称」固定靠左；「类型」等其余列可显隐、表头可拖拽调序
+                表头右边可拖改列宽；行拖中间挂子节点，上下半区改顺序
               </p>
             </div>
           ) : null}
         </div>
+        {dropMsg ? (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-900">
+            {dropMsg}
+          </p>
+        ) : null}
         {selected.size > 0 ? (
           <button
             type="button"
@@ -1086,31 +1253,9 @@ export function RequirementPoolTable({
                     onDrop={() => onColDrop(col.id)}
                     onDragEnd={() => setDragCol(null)}
                     className={cn(
-                      "px-3 py-2.5 font-medium",
+                      "relative px-3 py-2.5 font-medium",
                       isTitle &&
                         "sticky z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]",
-                      builtinKey === "next_step" && "min-w-[200px] max-w-[320px]",
-                      builtinKey === "req_type" && "min-w-[96px]",
-                      builtinKey === "status_tags" && "min-w-[100px]",
-                      builtinKey === "summary" && "min-w-[200px] max-w-[320px]",
-                      (builtinKey === "detail_work" ||
-                        builtinKey === "acceptance_criteria" ||
-                        builtinKey === "optimization_notes" ||
-                        builtinKey === "known_issues" ||
-                        builtinKey === "difficulty_notes" ||
-                        builtinKey === "scenario") &&
-                        "min-w-[180px] max-w-[320px]",
-                      builtinKey === "assignees" && "min-w-[100px]",
-                      builtinKey === "priority" && "min-w-[64px]",
-                      builtinKey === "req_source" && "min-w-[88px]",
-                      builtinKey === "inspiration_source" && "min-w-[100px] max-w-[200px]",
-                      builtinKey === "hours" && "min-w-[72px]",
-                      (builtinKey === "submitted_at" ||
-                        builtinKey === "due_date" ||
-                        builtinKey === "completed_at") &&
-                        "min-w-[110px]",
-                      builtinKey === "attachments" && "min-w-[80px]",
-                      col.kind === "custom" && "min-w-[120px]",
                       sortable && "cursor-pointer select-none hover:text-slate-800",
                       dragCol === col.id && "opacity-50"
                     )}
@@ -1118,28 +1263,37 @@ export function RequirementPoolTable({
                       isTitle
                         ? {
                             left: TITLE_LEFT,
-                            width: TITLE_STICKY_PX,
-                            minWidth: TITLE_STICKY_PX,
-                            maxWidth: TITLE_STICKY_PX,
+                            width: colW("title"),
+                            minWidth: colW("title"),
+                            maxWidth: colW("title"),
                           }
-                        : undefined
+                        : {
+                            width: colW(col.id),
+                            minWidth: colW(col.id),
+                          }
                     }
                     onClick={() => {
                       if (sortable && sk) toggleSort(sk);
                     }}
                     title={
                       isTitle
-                        ? "固定左侧；点击排序"
+                        ? "固定左侧；拖右边改宽；点击排序"
                         : builtinKey === "req_source"
                           ? "谁提出 / 归属哪类干系人（客户、用户、产品经理…）"
                           : builtinKey === "inspiration_source"
                             ? "念头从哪件事触发（会话、视频、整理现场…），不是干系人类型"
-                            : "拖拽调整列顺序；点击排序"
+                            : "拖拽调整列顺序；拖右边改宽；点击排序"
                     }
                   >
                     <span className="mr-1 text-[10px] text-slate-300">⠿</span>
                     {col.label}
                     {isActive ? (sortDir === "asc" ? " ↑" : " ↓") : sortable ? " ↕" : ""}
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      onMouseDown={(e) => onResizeStart(isTitle ? "title" : col.id, e)}
+                      className="absolute right-0 top-0 z-30 h-full w-1.5 cursor-col-resize hover:bg-indigo-400/50"
+                    />
                   </th>
                 );
               })}
@@ -1166,18 +1320,32 @@ export function RequirementPoolTable({
                 const active = req.id === drawerReqId;
                 const leaf = isLeafRequirement(req, requirements);
                 const hours = displayEstimateHours(req, requirements);
+                const hint = dropHint?.id === req.id ? dropHint.place : null;
                 return (
                   <tr
                     key={req.id}
                     draggable
                     onDragStart={() => onDragStart(req.id)}
                     onDragOver={(e) => onDragOver(e, req.id)}
-                    onDrop={() => onDrop(req.id)}
-                    onDragEnd={() => setDragId(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const place =
+                        dropHint?.id === req.id
+                          ? dropHint.place
+                          : dropPlaceFromEvent(e, e.currentTarget);
+                      onDrop(req.id, place);
+                    }}
+                    onDragEnd={() => {
+                      setDragId(null);
+                      setDropHint(null);
+                    }}
                     className={cn(
-                      "transition",
+                      "group transition",
                       active ? "bg-indigo-50" : "hover:bg-slate-50",
-                      dragId === req.id && "opacity-50"
+                      dragId === req.id && "opacity-50",
+                      hint === "child" && "bg-indigo-50/80 ring-1 ring-inset ring-indigo-200",
+                      hint === "before" && "border-t-2 border-indigo-400",
+                      hint === "after" && "border-b-2 border-indigo-400"
                     )}
                   >
                     <td
@@ -1187,7 +1355,18 @@ export function RequirementPoolTable({
                       )}
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <button
+                          type="button"
+                          title="添加子需求"
+                          className="flex h-6 w-6 items-center justify-center rounded text-slate-400 opacity-0 hover:bg-slate-100 hover:text-indigo-600 group-hover:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddChild(req.id);
+                          }}
+                        >
+                          +
+                        </button>
                         <input
                           type="checkbox"
                           checked={selected.has(req.id)}
@@ -1195,7 +1374,7 @@ export function RequirementPoolTable({
                         />
                         <span
                           className="cursor-grab select-none px-0.5 text-slate-400 active:cursor-grabbing"
-                          title="按住整行或此处拖拽改顺序"
+                          title="拖拽：上下半区改顺序，中间挂为子节点"
                         >
                           ⋮⋮
                         </span>
@@ -1288,9 +1467,9 @@ export function RequirementPoolTable({
                             )}
                             style={{
                               left: TITLE_LEFT,
-                              width: TITLE_STICKY_PX,
-                              minWidth: TITLE_STICKY_PX,
-                              maxWidth: TITLE_STICKY_PX,
+                              width: colW("title"),
+                              minWidth: colW("title"),
+                              maxWidth: colW("title"),
                             }}
                           >
                             <div
