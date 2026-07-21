@@ -6,6 +6,7 @@ import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
 import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
 import { WorkbenchProjectLibrary } from "@/components/workbench-project-library";
+import { WorkbenchBlockers } from "@/components/workbench-blockers";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
 import { getAdminSession } from "@/lib/auth/session";
 import {
@@ -72,6 +73,14 @@ export default async function WorkbenchPage({
   );
 
   const libraryProjects = allProjects.filter((p) => p.status !== "archived");
+  const projectTitleById = new Map(allProjects.map((p) => [p.id, p.title]));
+  const blockerItems = alerts.blockers.map((t) => ({
+    taskId: t.id,
+    title: t.title,
+    blocker: t.blocker?.trim() || "",
+    projectId: t.projectId,
+    projectTitle: projectTitleById.get(t.projectId) ?? "未知项目",
+  }));
 
   return (
     <WorkbenchShell
@@ -144,9 +153,7 @@ export default async function WorkbenchPage({
             <Link href="/stream" className="font-semibold text-indigo-600 hover:underline">
               {alerts.inboxCount}
             </Link>
-            {alerts.blockers.length > 0 ? (
-              <span className="ml-2 text-red-600">阻塞 {alerts.blockers.length}</span>
-            ) : null}
+            {blockerItems.length > 0 ? <WorkbenchBlockers items={blockerItems} /> : null}
             {alerts.emptyNextActionCount > 0 ? (
               <Link
                 href="/projects"
