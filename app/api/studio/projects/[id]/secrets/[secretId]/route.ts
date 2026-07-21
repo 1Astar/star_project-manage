@@ -1,4 +1,4 @@
-import { requireKeysAccess } from "@/lib/auth/require-admin";
+import { requireAdminRole } from "@/lib/auth/require-admin";
 import {
   deleteProjectSecret,
   updateProjectSecret,
@@ -10,7 +10,7 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string; secretId: string }> }
 ) {
-  const auth = await requireKeysAccess();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const { id, secretId } = await context.params;
@@ -29,7 +29,7 @@ export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string; secretId: string }> }
 ) {
-  const auth = await requireKeysAccess();
+  const auth = await requireAdminRole();
   if (auth.error) return auth.error;
 
   const { id, secretId } = await context.params;

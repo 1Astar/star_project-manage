@@ -75,6 +75,8 @@ export async function saveStudioGitSettings(input: SaveStudioGitInput): Promise<
 
 export async function applyDefaultGitToUnboundProjects(repo: string, branch: string) {
   const { getAllProjects } = await import("@/lib/studio/data");
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const { isSupabaseConfigured } = await import("@/lib/supabase/config");
   const projects = await getAllProjects();
   const trimmedRepo = sanitizeGithubRepoInput(repo);
   const trimmedBranch = branch.trim();
@@ -83,6 +85,27 @@ export async function applyDefaultGitToUnboundProjects(repo: string, branch: str
   if (!trimmedBranch) throw new Error("分支必填（须写明项目分支，不默认 main）");
 
   const updated: string[] = [];
+
+  // 只 patch 仓库字段，避免整行 upsert 因缺列 / schema cache 失败
+  if (isSupabaseConfigured()) {
+    const client = createServiceClient();
+    if (!client) throw new Error("Supabase 未配置");
+    for (const project of projects) {
+      if (project.githubRepo?.trim()) continue;
+      const { error } = await client
+        .from("studio_projects")
+        .update({
+          github_repo: trimmedRepo,
+          github_branch: trimmedBranch,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", project.id);
+      if (error) throw new Error(error.message);
+      updated.push(project.title);
+    }
+    return { count: updated.length, projects: updated };
+  }
+
   for (const project of projects) {
     if (project.githubRepo?.trim()) continue;
     await saveStudioGitSettings({
