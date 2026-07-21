@@ -17,6 +17,7 @@ import { parseAgentSourceLabel } from "@/lib/cursor-actor";
 
 export type PoolColumnKey =
   | "title"
+  | "req_type"
   | "status_tags"
   | "next_step"
   | "summary"
@@ -41,6 +42,7 @@ export type PoolColumnKey =
 
 const ALL_COLUMNS: { key: PoolColumnKey; label: string; sortable?: boolean }[] = [
   { key: "title", label: "需求名称", sortable: true },
+  { key: "req_type", label: "类型", sortable: true },
   { key: "next_step", label: "下一步" },
   { key: "status_tags", label: "状态", sortable: true },
   { key: "summary", label: "内容摘要" },
@@ -66,6 +68,7 @@ const ALL_COLUMNS: { key: PoolColumnKey; label: string; sortable?: boolean }[] =
 
 const DEFAULT_VISIBLE: PoolColumnKey[] = [
   "title",
+  "req_type",
   "next_step",
   "status_tags",
   "summary",
@@ -110,6 +113,7 @@ const TITLE_LEFT = CHECKBOX_PX;
 
 type SortKey =
   | "title"
+  | "req_type"
   | "priority"
   | "hours"
   | "submitted_at"
@@ -137,6 +141,7 @@ type Props = {
     requirementId: string,
     updates: Partial<{
       title: string;
+      type: RequirementType;
       next_step: string | null;
       priority: string | null;
       product_estimate_hours: number | null;
@@ -196,8 +201,20 @@ function storageOrderKey(projectId: string) {
   return `star-pm:pool-col-order:${projectId}`;
 }
 
+/** 旧版：类型徽章嵌在名称列内的偏好；迁移到「类型」列显隐后可忽略 */
 function storageTypeBadgeKey(projectId: string) {
   return `star-pm:pool-type-badge:${projectId}`;
+}
+
+function ensureReqTypeColumn(ids: ColumnId[], insert: boolean): ColumnId[] {
+  if (!insert || ids.includes("req_type")) return ids;
+  const titleIdx = ids.indexOf("title");
+  if (titleIdx >= 0) {
+    const next = [...ids];
+    next.splice(titleIdx + 1, 0, "req_type");
+    return next;
+  }
+  return ["req_type", ...ids];
 }
 
 function isBuiltinColumn(key: string): key is PoolColumnKey {
@@ -346,7 +363,6 @@ export function RequirementPoolTable({
   const [visible, setVisible] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [colOrder, setColOrder] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [colsOpen, setColsOpen] = useState(false);
-  const [showTypeBadge, setShowTypeBadge] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("sort_order");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -377,12 +393,24 @@ export function RequirementPoolTable({
 
   useEffect(() => {
     try {
+      const badgeRaw = localStorage.getItem(storageTypeBadgeKey(projectId));
+      const wantTypeCol = !(badgeRaw === "0" || badgeRaw === "false");
+
       const raw = localStorage.getItem(storageKey(projectId));
       if (raw) {
         const parsed = JSON.parse(raw) as ColumnId[];
         if (Array.isArray(parsed) && parsed.length) {
-          setVisible(parsed.filter((k) => isValidColumnId(k, customKeySet)));
+          const filtered = parsed.filter((k) => isValidColumnId(k, customKeySet));
+          const withType = ensureReqTypeColumn(filtered, wantTypeCol);
+          setVisible(withType);
+          try {
+            localStorage.setItem(storageKey(projectId), JSON.stringify(withType));
+          } catch {
+            /* ignore */
+          }
         }
+      } else if (!wantTypeCol) {
+        setVisible(DEFAULT_VISIBLE.filter((k) => k !== "req_type"));
       }
       const orderRaw = localStorage.getItem(storageOrderKey(projectId));
       if (orderRaw) {
@@ -390,7 +418,8 @@ export function RequirementPoolTable({
         if (Array.isArray(parsed) && parsed.length) {
           const valid = parsed.filter((k) => isValidColumnId(k, customKeySet));
           const missing = DEFAULT_VISIBLE.filter((k) => !valid.includes(k));
-          const next = pinLeadingColumns([...valid, ...missing]);
+          let next = pinLeadingColumns([...valid, ...missing]);
+          next = ensureReqTypeColumn(next, wantTypeCol);
           setColOrder(next);
           try {
             localStorage.setItem(storageOrderKey(projectId), JSON.stringify(next));
@@ -401,9 +430,6 @@ export function RequirementPoolTable({
       }
       // 仅保证名称列始终可见
       setVisible((prev) => (prev.includes("title") ? prev : ["title", ...prev]));
-      const badgeRaw = localStorage.getItem(storageTypeBadgeKey(projectId));
-      if (badgeRaw === "0" || badgeRaw === "false") setShowTypeBadge(false);
-      else setShowTypeBadge(true);
     } catch {
       /* ignore */
     }
@@ -467,15 +493,6 @@ export function RequirementPoolTable({
     setColOrder(pinned);
     try {
       localStorage.setItem(storageOrderKey(projectId), JSON.stringify(pinned));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  function persistShowTypeBadge(next: boolean) {
-    setShowTypeBadge(next);
-    try {
-      localStorage.setItem(storageTypeBadgeKey(projectId), next ? "1" : "0");
     } catch {
       /* ignore */
     }
@@ -555,6 +572,12 @@ export function RequirementPoolTable({
         case "title":
           cmp = a.title.localeCompare(b.title, "zh");
           break;
+        case "req_type": {
+          const ta = REQUIREMENT_TYPE_LABELS[(a.type ?? "task") as RequirementType] ?? a.type;
+          const tb = REQUIREMENT_TYPE_LABELS[(b.type ?? "task") as RequirementType] ?? b.type;
+          cmp = ta.localeCompare(tb, "zh");
+          break;
+        }
         case "priority":
           cmp = priorityRank(a.priority) - priorityRank(b.priority);
           break;
@@ -862,16 +885,8 @@ export function RequirementPoolTable({
                 </button>
               </form>
               <div className="my-1 border-t border-slate-100" />
-              <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={showTypeBadge}
-                  onChange={() => persistShowTypeBadge(!showTypeBadge)}
-                />
-                类型标签（大型模块等）
-              </label>
               <p className="mt-1 px-2 text-[10px] text-slate-400">
-                仅「需求名称」固定靠左；其余可显隐、表头可拖拽调序
+                仅「需求名称」固定靠左；「类型」等其余列可显隐、表头可拖拽调序
               </p>
             </div>
           ) : null}
@@ -1038,6 +1053,7 @@ export function RequirementPoolTable({
                 const sortable =
                   col.kind === "builtin" &&
                   (col.key === "title" ||
+                    col.key === "req_type" ||
                     col.key === "priority" ||
                     col.key === "hours" ||
                     col.key === "submitted_at" ||
@@ -1046,6 +1062,7 @@ export function RequirementPoolTable({
                     col.key === "status_tags");
                 const sortMap: Partial<Record<PoolColumnKey, SortKey>> = {
                   title: "title",
+                  req_type: "req_type",
                   priority: "priority",
                   hours: "hours",
                   submitted_at: "submitted_at",
@@ -1073,6 +1090,7 @@ export function RequirementPoolTable({
                       isTitle &&
                         "sticky z-20 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]",
                       builtinKey === "next_step" && "min-w-[200px] max-w-[320px]",
+                      builtinKey === "req_type" && "min-w-[96px]",
                       builtinKey === "status_tags" && "min-w-[100px]",
                       builtinKey === "summary" && "min-w-[200px] max-w-[320px]",
                       (builtinKey === "detail_work" ||
@@ -1261,9 +1279,6 @@ export function RequirementPoolTable({
                             )
                           : "";
                       if (key === "title") {
-                        const typeKey = (req.type ?? "task") as RequirementType;
-                        const typeLabel =
-                          REQUIREMENT_TYPE_LABELS[typeKey] ?? req.type ?? "任务";
                         return (
                           <td
                             key={col.id}
@@ -1299,9 +1314,6 @@ export function RequirementPoolTable({
                                   {depth > 0 ? "·" : ""}
                                 </span>
                               )}
-                              {showTypeBadge ? (
-                                <StudioBadge tone="muted">{typeLabel}</StudioBadge>
-                              ) : null}
                               <div className="min-w-0 flex-1">
                                 <InlineCell
                                   wrap
@@ -1335,6 +1347,32 @@ export function RequirementPoolTable({
                                 +子
                               </button>
                             </div>
+                          </td>
+                        );
+                      }
+                      if (key === "req_type") {
+                        const typeKey = (req.type ?? "task") as RequirementType;
+                        return (
+                          <td key={col.id} className="px-3 py-2.5 align-top">
+                            <select
+                              value={typeKey}
+                              disabled={pending}
+                              className="max-w-[110px] rounded-lg border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700"
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const next = e.target.value as RequirementType;
+                                if (next === typeKey) return;
+                                onInlineSave(req.id, { type: next });
+                              }}
+                            >
+                              {(Object.keys(REQUIREMENT_TYPE_LABELS) as RequirementType[]).map(
+                                (k) => (
+                                  <option key={k} value={k}>
+                                    {REQUIREMENT_TYPE_LABELS[k]}
+                                  </option>
+                                )
+                              )}
+                            </select>
                           </td>
                         );
                       }
