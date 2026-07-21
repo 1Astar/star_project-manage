@@ -23,15 +23,43 @@ export default async function TodosPage() {
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="font-semibold text-slate-800">进行中任务</h2>
           <div className="mt-3 space-y-2">
-            {pendingTasks.slice(0, 20).map((t) => (
-              <div key={t.id} className="text-sm">
-                <div className="font-medium">
-                  {ROLE_LABELS[t.role]}
-                  {t.assignee ? ` · ${t.assignee}` : ""}
+            {pendingTasks.slice(0, 20).map((t) => {
+              const href = t.project_slug
+                ? `/projects/${t.project_slug}/requirements/${t.requirement_id}`
+                : null;
+              const inner = (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-slate-900">
+                      {t.requirement_title}
+                    </span>
+                    <StatusBadge status={t.status} />
+                  </div>
+                  <div className="mt-0.5 text-xs text-slate-500">
+                    {t.project_name}
+                    <span className="mx-1 text-slate-300">·</span>
+                    {ROLE_LABELS[t.role]}
+                    {t.assignee ? ` · ${t.assignee}` : ""}
+                  </div>
+                </>
+              );
+              return href ? (
+                <Link
+                  key={t.id}
+                  href={href}
+                  className="block rounded-lg border border-slate-100 px-3 py-2 hover:border-indigo-200 hover:bg-indigo-50/40"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div
+                  key={t.id}
+                  className="rounded-lg border border-slate-100 px-3 py-2 text-sm"
+                >
+                  {inner}
                 </div>
-                <StatusBadge status={t.status} />
-              </div>
-            ))}
+              );
+            })}
             {pendingTasks.length === 0 ? (
               <p className="text-sm text-slate-500">暂无待办任务</p>
             ) : null}

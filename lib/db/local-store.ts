@@ -964,9 +964,27 @@ export async function addPrototype(input: {
 
 export async function getMyTodos(recipientName?: string) {
   const db = await readDb();
-  const pendingTasks = db.role_tasks.filter(
-    (t) => t.status !== "done" && t.status !== "blocked"
-  );
+  const pendingTasks = db.role_tasks
+    .filter((t) => t.status !== "done" && t.status !== "blocked")
+    .map((t) => {
+      const req = db.requirements.find((r) => r.id === t.requirement_id);
+      const project = req
+        ? db.projects.find((p) => p.id === req.project_id)
+        : undefined;
+      return {
+        ...t,
+        requirement_title: req?.title?.trim() || "未知需求",
+        project_id: req?.project_id ?? "",
+        project_name: project?.name?.trim() || "未知项目",
+        project_slug: project?.slug || req?.project_id || "",
+      };
+    })
+    // 待测试 / 待验收优先，方便产品一眼看到卡点
+    .sort((a, b) => {
+      const rank = (s: string) =>
+        s === "testing" ? 0 : s === "acceptance" ? 1 : s === "integration" ? 2 : 3;
+      return rank(a.status) - rank(b.status) || a.updated_at.localeCompare(b.updated_at);
+    });
   const pendingAcceptance = db.requirements.filter((r) => r.status === "acceptance");
   const unreadNotifications = db.notifications.filter(
     (n) => !n.is_read && (!recipientName || n.recipient_name === recipientName || !n.recipient_name)
