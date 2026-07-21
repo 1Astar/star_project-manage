@@ -260,6 +260,46 @@ export function RequirementPoolSplitView({
               }
             });
           }}
+          onTreeDrop={({ dragId, orderedIds, nextParentId }) => {
+            startTransition(async () => {
+              try {
+                const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+                setRequirements((prev) =>
+                  [...prev]
+                    .map((r) => {
+                      let next = r;
+                      if (r.id === dragId) {
+                        next = { ...next, parent_id: nextParentId };
+                      }
+                      if (orderMap.has(r.id)) {
+                        next = { ...next, sort_order: orderMap.get(r.id)! };
+                      }
+                      return next;
+                    })
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                );
+                await saveRequirementDetailAction({
+                  requirementId: dragId,
+                  projectSlug,
+                  updates: { parent_id: nextParentId },
+                });
+                await Promise.all(
+                  orderedIds.map((id, i) =>
+                    saveRequirementDetailAction({
+                      requirementId: id,
+                      projectSlug,
+                      updates: { sort_order: i },
+                    })
+                  )
+                );
+                setMessage("层级 / 顺序已更新");
+                router.refresh();
+              } catch (error) {
+                setMessage(error instanceof Error ? error.message : "拖拽保存失败");
+                router.refresh();
+              }
+            });
+          }}
         />
 
         {drawerReq ? (
