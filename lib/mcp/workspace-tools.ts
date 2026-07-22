@@ -64,6 +64,8 @@ function slimProject(project: NonNullable<Awaited<ReturnType<typeof getProjectBy
     targetUser: project.targetUser,
     currentStage: project.currentStage,
     nextAction: project.nextAction,
+    featureModules: project.featureModules ?? [],
+    githubRepo: project.githubRepo ?? null,
     updatedAt: project.updatedAt,
   };
 }
@@ -268,7 +270,8 @@ export function registerWorkspaceTools(server: McpServer) {
     "update_project",
     {
       title: "Update Project",
-      description: "更新项目状态、阶段、下一步、定位等。",
+      description:
+        "更新项目状态、阶段、下一步、定位、功能板块名单等。featureModules 为完整覆盖写入（每项建议用「体系·功能面·能力」路径）。",
       inputSchema: {
         projectId: z.string().min(1),
         title: z.string().optional(),
@@ -281,19 +284,40 @@ export function registerWorkspaceTools(server: McpServer) {
         portfolioValue: z.string().optional(),
         demoUrl: z.string().nullable().optional(),
         githubRepo: z.string().nullable().optional(),
+        featureModules: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "功能板块名单（完整覆盖）。例：[\"六爻·笔记·卦象解析\",\"八字·排盘·四柱\"]；传 [] 清空自定义（回退内置目录）"
+          ),
       },
     },
     async (input) => {
       try {
-        const { projectId, ...patch } = input;
+        const { projectId, featureModules, ...patch } = input;
         const project = await updateStudioProject(projectId, {
           ...patch,
           status: patch.status as ProjectStatus | undefined,
           priority: patch.priority as ProjectPriority | undefined,
+          ...(featureModules !== undefined
+            ? {
+                featureModules: featureModules
+                  .map((m) => m.trim())
+                  .filter(Boolean),
+              }
+            : {}),
         });
         await logAiAction({
           action: "update_project",
-          payload: { projectId, patch },
+          payload: {
+            projectId,
+            patch: {
+              ...patch,
+              ...(featureModules !== undefined
+                ? { featureModulesCount: featureModules.length }
+                : {}),
+            },
+          },
         });
         return mcpJson({ ok: true, project: slimProject(project) });
       } catch (error) {
