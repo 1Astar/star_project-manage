@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   createProjectModuleAction,
   deleteProjectModuleAction,
+  syncFeatureModulesToTreeAction,
   updateProjectModuleAction,
 } from "@/lib/actions";
 import type { ModuleNode } from "@/lib/types";
@@ -16,6 +17,8 @@ type Props = {
   modules: ModuleNode[];
   /** moduleId → 关联需求数 */
   reqCounts?: Record<string, number>;
+  /** Studio 项目 id；有则显示「从功能板块导入」 */
+  studioProjectId?: string | null;
 };
 
 type TreeNode = ModuleNode & { children: TreeNode[] };
@@ -45,6 +48,7 @@ export function ProjectModuleTree({
   projectSlug,
   modules,
   reqCounts = {},
+  studioProjectId = null,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -54,11 +58,13 @@ export function ProjectModuleTree({
   const [addingUnder, setAddingUnder] = useState<string | "root" | null>(null);
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const tree = useMemo(() => buildTree(modules), [modules]);
 
   function run(fn: () => Promise<unknown>) {
     setError(null);
+    setSyncMsg(null);
     startTransition(async () => {
       try {
         await fn();
@@ -69,6 +75,26 @@ export function ProjectModuleTree({
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "操作失败");
+      }
+    });
+  }
+
+  function importFromFeatureModules() {
+    if (!studioProjectId) return;
+    setError(null);
+    setSyncMsg(null);
+    startTransition(async () => {
+      try {
+        const result = await syncFeatureModulesToTreeAction({
+          studioProjectId,
+          projectSlug,
+        });
+        setSyncMsg(
+          `已导入：+${result.createdL1} 一级 / +${result.createdL2} 子模块（跳过 ${result.skippedExisting}）`
+        );
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "导入失败");
       }
     });
   }
@@ -251,21 +277,35 @@ export function ProjectModuleTree({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold text-slate-800">模块</h3>
-        <button
-          type="button"
-          className="text-[11px] font-medium text-indigo-600 hover:underline"
-          onClick={() => {
-            setAddingUnder("root");
-            setNewName("");
-            setEditingId(null);
-          }}
-          disabled={pending}
-        >
-          + 一级模块
-        </button>
+        <div className="flex items-center gap-2">
+          {studioProjectId ? (
+            <button
+              type="button"
+              className="text-[11px] font-medium text-slate-600 hover:underline"
+              onClick={importFromFeatureModules}
+              disabled={pending}
+              title="按功能板块路径补缺导入（体系→一级，其余→子模块）"
+            >
+              从功能板块导入
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="text-[11px] font-medium text-indigo-600 hover:underline"
+            onClick={() => {
+              setAddingUnder("root");
+              setNewName("");
+              setEditingId(null);
+            }}
+            disabled={pending}
+          >
+            + 一级模块
+          </button>
+        </div>
       </div>
 
       {error ? <p className="text-[11px] text-red-600">{error}</p> : null}
+      {syncMsg ? <p className="text-[11px] text-emerald-600">{syncMsg}</p> : null}
 
       {addingUnder === "root" ? (
         <form

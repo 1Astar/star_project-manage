@@ -658,6 +658,27 @@ export async function createProjectModuleAction(input: {
   return mod;
 }
 
+/** 将 Studio 项目功能板块增量导入模块树 */
+export async function syncFeatureModulesToTreeAction(input: {
+  studioProjectId: string;
+  projectSlug: string;
+}) {
+  const { getProjectById } = await import("@/lib/studio/data");
+  const { syncFeatureModulesToModuleTree } = await import(
+    "@/lib/studio/feature-module-tree"
+  );
+  const project = await getProjectById(input.studioProjectId);
+  if (!project) throw new Error("项目不存在");
+  const result = await syncFeatureModulesToModuleTree(
+    project,
+    project.featureModules ?? []
+  );
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.studioProjectId}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return result;
+}
+
 export async function updateProjectModuleAction(input: {
   projectSlug: string;
   moduleId: string;

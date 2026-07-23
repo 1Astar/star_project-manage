@@ -61,7 +61,23 @@ export function StudioGitSettings({ project }: { project: Project }) {
           setError(projData.error ?? "板块保存失败");
           return;
         }
-        setMessage("已保存（仓库 + 功能板块）");
+        const sync = projData.moduleTreeSync as
+          | {
+              createdL1?: number;
+              createdL2?: number;
+              skippedExisting?: number;
+            }
+          | null
+          | undefined;
+        if (sync && (sync.createdL1 || sync.createdL2)) {
+          setMessage(
+            `已保存（仓库 + 功能板块）；模块树新增 ${sync.createdL1 ?? 0} 个一级、${sync.createdL2 ?? 0} 个子模块`
+          );
+        } else if (sync) {
+          setMessage("已保存（仓库 + 功能板块）；模块树已对齐（无新增）");
+        } else {
+          setMessage("已保存（仓库 + 功能板块）");
+        }
         router.refresh();
       } catch {
         setError("网络错误");
@@ -144,7 +160,7 @@ export function StudioGitSettings({ project }: { project: Project }) {
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
           <p className="mt-1 text-xs text-slate-400">
-            按产品功能面配置（小手机里有什么能力），不是「产品/技术」这类横切标签。留空则按仓库用内置目录。
+            每行一条路径（建议「体系·功能面·能力」）。保存时会按首个「·」拆成模块树：一级=体系，子模块=其余；已有同名跳过。留空则按仓库用内置目录。
           </p>
         </label>
         <button

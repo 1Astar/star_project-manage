@@ -166,6 +166,7 @@ export default async function ProjectOverviewPage({
               projectSlug={slug}
               modules={modules}
               reqCounts={reqCounts}
+              studioProjectId={ctx.studio?.id ?? null}
             />
           ) : (
             <>

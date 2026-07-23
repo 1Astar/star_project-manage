@@ -440,6 +440,41 @@ export async function updateStudioProject(id: string, patch: UpdateProjectInput)
   );
 }
 
+/** 更新项目；若写入 featureModules 则增量同步到模块树 */
+export async function updateStudioProjectWithModuleSync(
+  id: string,
+  patch: UpdateProjectInput
+): Promise<{
+  project: Project;
+  moduleTreeSync: import("@/lib/studio/feature-module-tree").ModuleTreeSyncResult | null;
+}> {
+  const project = await updateStudioProject(id, patch);
+  if (patch.featureModules === undefined) {
+    return { project, moduleTreeSync: null };
+  }
+  try {
+    const { syncFeatureModulesToModuleTree } = await import(
+      "@/lib/studio/feature-module-tree"
+    );
+    const moduleTreeSync = await syncFeatureModulesToModuleTree(
+      project,
+      project.featureModules ?? []
+    );
+    return { project, moduleTreeSync };
+  } catch (err) {
+    console.error("[updateStudioProjectWithModuleSync] module tree sync failed", err);
+    return {
+      project,
+      moduleTreeSync: {
+        createdL1: 0,
+        createdL2: 0,
+        skippedExisting: 0,
+        paths: (project.featureModules ?? []).length,
+      },
+    };
+  }
+}
+
 export async function deleteStudioProject(id: string): Promise<void> {
   const snapshot = await getStudioSnapshot();
   if (!snapshot.projects.some((p) => p.id === id)) throw new Error("项目不存在");
@@ -1202,8 +1237,10 @@ export async function syncStudioProjectReleases(projectId: string): Promise<{
     const catalog = detectModuleCatalog(project.id, repo);
     if (catalog !== "generic") {
       const defaults = resolveFeatureModules(project.id, null, repo);
-      await updateStudioProject(projectId, { featureModules: defaults });
-      project = { ...project, featureModules: defaults };
+      const synced = await updateStudioProjectWithModuleSync(projectId, {
+        featureModules: defaults,
+      });
+      project = { ...synced.project, featureModules: defaults };
     }
   }
 

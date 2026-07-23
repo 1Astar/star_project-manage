@@ -28,7 +28,7 @@
 
 | 字段 | 要求 |
 |------|------|
-| **板块** `module` / `relatedModule` | **强烈建议必填**。可用项目自定义 `featureModules`（如 `六爻·笔记·卦象解析`）；未配置时 Star PM 默认：工作台 / 项目库 / 灵感 / 需求任务 / 迭代记录 / 资源中心 / Git / 设置。MCP 用 `update_project.featureModules` 覆盖写入项目名单 |
+| **板块** `module` / `relatedModule` | **强烈建议必填**。可用项目自定义 `featureModules`（如 `六爻·笔记·卦象解析`）；未配置时 Star PM 默认：工作台 / 项目库 / 灵感 / 需求任务 / 迭代记录 / 资源中心 / Git / 设置。MCP 用 `update_project.featureModules` 覆盖写入；写入时按「·」增量同步到需求模块树（一级=首段，子模块=其余） |
 | **原因** `reason` | 可空；空则弱提醒 |
 | **版本** `releaseTag` | 可选；发版前用 `publish_release` 挂上 |
 

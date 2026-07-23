@@ -1,6 +1,6 @@
 import {
   deleteStudioProject,
-  updateStudioProject,
+  updateStudioProjectWithModuleSync,
   type UpdateProjectInput,
 } from "@/lib/studio/mutations";
 import { getProjectById } from "@/lib/studio/data";
@@ -19,8 +19,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   if (!body) return studioErr("请求体无效");
 
   try {
-    const project = await updateStudioProject(id, body);
-    return studioOk({ project });
+    const { project, moduleTreeSync } = await updateStudioProjectWithModuleSync(id, body);
+    return studioOk({ project, moduleTreeSync });
   } catch (error) {
     return mapStudioError(error);
   }

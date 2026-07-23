@@ -9,6 +9,7 @@ import {
   importReleaseBodiesAsEvolution,
   updateStudioIdea,
   updateStudioProject,
+  updateStudioProjectWithModuleSync,
 } from "@/lib/studio/mutations";
 import type {
   AssetType,
@@ -271,7 +272,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Update Project",
       description:
-        "更新项目状态、阶段、下一步、定位、功能板块名单等。featureModules 为完整覆盖写入（每项建议用「体系·功能面·能力」路径）。",
+        "更新项目状态、阶段、下一步、定位、功能板块名单等。featureModules 为完整覆盖写入（每项建议用「体系·功能面·能力」路径）；写入时会增量同步到模块树（首段→一级，其余→子模块）。",
       inputSchema: {
         projectId: z.string().min(1),
         title: z.string().optional(),
@@ -295,18 +296,21 @@ export function registerWorkspaceTools(server: McpServer) {
     async (input) => {
       try {
         const { projectId, featureModules, ...patch } = input;
-        const project = await updateStudioProject(projectId, {
-          ...patch,
-          status: patch.status as ProjectStatus | undefined,
-          priority: patch.priority as ProjectPriority | undefined,
-          ...(featureModules !== undefined
-            ? {
-                featureModules: featureModules
-                  .map((m) => m.trim())
-                  .filter(Boolean),
-              }
-            : {}),
-        });
+        const { project, moduleTreeSync } = await updateStudioProjectWithModuleSync(
+          projectId,
+          {
+            ...patch,
+            status: patch.status as ProjectStatus | undefined,
+            priority: patch.priority as ProjectPriority | undefined,
+            ...(featureModules !== undefined
+              ? {
+                  featureModules: featureModules
+                    .map((m) => m.trim())
+                    .filter(Boolean),
+                }
+              : {}),
+          }
+        );
         await logAiAction({
           action: "update_project",
           payload: {
@@ -319,7 +323,11 @@ export function registerWorkspaceTools(server: McpServer) {
             },
           },
         });
-        return mcpJson({ ok: true, project: slimProject(project) });
+        return mcpJson({
+          ok: true,
+          project: slimProject(project),
+          moduleTreeSync,
+        });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "update_project 失败");
       }
