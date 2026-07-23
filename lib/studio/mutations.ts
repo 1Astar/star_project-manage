@@ -19,6 +19,7 @@ import {
   assertNoDuplicateAsset,
   assertNoDuplicateProject,
 } from "@/lib/studio/entity-dedupe";
+import { normalizeFeaturePath } from "@/lib/studio/project-modules";
 import type {
   Asset,
   AssetType,
@@ -276,7 +277,13 @@ function buildProject(input: CreateProjectInput, existing?: Project): Project {
       input.parentId !== undefined ? input.parentId : (existing?.parentId ?? null),
     featureModules:
       input.featureModules !== undefined
-        ? input.featureModules.map((m) => m.trim()).filter(Boolean)
+        ? Array.from(
+            new Set(
+              input.featureModules
+                .map((m) => normalizeFeaturePath(m.trim()))
+                .filter(Boolean)
+            )
+          )
         : (existing?.featureModules ?? []),
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -466,6 +473,7 @@ export async function updateStudioProjectWithModuleSync(
     return {
       project,
       moduleTreeSync: {
+        created: 0,
         createdL1: 0,
         createdL2: 0,
         skippedExisting: 0,

@@ -2339,7 +2339,7 @@ export async function listProjectModules(projectId: string): Promise<ModuleNode[
     .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh"));
 }
 
-/** 新增模块：顶级挂需求池迭代；子模块挂在父同迭代（最多两级） */
+/** 新增模块：顶级挂需求池迭代；子模块挂在父同迭代（任意多层） */
 export async function createProjectModule(input: {
   projectId: string;
   name: string;
@@ -2354,7 +2354,7 @@ export async function createProjectModule(input: {
 
   let iterationId: string;
   let parentId: string | null = null;
-  let level: 1 | 2 = 1;
+  let level = 1;
 
   if (input.parentId) {
     const parent = db.modules.find((m) => m.id === input.parentId);
@@ -2363,10 +2363,9 @@ export async function createProjectModule(input: {
     if (!parentIter || parentIter.project_id !== project.id) {
       throw new Error("父模块不属于本项目");
     }
-    if (parent.level !== 1) throw new Error("最多两级模块，请挂在一级模块下");
     iterationId = parent.iteration_id;
     parentId = parent.id;
-    level = 2;
+    level = (parent.level || 1) + 1;
   } else {
     const pool = await ensurePoolIteration(project.id);
     iterationId = pool.id;
@@ -2410,17 +2409,21 @@ export async function deleteProjectModule(moduleId: string): Promise<void> {
   if (!root) throw new Error("模块不存在");
 
   const toRemove = new Set<string>([moduleId]);
-  for (const m of db.modules) {
-    if (m.parent_id && toRemove.has(m.parent_id)) toRemove.add(m.id);
-  }
-  // 再扫一遍以防多层（当前最多两级）
-  for (const m of db.modules) {
-    if (m.parent_id && toRemove.has(m.parent_id)) toRemove.add(m.id);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const m of db.modules) {
+      if (m.parent_id && toRemove.has(m.parent_id) && !toRemove.has(m.id)) {
+        toRemove.add(m.id);
+        grew = true;
+      }
+    }
   }
 
   db.modules = db.modules.filter((m) => !toRemove.has(m.id));
   for (const r of db.requirements) {
     if (r.module_l1_id && toRemove.has(r.module_l1_id)) r.module_l1_id = null;
+    // module_l2_id：语义为叶子（深度≥2）；删除时一并清空
     if (r.module_l2_id && toRemove.has(r.module_l2_id)) r.module_l2_id = null;
   }
   await saveDb(db);

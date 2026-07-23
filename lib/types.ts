@@ -105,7 +105,8 @@ export interface ModuleNode {
   iteration_id: string;
   parent_id: string | null;
   name: string;
-  level: 1 | 2;
+  /** 相对根的深度，1 起；任意多层 */
+  level: number;
   estimate_level: EstimateLevel;
   module_estimate_hours: number | null;
   sort_order: number;

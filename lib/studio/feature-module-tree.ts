@@ -1,29 +1,24 @@
 import type { Project } from "@/lib/studio/types";
 import type { ModuleNode } from "@/lib/types";
-
-/** 将「体系·功能面·能力」路径拆成模块树两级：首段 L1，其余拼成 L2 */
-export function parseFeaturePathToLevels(
-  path: string
-): { l1: string; l2: string | null } | null {
-  const parts = path
-    .split("·")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return null;
-  if (parts.length === 1) return { l1: parts[0], l2: null };
-  return { l1: parts[0], l2: parts.slice(1).join("·") };
-}
+import {
+  normalizeFeaturePath,
+  parseFeaturePathToChain,
+} from "@/lib/studio/project-modules";
 
 export type ModuleTreeSyncResult = {
-  createdL1: number;
-  createdL2: number;
+  /** 新建节点总数（任意层） */
+  created: number;
   skippedExisting: number;
   paths: number;
+  /** 兼容旧 toast：新建的一级节点数 */
+  createdL1: number;
+  /** 兼容旧 toast：新建的二级及以下节点数 */
+  createdL2: number;
 };
 
 /**
- * 把功能板块名单增量同步到 PM 模块树（最多两级）。
- * 已存在同名节点跳过；不删除名单外已有模块。
+ * 把功能板块名单增量同步到 PM 模块树（任意多层）。
+ * 路径按 · / 、 分段；同名同父跳过；不删除名单外已有模块。
  */
 export async function syncFeatureModulesToModuleTree(
   studioProject: Project,
@@ -51,59 +46,69 @@ export async function syncFeatureModulesToModuleTree(
       : null,
   });
 
-  const cleaned = Array.from(new Set(paths.map((p) => p.trim()).filter(Boolean)));
+  const cleaned = Array.from(
+    new Set(
+      paths
+        .map((p) => normalizeFeaturePath(p.trim()))
+        .filter(Boolean)
+    )
+  );
 
   const result: ModuleTreeSyncResult = {
-    createdL1: 0,
-    createdL2: 0,
+    created: 0,
     skippedExisting: 0,
     paths: cleaned.length,
+    createdL1: 0,
+    createdL2: 0,
   };
   if (cleaned.length === 0) return result;
 
   const modules = await listProjectModules(pm.id);
-  const l1ByName = new Map<string, ModuleNode>();
-  const l2Key = new Set<string>();
-
+  /** parentId|null + name → node */
+  const byParentName = new Map<string, ModuleNode>();
   for (const m of modules) {
-    if (m.level === 1 && !m.parent_id) {
-      l1ByName.set(m.name, m);
-    } else if (m.level === 2 && m.parent_id) {
-      l2Key.add(`${m.parent_id}::${m.name}`);
-    }
+    byParentName.set(`${m.parent_id ?? ""}::${m.name}`, m);
   }
 
   for (const path of cleaned) {
-    const levels = parseFeaturePathToLevels(path);
-    if (!levels) continue;
+    const chain = parseFeaturePathToChain(path);
+    if (chain.length === 0) continue;
 
-    let l1 = l1ByName.get(levels.l1);
-    let l1Created = false;
-    if (!l1) {
-      l1 = await createProjectModule({ projectId: pm.id, name: levels.l1 });
-      l1ByName.set(levels.l1, l1);
-      result.createdL1 += 1;
-      l1Created = true;
+    let parentId: string | null = null;
+    let pathFullyExisted = true;
+
+    for (let i = 0; i < chain.length; i++) {
+      const name = chain[i];
+      const key = `${parentId ?? ""}::${name}`;
+      let node = byParentName.get(key);
+      if (!node) {
+        node = await createProjectModule({
+          projectId: pm.id,
+          name,
+          parentId,
+        });
+        byParentName.set(key, node);
+        result.created += 1;
+        if (i === 0) result.createdL1 += 1;
+        else result.createdL2 += 1;
+        pathFullyExisted = false;
+      }
+      parentId = node.id;
     }
 
-    if (!levels.l2) {
-      if (!l1Created) result.skippedExisting += 1;
-      continue;
-    }
-
-    const key = `${l1.id}::${levels.l2}`;
-    if (l2Key.has(key)) {
-      result.skippedExisting += 1;
-      continue;
-    }
-    await createProjectModule({
-      projectId: pm.id,
-      name: levels.l2,
-      parentId: l1.id,
-    });
-    l2Key.add(key);
-    result.createdL2 += 1;
+    if (pathFullyExisted) result.skippedExisting += 1;
   }
 
   return result;
+}
+
+/** @deprecated use parseFeaturePathToChain */
+export function parseFeaturePathToLevels(path: string): {
+  l1: string;
+  l2: string | null;
+} | null {
+  const chain = parseFeaturePathToChain(path);
+  if (chain.length === 0) return null;
+  if (chain.length === 1) return { l1: chain[0], l2: null };
+  return { l1: chain[0], l2: chain.slice(1).join("·") };
 }

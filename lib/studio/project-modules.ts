@@ -69,14 +69,47 @@ export function normalizeModuleName(value: string | null | undefined): string {
   return (value ?? "").trim();
 }
 
-/** 解析「逗号 / 换行 / 顿号」分隔的板块名单 */
+/** 路径层级分隔：中点 / 斜杠 / 顿号 */
+const HIERARCHY_SEP = /[·/、]+/;
+
+/** 将粘贴路径规范为用「·」连接的层级串 */
+export function normalizeFeaturePath(path: string): string {
+  return path
+    .split(HIERARCHY_SEP)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join("·");
+}
+
+/** 拆成层级名数组：六爻/笔记、卦象解析 → [六爻, 笔记, 卦象解析] */
+export function parseFeaturePathToChain(path: string): string[] {
+  return path
+    .split(HIERARCHY_SEP)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * 解析粘贴的板块名单。
+ * - 换行 / 分号：多条路径
+ * - 条内含 · / 、：整行一条路径（按分隔符分层）
+ * - 否则可用逗号拆多条扁平名（如「对话聊天,相册图库」）
+ */
 export function parseFeatureModulesInput(raw: string): string[] {
-  return Array.from(
-    new Set(
-      raw
-        .split(/[,，、\n\r]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-    )
-  );
+  const lines = raw
+    .split(/[\n\r;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const out: string[] = [];
+  for (const line of lines) {
+    if (/[·/、]/.test(line)) {
+      out.push(normalizeFeaturePath(line));
+    } else {
+      for (const part of line.split(/[,，]+/)) {
+        const t = part.trim();
+        if (t) out.push(t);
+      }
+    }
+  }
+  return Array.from(new Set(out));
 }

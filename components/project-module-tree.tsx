@@ -43,6 +43,16 @@ function buildTree(modules: ModuleNode[]): TreeNode[] {
   return roots;
 }
 
+function subtreeReqCount(
+  node: TreeNode,
+  reqCounts: Record<string, number>
+): number {
+  return (
+    (reqCounts[node.id] ?? 0) +
+    node.children.reduce((s, c) => s + subtreeReqCount(c, reqCounts), 0)
+  );
+}
+
 export function ProjectModuleTree({
   projectId,
   projectSlug,
@@ -52,6 +62,7 @@ export function ProjectModuleTree({
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  /** 显式展开/收起；未设置时：level≥2 默认收起（界面默认只看两层） */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -61,6 +72,15 @@ export function ProjectModuleTree({
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const tree = useMemo(() => buildTree(modules), [modules]);
+
+  function isNodeCollapsed(node: TreeNode) {
+    return collapsed[node.id] ?? node.level >= 2;
+  }
+
+  function toggleCollapsed(node: TreeNode) {
+    const next = !isNodeCollapsed(node);
+    setCollapsed((c) => ({ ...c, [node.id]: next }));
+  }
 
   function run(fn: () => Promise<unknown>) {
     setError(null);
@@ -90,7 +110,7 @@ export function ProjectModuleTree({
           projectSlug,
         });
         setSyncMsg(
-          `已导入：+${result.createdL1} 一级 / +${result.createdL2} 子模块（跳过 ${result.skippedExisting}）`
+          `已导入：+${result.created} 节点（一级 ${result.createdL1} / 深层 ${result.createdL2}，跳过路径 ${result.skippedExisting}）`
         );
         router.refresh();
       } catch (e) {
@@ -130,11 +150,9 @@ export function ProjectModuleTree({
   }
 
   function renderNode(node: TreeNode, depth: number) {
-    const isCollapsed = collapsed[node.id];
+    const isCollapsed = isNodeCollapsed(node);
     const hasChildren = node.children.length > 0;
-    const count =
-      (reqCounts[node.id] ?? 0) +
-      node.children.reduce((s, c) => s + (reqCounts[c.id] ?? 0), 0);
+    const count = subtreeReqCount(node, reqCounts);
 
     return (
       <li key={node.id} className="relative">
@@ -149,7 +167,6 @@ export function ProjectModuleTree({
             "group flex items-center gap-1 rounded-md py-0.5 pr-1 hover:bg-slate-50",
             depth > 0 && "pl-1"
           )}
-          style={{ paddingLeft: depth > 0 ? undefined : 0 }}
         >
           <button
             type="button"
@@ -157,9 +174,7 @@ export function ProjectModuleTree({
               "flex h-5 w-5 shrink-0 items-center justify-center text-[10px] text-slate-400",
               !hasChildren && "invisible"
             )}
-            onClick={() =>
-              setCollapsed((c) => ({ ...c, [node.id]: !c[node.id] }))
-            }
+            onClick={() => toggleCollapsed(node)}
             aria-label={isCollapsed ? "展开" : "收起"}
           >
             {isCollapsed ? "▸" : "▾"}
@@ -200,20 +215,18 @@ export function ProjectModuleTree({
                 ) : null}
               </span>
               <span className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
-                {node.level === 1 ? (
-                  <button
-                    type="button"
-                    title="添加子模块"
-                    className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
-                    onClick={() => {
-                      setAddingUnder(node.id);
-                      setNewName("");
-                      setEditingId(null);
-                    }}
-                  >
-                    ＋
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  title="添加子模块"
+                  className="rounded px-1 text-[11px] text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
+                  onClick={() => {
+                    setAddingUnder(node.id);
+                    setNewName("");
+                    setEditingId(null);
+                  }}
+                >
+                  ＋
+                </button>
                 <button
                   type="button"
                   title="重命名"
@@ -284,7 +297,7 @@ export function ProjectModuleTree({
               className="text-[11px] font-medium text-slate-600 hover:underline"
               onClick={importFromFeatureModules}
               disabled={pending}
-              title="按功能板块路径补缺导入（体系→一级，其余→子模块）"
+              title="按功能板块路径补缺导入（· / 、 分层，同名合并）"
             >
               从功能板块导入
             </button>
@@ -338,7 +351,7 @@ export function ProjectModuleTree({
 
       {tree.length === 0 && addingUnder !== "root" ? (
         <p className="text-[11px] text-slate-400">
-          暂无模块。点「+ 一级模块」开始，再建子模块（最多两级）。
+          暂无模块。可从功能板块导入，或点「+ 一级模块」。默认展示两层，更深可展开。
         </p>
       ) : (
         <ul className="max-h-[220px] space-y-0.5 overflow-y-auto text-xs">

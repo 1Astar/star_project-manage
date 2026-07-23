@@ -69,9 +69,12 @@ export function StudioGitSettings({ project }: { project: Project }) {
             }
           | null
           | undefined;
-        if (sync && (sync.createdL1 || sync.createdL2)) {
+        if (sync && (sync.createdL1 || sync.createdL2 || (sync as { created?: number }).created)) {
+          const created =
+            (sync as { created?: number }).created ??
+            (sync.createdL1 ?? 0) + (sync.createdL2 ?? 0);
           setMessage(
-            `已保存（仓库 + 功能板块）；模块树新增 ${sync.createdL1 ?? 0} 个一级、${sync.createdL2 ?? 0} 个子模块`
+            `已保存（仓库 + 功能板块）；模块树新增 ${created} 个节点`
           );
         } else if (sync) {
           setMessage("已保存（仓库 + 功能板块）；模块树已对齐（无新增）");
@@ -156,11 +159,11 @@ export function StudioGitSettings({ project }: { project: Project }) {
             value={featureModulesText}
             onChange={(e) => setFeatureModulesText(e.target.value)}
             rows={5}
-            placeholder={"每行一个，或逗号分隔\n例：对话聊天、相册图库、推送通知"}
+            placeholder={"每行一条路径，分隔符自动分层\n例：六爻/笔记/卦象解析\n或：旅程、备份"}
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
           <p className="mt-1 text-xs text-slate-400">
-            每行一条路径（建议「体系·功能面·能力」）。保存时会按首个「·」拆成模块树：一级=体系，子模块=其余；已有同名跳过。留空则按仓库用内置目录。
+            换行分隔多条；条内用 · / 、 分层（同名自动合并）。保存时同步到模块树（任意多层，界面默认展开两层）。无分隔符时可用逗号写多条扁平名。
           </p>
         </label>
         <button
