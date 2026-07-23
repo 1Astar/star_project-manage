@@ -137,6 +137,7 @@ export function ImportClient({
                 <tr>
                   <th className="px-3 py-2">一级模块</th>
                   <th className="px-3 py-2">二级模块</th>
+                  <th className="px-3 py-2">三级模块</th>
                   <th className="px-3 py-2">细分功能</th>
                   <th className="px-3 py-2">角色任务</th>
                   <th className="px-3 py-2">警告</th>
@@ -147,6 +148,7 @@ export function ImportClient({
                   <tr key={idx} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-2">{row.moduleL1}</td>
                     <td className="px-3 py-2">{row.moduleL2}</td>
+                    <td className="px-3 py-2">{row.moduleL3}</td>
                     <td className="px-3 py-2">{row.subFunction ?? "—"}</td>
                     <td className="px-3 py-2">
                       {row.roles.map((r) => (

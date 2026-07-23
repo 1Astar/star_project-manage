@@ -18,6 +18,7 @@ import { RequirementPoolTable } from "@/components/requirement-pool-table";
 import { StudioBadge } from "@/components/studio/shell";
 import type {
   Iteration,
+  ModuleNode,
   PoolColumnDef,
   ProjectMember,
   Requirement,
@@ -45,6 +46,7 @@ type Props = {
   projectId: string;
   projectSlug: string;
   requirements: Requirement[];
+  modules?: ModuleNode[];
   activeIterations: Iteration[];
   attachments: RequirementAttachment[];
   members: ProjectMember[];
@@ -64,6 +66,7 @@ export function RequirementPoolSplitView({
   projectId,
   projectSlug,
   requirements: initialReqs,
+  modules = [],
   activeIterations,
   attachments: initialAttachments,
   members,
@@ -170,6 +173,7 @@ export function RequirementPoolSplitView({
           projectId={projectId}
           projectSlug={projectSlug}
           requirements={requirements}
+          modules={modules}
           attachments={attachments}
           columnDefs={columnDefs}
           tagOptions={tagOptions}

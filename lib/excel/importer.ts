@@ -30,14 +30,14 @@ function mapStatus(raw?: string): TaskStatus {
 function detectModuleLevelHours(rows: ParsedRequirementRow[]): Set<number> {
   const moduleGroups = new Map<string, ParsedRequirementRow[]>();
   for (const row of rows) {
-    const key = `${row.moduleL1}::${row.moduleL2}`;
+    const key = `${row.moduleL1}::${row.moduleL2}::${row.moduleL3 ?? ""}`;
     if (!moduleGroups.has(key)) moduleGroups.set(key, []);
     moduleGroups.get(key)!.push(row);
   }
 
   const moduleLevelIndices = new Set<number>();
   rows.forEach((row, idx) => {
-    const key = `${row.moduleL1}::${row.moduleL2}`;
+    const key = `${row.moduleL1}::${row.moduleL2}::${row.moduleL3 ?? ""}`;
     const group = moduleGroups.get(key) ?? [];
     if (group.length <= 1) return;
 
@@ -118,50 +118,45 @@ export async function importSheetToProject(
     const isModuleLevel = moduleLevelIndices.has(rowIdx);
 
     let moduleL1Id: string | null = null;
-    let moduleL2Id: string | null = null;
+    let moduleLeafId: string | null = null;
 
-    if (row.moduleL1) {
-      const l1Key = `${iteration.id}::${row.moduleL1}`;
-      if (!moduleCache.has(l1Key)) {
+    const chainNames = [row.moduleL1, row.moduleL2, row.moduleL3]
+      .map((s) => (s ?? "").trim())
+      .filter(Boolean);
+
+    let parentId: string | null = null;
+    let pathKey = iteration.id;
+    for (let depth = 0; depth < chainNames.length; depth++) {
+      const name = chainNames[depth];
+      pathKey = `${pathKey}::${name}`;
+      if (!moduleCache.has(pathKey)) {
         const mod = {
           id: uid("mod-"),
           iteration_id: iteration.id,
-          parent_id: null,
-          name: row.moduleL1,
-          level: 1 as const,
-          estimate_level: "requirement" as EstimateLevel,
-          module_estimate_hours: null,
+          parent_id: parentId,
+          name,
+          level: depth + 1,
+          estimate_level: (
+            depth === chainNames.length - 1 && isModuleLevel ? "module" : "requirement"
+          ) as EstimateLevel,
+          module_estimate_hours:
+            depth === chainNames.length - 1 && isModuleLevel
+              ? row.roles.find((r) => r.role === "backend")?.estimateHours ?? null
+              : null,
           sort_order: modulesCreated++,
         };
         db.modules.push(mod);
-        moduleCache.set(l1Key, mod.id);
+        moduleCache.set(pathKey, mod.id);
       }
-      moduleL1Id = moduleCache.get(l1Key)!;
-    }
-
-    if (row.moduleL2) {
-      const l2Key = `${iteration.id}::${row.moduleL1}::${row.moduleL2}`;
-      if (!moduleCache.has(l2Key)) {
-        const mod = {
-          id: uid("mod-"),
-          iteration_id: iteration.id,
-          parent_id: moduleL1Id,
-          name: row.moduleL2,
-          level: 2 as const,
-          estimate_level: (isModuleLevel ? "module" : "requirement") as EstimateLevel,
-          module_estimate_hours: isModuleLevel
-            ? row.roles.find((r) => r.role === "backend")?.estimateHours ?? null
-            : null,
-          sort_order: modulesCreated++,
-        };
-        db.modules.push(mod);
-        moduleCache.set(l2Key, mod.id);
-      }
-      moduleL2Id = moduleCache.get(l2Key)!;
+      const id = moduleCache.get(pathKey)!;
+      if (depth === 0) moduleL1Id = id;
+      moduleLeafId = id;
+      parentId = id;
     }
 
     const title =
       row.subFunction ||
+      row.moduleL3 ||
       row.moduleL2 ||
       row.moduleL1 ||
       "未命名需求";
@@ -172,7 +167,9 @@ export async function importSheetToProject(
       project_id: project.id,
       iteration_id: iteration.id,
       module_l1_id: moduleL1Id,
-      module_l2_id: moduleL2Id,
+      // 深度≥2 时挂叶子（三级时仍写在 module_l2_id）
+      module_l2_id:
+        chainNames.length >= 2 ? moduleLeafId : null,
       title,
       sub_function: row.subFunction ?? null,
       detail_work: isModuleLevel

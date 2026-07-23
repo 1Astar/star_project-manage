@@ -14,6 +14,7 @@ export interface ParsedRequirementRow {
   iterationName?: string;
   moduleL1?: string;
   moduleL2?: string;
+  moduleL3?: string;
   subFunction?: string;
   detailWork?: string;
   acceptanceCriteria?: string;
@@ -189,6 +190,7 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
       findColumnByKeyword(sheet, mergedMap, "一期") ??
       2;
     const colL2 = findColumnByKeyword(sheet, mergedMap, "二级模块");
+    const colL3 = findColumnByKeyword(sheet, mergedMap, "三级模块");
     // 旧版一期表没有「细分功能」列；勿默认落到工时列（常为第 4 列）
     const colSub = findColumnByKeyword(sheet, mergedMap, "细分功能");
     const colDetail = findColumnByKeyword(sheet, mergedMap, "详细工作");
@@ -201,6 +203,7 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
       iterationName: "",
       moduleL1: "",
       moduleL2: "",
+      moduleL3: "",
     };
 
     for (let row = headerRows + 1; row <= sheet.rowCount; row++) {
@@ -209,6 +212,9 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
       const moduleL2 = colL2
         ? String(getCellValue(sheet, row, colL2, mergedMap) ?? "").trim()
         : "";
+      const moduleL3 = colL3
+        ? String(getCellValue(sheet, row, colL3, mergedMap) ?? "").trim()
+        : "";
       const subFunction = colSub
         ? String(getCellValue(sheet, row, colSub, mergedMap) ?? "").trim()
         : "";
@@ -216,8 +222,9 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
       if (iterationName) current.iterationName = iterationName;
       if (moduleL1) current.moduleL1 = moduleL1;
       if (moduleL2) current.moduleL2 = moduleL2;
+      if (moduleL3) current.moduleL3 = moduleL3;
 
-      const hasContent = moduleL1 || moduleL2 || subFunction || iterationName;
+      const hasContent = moduleL1 || moduleL2 || moduleL3 || subFunction || iterationName;
       if (!hasContent) continue;
 
       const warnings: string[] = [];
@@ -258,8 +265,10 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
 
       const title =
         subFunction ||
+        moduleL3 ||
         moduleL2 ||
         moduleL1 ||
+        current.moduleL3 ||
         current.moduleL2 ||
         current.moduleL1 ||
         "未命名需求";
@@ -268,6 +277,7 @@ export async function parseWorkbookPreview(buffer: ArrayBuffer): Promise<ParsePr
         iterationName: current.iterationName,
         moduleL1: moduleL1 || current.moduleL1,
         moduleL2: moduleL2 || current.moduleL2,
+        moduleL3: moduleL3 || current.moduleL3 || undefined,
         subFunction: subFunction || undefined,
         detailWork: colDetail
           ? String(getCellValue(sheet, row, colDetail, mergedMap) ?? "").trim() || undefined

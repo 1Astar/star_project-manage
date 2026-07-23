@@ -15,7 +15,7 @@ import {
 } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { saveRequirementDetailAction } from "@/lib/actions";
-import type { Requirement } from "@/lib/types";
+import type { ModuleNode, Requirement } from "@/lib/types";
 import { REQUIREMENT_DONE_TAG, requirementIsDone } from "@/lib/types";
 import {
   childrenOf,
@@ -138,13 +138,37 @@ function toRow(
 type Props = {
   projectSlug: string;
   requirements: Requirement[];
+  modules?: ModuleNode[];
   onOpen?: (reqId: string) => void;
 };
 
-export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
+function reqMatchesModuleFilter(
+  req: Requirement,
+  filterId: string,
+  modulesById: Map<string, ModuleNode>
+): boolean {
+  if (!filterId) return true;
+  if (filterId === "__none__") return !req.module_l1_id;
+  if (req.module_l1_id === filterId) return true;
+  if (req.module_l2_id === filterId) return true;
+  let cur = req.module_l2_id ? modulesById.get(req.module_l2_id) : undefined;
+  while (cur) {
+    if (cur.id === filterId) return true;
+    cur = cur.parent_id ? modulesById.get(cur.parent_id) : undefined;
+  }
+  return false;
+}
+
+export function RequirementGantt({
+  projectSlug,
+  requirements,
+  modules = [],
+  onOpen,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [onlyWithDates, setOnlyWithDates] = useState(true);
+  const [filterModuleId, setFilterModuleId] = useState("");
   const [overrides, setOverrides] = useState<Record<string, { start: Date; end: Date }>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -156,27 +180,61 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
   onOpenRef.current = onOpen;
   projectSlugRef.current = projectSlug;
 
+  const modulesById = useMemo(
+    () => new Map(modules.map((m) => [m.id, m])),
+    [modules]
+  );
+
+  const filteredRequirements = useMemo(() => {
+    if (!filterModuleId) return requirements;
+    const matched = new Set(
+      requirements
+        .filter((r) => reqMatchesModuleFilter(r, filterModuleId, modulesById))
+        .map((r) => r.id)
+    );
+    const keep = new Set(matched);
+    for (const id of matched) {
+      let cur = requirements.find((r) => r.id === id);
+      while (cur?.parent_id) {
+        keep.add(cur.parent_id);
+        cur = requirements.find((r) => r.id === cur!.parent_id);
+      }
+    }
+    return requirements.filter((r) => keep.has(r.id));
+  }, [requirements, filterModuleId, modulesById]);
+
+  const moduleOptions = useMemo(() => {
+    return modules
+      .slice()
+      .sort(
+        (a, b) =>
+          a.level - b.level ||
+          a.sort_order - b.sort_order ||
+          a.name.localeCompare(b.name, "zh")
+      );
+  }, [modules]);
+
   useEffect(() => {
     setOverrides({});
-  }, [requirements]);
+  }, [filteredRequirements]);
 
   // 默认收起深度 ≥ 2 的父节点（与需求表一致）
   useEffect(() => {
     if (collapseReady) return;
-    const tree = flattenRequirementTree(requirements);
+    const tree = flattenRequirementTree(filteredRequirements);
     const next = new Set<string>();
     for (const { req, depth } of tree) {
-      if (depth >= 2 && childrenOf(req.id, requirements).length > 0) {
+      if (depth >= 2 && childrenOf(req.id, filteredRequirements).length > 0) {
         next.add(req.id);
       }
     }
     setCollapsed(next);
     setCollapseReady(true);
-  }, [requirements, collapseReady]);
+  }, [filteredRequirements, collapseReady]);
 
   useEffect(() => {
     setCollapseReady(false);
-  }, [projectSlug]);
+  }, [projectSlug, filterModuleId]);
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -238,9 +296,9 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
 
   const baseRows = useMemo(() => {
     const list: GanttRow[] = [];
-    const tree = flattenRequirementTree(requirements);
+    const tree = flattenRequirementTree(filteredRequirements);
     for (const { req, depth } of tree) {
-      const row = toRow(req, requirements, depth);
+      const row = toRow(req, filteredRequirements, depth);
       if (!row) {
         if (!onlyWithDates) {
           const fallback = startOfDay(new Date());
@@ -252,8 +310,8 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
             statusLabel: (req.status_tags ?? [])[0] || "待开始",
             done: requirementIsDone(req),
             depth,
-            isParent: !isLeafRequirement(req, requirements),
-            hasChildren: !isLeafRequirement(req, requirements),
+            isParent: !isLeafRequirement(req, filteredRequirements),
+            hasChildren: !isLeafRequirement(req, filteredRequirements),
             hoursLabel: null,
           });
         }
@@ -262,7 +320,7 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
       list.push(row);
     }
     return list;
-  }, [requirements, onlyWithDates]);
+  }, [filteredRequirements, onlyWithDates]);
 
   const rows = useMemo(
     () =>
@@ -276,18 +334,15 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
   const visibleRows = useMemo(() => {
     if (collapsed.size === 0) return rows;
     const hidden = new Set<string>();
-    const byId = new Map(requirements.map((r) => [r.id, r]));
     function hideDescendants(id: string) {
-      for (const child of childrenOf(id, requirements)) {
+      for (const child of childrenOf(id, filteredRequirements)) {
         hidden.add(child.id);
         hideDescendants(child.id);
       }
     }
-    for (const id of collapsed) {
-      if (byId.has(id)) hideDescendants(id);
-    }
+    for (const id of collapsed) hideDescendants(id);
     return rows.filter((r) => !hidden.has(r.id));
-  }, [rows, collapsed, requirements]);
+  }, [rows, collapsed, filteredRequirements]);
 
   const range = useMemo(() => {
     if (visibleRows.length === 0) {
@@ -340,15 +395,18 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
 
   function collapseAll() {
     const next = new Set<string>();
-    for (const { req } of flattenRequirementTree(requirements)) {
-      if (childrenOf(req.id, requirements).length > 0) next.add(req.id);
+    for (const { req } of flattenRequirementTree(filteredRequirements)) {
+      if (childrenOf(req.id, filteredRequirements).length > 0) next.add(req.id);
     }
     setCollapsed(next);
   }
 
   const hasTree = useMemo(
-    () => requirements.some((r) => childrenOf(r.id, requirements).length > 0),
-    [requirements]
+    () =>
+      filteredRequirements.some(
+        (r) => childrenOf(r.id, filteredRequirements).length > 0
+      ),
+    [filteredRequirements]
   );
 
   return (
@@ -359,6 +417,23 @@ export function RequirementGantt({ projectSlug, requirements, onOpen }: Props) {
           {pending ? " · 保存中…" : null}
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <span className="text-slate-500">模块</span>
+            <select
+              value={filterModuleId}
+              onChange={(e) => setFilterModuleId(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
+            >
+              <option value="">全部</option>
+              <option value="__none__">未分组</option>
+              {moduleOptions.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {"　".repeat(Math.max(0, m.level - 1))}
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
           {message ? <span className="text-xs text-red-600">{message}</span> : null}
           {hasTree ? (
             <>

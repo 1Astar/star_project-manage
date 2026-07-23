@@ -14,6 +14,7 @@ import { ProjectTaskBoard } from "@/components/studio/project-task-board";
 import { cn } from "@/lib/utils";
 import type {
   Iteration,
+  ModuleNode,
   PoolColumnDef,
   ProjectMember,
   Requirement,
@@ -29,6 +30,7 @@ export function ProjectTasksViews({
   routeId,
   projectId,
   poolRequirements,
+  poolModules = [],
   activeIterations,
   columnDefs,
   tagOptions,
@@ -48,7 +50,7 @@ export function ProjectTasksViews({
   projectId: string;
   projectSlug: string;
   poolRequirements: Requirement[];
-  poolModules?: unknown;
+  poolModules?: ModuleNode[];
   activeIterations: Iteration[];
   columnDefs?: PoolColumnDef[];
   tagOptions?: string[];
@@ -180,6 +182,7 @@ export function ProjectTasksViews({
           projectId={projectId}
           projectSlug={routeId}
           requirements={poolRequirements}
+          modules={poolModules}
           activeIterations={activeIterations}
           attachments={attachments}
           members={members}
@@ -212,6 +215,7 @@ export function ProjectTasksViews({
           <RequirementGantt
             projectSlug={routeId}
             requirements={ganttReqs}
+            modules={poolModules}
             onOpen={openReq}
           />
         </div>

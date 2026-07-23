@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
-import type { PoolColumnDef, PoolColumnType, Requirement, RequirementAttachment, RequirementType } from "@/lib/types";
+import type { ModuleNode, PoolColumnDef, PoolColumnType, Requirement, RequirementAttachment, RequirementType } from "@/lib/types";
 import { REQUIREMENT_DONE_TAG, REQUIREMENT_TYPE_LABELS } from "@/lib/types";
 import { createPoolColumnAction, deletePoolColumnAction, listRequirementMigrateTargetsAction } from "@/lib/actions";
 import {
@@ -128,6 +128,7 @@ type Props = {
   projectId: string;
   projectSlug: string;
   requirements: Requirement[];
+  modules?: ModuleNode[];
   attachments: RequirementAttachment[];
   columnDefs: PoolColumnDef[];
   tagOptions?: string[];
@@ -409,6 +410,7 @@ export function RequirementPoolTable({
   projectId,
   projectSlug,
   requirements,
+  modules = [],
   attachments,
   columnDefs,
   drawerReqId,
@@ -434,6 +436,8 @@ export function RequirementPoolTable({
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
   const [filterPriority, setFilterPriority] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
+  /** 根模块 id；`__none__` = 未分组 */
+  const [filterRootModule, setFilterRootModule] = useState("");
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragCol, setDragCol] = useState<ColumnId | null>(null);
   const [dropHint, setDropHint] = useState<{
@@ -714,6 +718,15 @@ export function RequirementPoolTable({
     return result;
   }, [colOrder, visible, activeCustoms]);
 
+  const rootModules = useMemo(
+    () =>
+      modules
+        .filter((m) => m.level === 1 && !m.parent_id)
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh")),
+    [modules]
+  );
+
   const filtered = useMemo(() => {
     return requirements.filter((r) => {
       if (filterStatuses.length) {
@@ -726,9 +739,14 @@ export function RequirementPoolTable({
         const hay = (r.assignees ?? []).join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
+      if (filterRootModule === "__none__") {
+        if (r.module_l1_id) return false;
+      } else if (filterRootModule) {
+        if (r.module_l1_id !== filterRootModule) return false;
+      }
       return true;
     });
-  }, [requirements, filterStatuses, filterPriority, filterAssignee]);
+  }, [requirements, filterStatuses, filterPriority, filterAssignee, filterRootModule]);
 
   const sorted = useMemo(() => {
     const list = [...filtered];
@@ -1026,7 +1044,10 @@ export function RequirementPoolTable({
   }
 
   const activeFilterCount =
-    filterStatuses.length + (filterPriority ? 1 : 0) + (filterAssignee.trim() ? 1 : 0);
+    filterStatuses.length +
+    (filterPriority ? 1 : 0) +
+    (filterAssignee.trim() ? 1 : 0) +
+    (filterRootModule ? 1 : 0);
 
   return (
     <div className="flex flex-col">
@@ -1261,6 +1282,22 @@ export function RequirementPoolTable({
             </div>
           </div>
           <label className="block">
+            <span className="mb-1 block font-medium text-slate-600">根模块</span>
+            <select
+              value={filterRootModule}
+              onChange={(e) => setFilterRootModule(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5"
+            >
+              <option value="">全部</option>
+              <option value="__none__">未分组</option>
+              {rootModules.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
             <span className="mb-1 block font-medium text-slate-600">优先级</span>
             <select
               value={filterPriority}
@@ -1292,6 +1329,7 @@ export function RequirementPoolTable({
                 setFilterStatuses([]);
                 setFilterPriority("");
                 setFilterAssignee("");
+                setFilterRootModule("");
               }}
             >
               清空筛选
