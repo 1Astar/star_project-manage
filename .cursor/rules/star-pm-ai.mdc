@@ -9,21 +9,20 @@ alwaysApply: true
 
 ## 写入或发版前（强制）
 
-先 **Read** 本仓库 skill，再动手写 PM / 打 tag / `publish_release`：
+先 **Read** 本仓库 skill：
 
 `.cursor/skills/star-pm-write-release/SKILL.md`
 
-字段总原则：**有则写之，无则跳过**（不编造）。
+字段：**有则写之，无则跳过**。  
+正文：`docs/ai/CANONICAL_RULES.md`
 
-统一规则正文：`docs/ai/CANONICAL_RULES.md`
+## 审慎与全链路（硬规则）
 
-## 协作与验收
+- **不要假设**用户已非常清楚想要什么、以及该怎么得到  
+- **从原始需求和问题出发**；动机/目标不清 → **停下来讨论**  
+- 有逻辑漏洞或不明确 → **必须提醒**，不可用猜测默填  
+- 方案须 **逻辑正确**，并做 **全链路逻辑验证**（问题→方案→数据/状态→验收→发版影响）  
+- 计划/需求 **直接写 PM**，不写 spec（除非用户要）  
+- 发版前：对照初始要求 + 全链路核对 + tsc/单测/冒烟；**先 tag+push，再 publish_release**
 
-1. **要求不够明确 → 先细问再做**；问清后再实现  
-2. **不写 spec / 长篇计划文件**；计划与需求**直接写进 PM**  
-3. **测试要对齐初始要求**（+ PM 条目），再跑 tsc/单测/冒烟；未过不发版  
-4. 改代码前 `compare_sources`；发版：CHANGELOG → version → commit → tag → `publish_release`  
-5. 「同步版本」≠「同步 Git 更新」≠ `publish_release`  
-
-MCP：先调 `get_ai_rules` 再大批量写入。  
-跨机：拉最新仓库即可带上 `.cursor/skills/star-pm-write-release`。
+MCP：先 `get_ai_rules`。跨机：拉仓库即带 skill。
