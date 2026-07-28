@@ -1,11 +1,14 @@
-import { requireAdminSession } from "@/lib/auth/require-admin";
+import { getAdminSession } from "@/lib/auth/session";
 import { studioOk } from "@/lib/studio/route-utils";
 
+/** 未登录返回 guest，前端右上角显示「登录」 */
 export async function GET() {
-  const auth = await requireAdminSession();
-  if (auth.error) return auth.error;
+  const session = await getAdminSession();
+  if (!session) {
+    return studioOk({ account: null, role: "guest" });
+  }
   return studioOk({
-    account: auth.session!.email,
-    role: auth.session!.role,
+    account: session.email,
+    role: session.role,
   });
 }

@@ -1,18 +1,21 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getAllEvolutionLogs, getProjectById, getProjectAssets, getProjectIdeas, getProjectTasks } from "@/lib/studio/data";
+import { getAllEvolutionLogs, getProjectById, getProjectAssets, getProjectChangeSessions, getProjectIdeas, getProjectTasks, getChangeSessionById } from "@/lib/studio/data";
 import {
+  createChangeSession,
   createStudioAsset,
   createStudioEvolution,
   createStudioProject,
   importChangelogAsEvolution,
   importReleaseBodiesAsEvolution,
+  updateChangeSession,
   updateStudioIdea,
   updateStudioProject,
   updateStudioProjectWithModuleSync,
 } from "@/lib/studio/mutations";
 import type {
   AssetType,
+  ChangeSessionAcceptance,
   EvolutionLogType,
   ProjectPriority,
   ProjectStatus,
@@ -741,6 +744,163 @@ export function registerWorkspaceTools(server: McpServer) {
         return mcpJson({ ok: true, ...result });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "summarize_day 失败");
+      }
+    }
+  );
+
+  const stringList = z.array(z.string()).optional();
+  const acceptanceSchema = z.enum(["unreviewed", "passed", "rejected"]);
+
+  server.registerTool(
+    "start_change_session",
+    {
+      title: "Start Change Session",
+      description:
+        "改东西之前开一条 AI 变更会话：写修改目标/原因/期望效果。返回 sessionId，改完后用 finish_change_session。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        goal: z.string().min(1).describe("修改目标"),
+        reason: z.string().optional().describe("修改原因"),
+        expected: stringList.describe("期望效果列表"),
+        module: z.string().optional(),
+        requirementId: z.string().nullable().optional(),
+        ideaId: z.string().nullable().optional(),
+        day: z.string().optional().describe("YYYY-MM-DD，默认今天（上海）"),
+      },
+    },
+    async (input) => {
+      try {
+        const session = await createChangeSession({
+          projectId: input.projectId,
+          goal: input.goal,
+          reason: input.reason,
+          expected: input.expected,
+          module: input.module,
+          requirementId: input.requirementId,
+          ideaId: input.ideaId,
+          day: input.day,
+        });
+        await logAiAction({
+          action: "start_change_session",
+          payload: { sessionId: session.id, projectId: session.projectId },
+        });
+        return mcpJson({ ok: true, session });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "start_change_session 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "finish_change_session",
+    {
+      title: "Finish Change Session",
+      description:
+        "改完后收尾变更会话：写入 ✅/❌ 执行项、AI 操作摘要、结果；状态变为 finished，人工验收默认未验收。",
+      inputSchema: {
+        sessionId: z.string().min(1),
+        doneItems: stringList.describe("已完成项"),
+        pendingItems: stringList.describe("未完成项"),
+        aiOps: stringList.describe("AI 操作摘要，如改了哪些文件"),
+        result: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const session = await updateChangeSession(input.sessionId, {
+          action: "finish",
+          doneItems: input.doneItems,
+          pendingItems: input.pendingItems,
+          aiOps: input.aiOps,
+          result: input.result,
+        });
+        await logAiAction({
+          action: "finish_change_session",
+          payload: { sessionId: session.id },
+        });
+        return mcpJson({ ok: true, session });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "finish_change_session 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_change_session",
+    {
+      title: "Update Change Session",
+      description: "补记或改验收状态（passed/rejected/unreviewed）；也可改 goal/reason/expected 等。",
+      inputSchema: {
+        sessionId: z.string().min(1),
+        goal: z.string().optional(),
+        reason: z.string().optional(),
+        expected: stringList,
+        doneItems: stringList,
+        pendingItems: stringList,
+        aiOps: stringList,
+        result: z.string().optional(),
+        humanAcceptance: acceptanceSchema.optional(),
+        module: z.string().optional(),
+        status: z.enum(["open", "finished"]).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { sessionId, ...patch } = input;
+        const session = await updateChangeSession(sessionId, {
+          ...patch,
+          humanAcceptance: patch.humanAcceptance as ChangeSessionAcceptance | undefined,
+        });
+        await logAiAction({
+          action: "update_change_session",
+          payload: { sessionId },
+        });
+        return mcpJson({ ok: true, session });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_change_session 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_change_sessions",
+    {
+      title: "List Change Sessions",
+      description: "列出项目的 AI 变更会话；可按 day（YYYY-MM-DD）过滤。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        day: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const sessions = await getProjectChangeSessions(
+          input.projectId,
+          input.day?.trim() || undefined
+        );
+        return mcpJson({ ok: true, count: sessions.length, sessions });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_change_sessions 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "get_change_session",
+    {
+      title: "Get Change Session",
+      description: "按 id 获取一条变更会话。",
+      inputSchema: {
+        sessionId: z.string().min(1),
+      },
+    },
+    async (input) => {
+      try {
+        const session = await getChangeSessionById(input.sessionId);
+        if (!session) return mcpError("变更会话不存在");
+        return mcpJson({ ok: true, session });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "get_change_session 失败");
       }
     }
   );

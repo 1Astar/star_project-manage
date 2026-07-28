@@ -39,7 +39,7 @@ export default function LoginForm() {
           </div>
           <h1 className="text-xl font-bold">登录</h1>
           <p className="mt-1 text-sm text-slate-500">
-            管理员或观看者账号（观看者无法打开密钥区）
+            站点默认公开演示沙盘；管理员登录后可见全量私域与密钥
           </p>
         </div>
         <input

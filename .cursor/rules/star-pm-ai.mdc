@@ -17,5 +17,6 @@ alwaysApply: true
 2. 灵感/演进写入强烈建议带**板块**（`relatedModule` / `module`）  
 3. 导入缺板块 →「待补齐」仍可导入，不要静默丢  
 4. 发版用 `publish_release`；「同步版本」≠「同步 Git 更新」
+5. 用户确认要做后：**写进 PM → 直接开做**；默认不写 `docs/superpowers/specs` 设计文档（除非明确要求）
 
 MCP：先调 `get_ai_rules` 再大批量写入。

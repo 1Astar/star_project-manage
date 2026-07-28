@@ -1,5 +1,7 @@
 import type {
   Asset,
+  ChangeSession,
+  ChangeSessionAcceptance,
   EvolutionLog,
   Idea,
   IdeaSubtask,
@@ -109,6 +111,27 @@ export interface StudioEvolutionRow {
   module?: string;
   release_tag?: string | null;
   created_at: string;
+}
+
+export interface StudioChangeSessionRow {
+  id: string;
+  project_id: string;
+  day: string;
+  goal: string;
+  reason: string;
+  expected: unknown;
+  done_items: unknown;
+  pending_items: unknown;
+  ai_ops: unknown;
+  result: string;
+  human_acceptance: string;
+  module?: string;
+  requirement_id?: string | null;
+  idea_id?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  finished_at?: string | null;
 }
 
 function normalizeStringList(value: unknown): string[] {
@@ -506,5 +529,56 @@ export function rowToRelease(row: StudioReleaseRow): StudioRelease {
     isPrerelease: Boolean(row.is_prerelease),
     source: row.source === "tag" ? "tag" : "release",
     syncedAt: row.synced_at,
+  };
+}
+
+function normalizeAcceptance(value: unknown): ChangeSessionAcceptance {
+  if (value === "passed" || value === "rejected" || value === "unreviewed") return value;
+  return "unreviewed";
+}
+
+export function changeSessionToRow(session: ChangeSession): StudioChangeSessionRow {
+  return {
+    id: session.id,
+    project_id: session.projectId,
+    day: session.day,
+    goal: session.goal,
+    reason: session.reason,
+    expected: session.expected,
+    done_items: session.doneItems,
+    pending_items: session.pendingItems,
+    ai_ops: session.aiOps,
+    result: session.result,
+    human_acceptance: session.humanAcceptance,
+    module: session.module ?? "",
+    requirement_id: session.requirementId,
+    idea_id: session.ideaId,
+    status: session.status,
+    created_at: session.createdAt,
+    updated_at: session.updatedAt,
+    finished_at: session.finishedAt,
+  };
+}
+
+export function rowToChangeSession(row: StudioChangeSessionRow): ChangeSession {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    day: typeof row.day === "string" ? row.day.slice(0, 10) : String(row.day).slice(0, 10),
+    goal: row.goal ?? "",
+    reason: row.reason ?? "",
+    expected: normalizeStringList(row.expected),
+    doneItems: normalizeStringList(row.done_items),
+    pendingItems: normalizeStringList(row.pending_items),
+    aiOps: normalizeStringList(row.ai_ops),
+    result: row.result ?? "",
+    humanAcceptance: normalizeAcceptance(row.human_acceptance),
+    module: row.module ?? "",
+    requirementId: row.requirement_id ?? null,
+    ideaId: row.idea_id ?? null,
+    status: row.status === "finished" ? "finished" : "open",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
+    finishedAt: row.finished_at ?? null,
   };
 }

@@ -21,3 +21,13 @@ export async function requireAdminRole() {
   }
   return auth;
 }
+
+/** 观看者 / 未登录访客只读：写操作前调用（server action 抛错） */
+export async function assertNotViewerWrite() {
+  const { isAuthRequired } = await import("@/lib/auth/session");
+  if (!isAuthRequired()) return;
+  const session = await getAdminSession();
+  if (!session || session.role === "viewer") {
+    throw new Error("公开演示为只读，改数据请管理员登录");
+  }
+}

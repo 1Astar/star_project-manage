@@ -53,7 +53,7 @@ export function ProjectNav({ routeId }: { routeId: string }) {
 export function ProjectMoreMenu({
   routeId,
   pmSlug,
-  showSecrets = true,
+  showSecrets = false,
 }: {
   routeId: string;
   pmSlug: string | null;

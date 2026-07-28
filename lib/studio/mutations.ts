@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   assetToRow,
+  changeSessionToRow,
   columnDefToRow,
   evolutionToRow,
   ideaToRow,
@@ -23,6 +24,9 @@ import { normalizeFeaturePath } from "@/lib/studio/project-modules";
 import type {
   Asset,
   AssetType,
+  ChangeSession,
+  ChangeSessionAcceptance,
+  ChangeSessionStatus,
   EmotionLevel,
   EvolutionLog,
   EvolutionLogType,
@@ -50,6 +54,17 @@ function studioId(prefix: string) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/** Asia/Shanghai 日历日 YYYY-MM-DD */
+export function shanghaiDay(iso?: string | null): string {
+  const d = iso ? new Date(iso) : new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 /** 仅一层父子：父必须存在且自身无父；不可自挂；有子时不可再挂父 */
@@ -501,6 +516,7 @@ export async function deleteStudioProject(id: string): Promise<void> {
         snap.evolutionLogs = snap.evolutionLogs.filter((e) => e.projectId !== id);
         snap.tasks = snap.tasks.filter((t) => t.projectId !== id);
         snap.assets = snap.assets.filter((a) => a.projectId !== id);
+        snap.changeSessions = (snap.changeSessions ?? []).filter((c) => c.projectId !== id);
       });
     }
   );
@@ -809,6 +825,168 @@ export async function deleteStudioEvolution(id: string): Promise<void> {
       applyMemoryMutation((snap) => {
         snap.evolutionLogs = snap.evolutionLogs.filter((e) => e.id !== id);
       });
+    }
+  );
+}
+
+export type CreateChangeSessionInput = {
+  projectId: string;
+  goal: string;
+  reason?: string;
+  expected?: string[];
+  module?: string;
+  requirementId?: string | null;
+  ideaId?: string | null;
+  day?: string;
+};
+
+export type UpdateChangeSessionInput = {
+  goal?: string;
+  reason?: string;
+  expected?: string[];
+  doneItems?: string[];
+  pendingItems?: string[];
+  aiOps?: string[];
+  result?: string;
+  humanAcceptance?: ChangeSessionAcceptance;
+  module?: string;
+  requirementId?: string | null;
+  ideaId?: string | null;
+  day?: string;
+  status?: ChangeSessionStatus;
+  /** finish 快捷：写入执行项并标 finished */
+  action?: "finish";
+  finishedAt?: string | null;
+};
+
+function normalizeStringListInput(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v).trim()).filter(Boolean);
+}
+
+export async function createChangeSession(
+  input: CreateChangeSessionInput
+): Promise<ChangeSession> {
+  if (!input.projectId) throw new Error("projectId 必填");
+  if (!input.goal?.trim()) throw new Error("goal 必填");
+
+  const snapshot = await getStudioSnapshot();
+  if (!snapshot.projects.some((p) => p.id === input.projectId)) {
+    throw new Error("关联项目不存在");
+  }
+
+  const createdAt = nowIso();
+  const day =
+    input.day?.trim().slice(0, 10) || shanghaiDay(createdAt);
+
+  const session: ChangeSession = {
+    id: studioId("chg-"),
+    projectId: input.projectId,
+    day,
+    goal: input.goal.trim(),
+    reason: input.reason?.trim() ?? "",
+    expected: normalizeStringListInput(input.expected),
+    doneItems: [],
+    pendingItems: [],
+    aiOps: [],
+    result: "",
+    humanAcceptance: "unreviewed",
+    module: input.module?.trim() ?? "",
+    requirementId: input.requirementId?.trim() || null,
+    ideaId: input.ideaId?.trim() || null,
+    status: "open",
+    createdAt,
+    updatedAt: createdAt,
+    finishedAt: null,
+  };
+
+  return writeSupabase(
+    async () => {
+      const { error } = await sb()
+        .from("studio_change_sessions")
+        .insert(changeSessionToRow(session));
+      if (error) throw new Error(error.message);
+      return session;
+    },
+    () => {
+      applyMemoryMutation((snap) => {
+        if (!snap.changeSessions) snap.changeSessions = [];
+        snap.changeSessions.unshift(session);
+      });
+      return session;
+    }
+  );
+}
+
+export async function updateChangeSession(
+  id: string,
+  patch: UpdateChangeSessionInput
+): Promise<ChangeSession> {
+  const snapshot = await getStudioSnapshot();
+  const existing = (snapshot.changeSessions ?? []).find((c) => c.id === id);
+  if (!existing) throw new Error("变更会话不存在");
+
+  const finish = patch.action === "finish" || patch.status === "finished";
+  const finishedAt = finish
+    ? patch.finishedAt !== undefined
+      ? patch.finishedAt
+      : existing.finishedAt ?? nowIso()
+    : patch.status === "open"
+      ? null
+      : existing.finishedAt;
+
+  const session: ChangeSession = {
+    ...existing,
+    goal: patch.goal?.trim() ?? existing.goal,
+    reason: patch.reason !== undefined ? patch.reason.trim() : existing.reason,
+    expected:
+      patch.expected !== undefined
+        ? normalizeStringListInput(patch.expected)
+        : existing.expected,
+    doneItems:
+      patch.doneItems !== undefined
+        ? normalizeStringListInput(patch.doneItems)
+        : existing.doneItems,
+    pendingItems:
+      patch.pendingItems !== undefined
+        ? normalizeStringListInput(patch.pendingItems)
+        : existing.pendingItems,
+    aiOps:
+      patch.aiOps !== undefined ? normalizeStringListInput(patch.aiOps) : existing.aiOps,
+    result: patch.result !== undefined ? patch.result.trim() : existing.result,
+    humanAcceptance: patch.humanAcceptance ?? existing.humanAcceptance,
+    module: patch.module !== undefined ? patch.module.trim() : existing.module,
+    requirementId:
+      patch.requirementId !== undefined
+        ? patch.requirementId?.trim() || null
+        : existing.requirementId,
+    ideaId:
+      patch.ideaId !== undefined ? patch.ideaId?.trim() || null : existing.ideaId,
+    day: patch.day?.trim().slice(0, 10) || existing.day,
+    status: finish ? "finished" : patch.status ?? existing.status,
+    finishedAt,
+    updatedAt: nowIso(),
+    createdAt: existing.createdAt,
+    projectId: existing.projectId,
+    id: existing.id,
+  };
+
+  return writeSupabase(
+    async () => {
+      const { error } = await sb()
+        .from("studio_change_sessions")
+        .upsert(changeSessionToRow(session), { onConflict: "id" });
+      if (error) throw new Error(error.message);
+      return session;
+    },
+    () => {
+      applyMemoryMutation((snap) => {
+        if (!snap.changeSessions) snap.changeSessions = [];
+        const idx = snap.changeSessions.findIndex((c) => c.id === id);
+        if (idx >= 0) snap.changeSessions[idx] = session;
+        else snap.changeSessions.unshift(session);
+      });
+      return session;
     }
   );
 }

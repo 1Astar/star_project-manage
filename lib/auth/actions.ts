@@ -15,6 +15,14 @@ export async function loginAction(formData: FormData): Promise<{ error?: string 
     return { error: "账号或密码错误" };
   }
   await setAdminSession(account, role);
+  if (role === "viewer") {
+    try {
+      const { ensureDemoShowcase } = await import("@/lib/demo/ensure-showcase");
+      await ensureDemoShowcase();
+    } catch (e) {
+      console.error("ensureDemoShowcase failed", e);
+    }
+  }
   return {};
 }
 

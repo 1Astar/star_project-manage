@@ -18,7 +18,7 @@ const ENV_INDEX = [
 
 export default async function KeysPage() {
   const session = await getAdminSession();
-  if (session?.role === "viewer") {
+  if (session?.role !== "admin") {
     redirect("/?error=keys-forbidden");
   }
 
@@ -26,7 +26,7 @@ export default async function KeysPage() {
     <WorkbenchShell
       title="密钥索引"
       subtitle="环境变量清单 — 不存储明文密钥，只记录用途与存放位置（仅管理员）"
-      role={session?.role ?? "admin"}
+      role="admin"
     >
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">

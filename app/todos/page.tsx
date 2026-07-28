@@ -2,17 +2,19 @@ import Link from "next/link";
 import { getMyTodos, getProjects } from "@/lib/db/local-store";
 import { WorkbenchShell } from "@/components/workbench-shell";
 import { StatusBadge } from "@/components/ui";
+import { TomorrowAgendaPanel } from "@/components/tomorrow-agenda-panel";
+import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
 import { ROLE_LABELS } from "@/lib/types";
 
 export default async function TodosPage() {
-  const { pendingTasks, pendingAcceptance, unreadNotifications } = await getMyTodos();
-  const projects = await getProjects();
+  const [{ pendingTasks, pendingAcceptance, unreadNotifications }, projects, tomorrowAgenda] =
+    await Promise.all([getMyTodos(), getProjects(), getTomorrowAgenda()]);
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
   return (
     <WorkbenchShell
       title="我的待办"
-      subtitle="任务、待验收与未读通知 — 全局唯一入口"
+      subtitle="明日清单 · 任务 · 待验收 · 未读通知"
       actions={
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/boards/requirements" className="text-sm text-indigo-600 hover:underline">
@@ -24,6 +26,15 @@ export default async function TodosPage() {
         </div>
       }
     >
+      <div className="mb-6">
+        <TomorrowAgendaPanel
+          todayDay={tomorrowAgenda.todayDay}
+          yesterdayDay={tomorrowAgenda.yesterdayDay}
+          items={tomorrowAgenda.items}
+          projects={tomorrowAgenda.projects}
+        />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-6">
           <h2 className="font-semibold text-slate-800">进行中任务</h2>

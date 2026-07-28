@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ProjectChangeSessions } from "@/components/project-change-sessions";
 import { StudioBadge } from "@/components/studio/shell";
-import { resolveFeatureModules } from "@/lib/studio/project-modules";
+import { parseFeaturePathToChain, resolveFeatureModules } from "@/lib/studio/project-modules";
 import { inferChangeDirection, inferModulesFromText } from "@/lib/studio/infer-modules";
 import { extractReleaseBodyItems, partitionReleaseTags } from "@/lib/studio/release-notes";
 import {
   EVOLUTION_TYPE_LABELS,
+  type ChangeSession,
   type EvolutionLog,
   type EvolutionLogType,
   type Idea,
@@ -24,11 +26,33 @@ type Props = {
   evolution: EvolutionLog[];
   ideas: Idea[];
   iterations: Iteration[];
+  changeSessions: ChangeSession[];
 };
 
-type TabKey = "releases" | "modules";
-/** 板块演进内：全部概览 或 单个板块 */
-type ModuleFilter = "all" | string;
+type TabKey = "releases" | "modules" | "changes";
+/** 板块演进：空串=全部；按「体系·功能面」路径前缀筛选 */
+type ModuleLevelFilter = { l1: string; l2: string };
+
+function modulePathPrefix(filter: ModuleLevelFilter): string | null {
+  if (!filter.l1) return null;
+  if (!filter.l2) return filter.l1;
+  return `${filter.l1}·${filter.l2}`;
+}
+
+function moduleMatchesPrefix(path: string, prefix: string | null): boolean {
+  if (!prefix) return true;
+  return path === prefix || path.startsWith(`${prefix}·`);
+}
+
+function countForPaths(
+  paths: string[],
+  stats: Array<{ module: string; evolution: EvolutionLog[]; ideas: Idea[] }>
+) {
+  const set = new Set(paths);
+  return stats
+    .filter((s) => set.has(s.module))
+    .reduce((n, s) => n + s.evolution.length + s.ideas.length, 0);
+}
 
 const LOG_TYPES = Object.keys(EVOLUTION_TYPE_LABELS) as EvolutionLogType[];
 
@@ -47,11 +71,12 @@ export function ProjectEvolutionTimeline({
   evolution,
   ideas,
   iterations,
+  changeSessions,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<TabKey>("releases");
-  const [moduleFilter, setModuleFilter] = useState<ModuleFilter>("all");
+  const [moduleFilter, setModuleFilter] = useState<ModuleLevelFilter>({ l1: "", l2: "" });
   const [message, setMessage] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
 
@@ -96,9 +121,31 @@ export function ProjectEvolutionTimeline({
     }));
   }, [modules, evolution, ideas]);
 
+  const moduleTree = useMemo(() => {
+    const l1Map = new Map<string, Set<string>>();
+    for (const m of modules) {
+      const chain = parseFeaturePathToChain(m);
+      if (chain.length === 0) continue;
+      const l1 = chain[0];
+      if (!l1Map.has(l1)) l1Map.set(l1, new Set());
+      if (chain[1]) l1Map.get(l1)!.add(chain[1]);
+    }
+    return Array.from(l1Map.entries())
+      .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+      .map(([l1, l2set]) => ({
+        l1,
+        l2: Array.from(l2set).sort((a, b) => a.localeCompare(b, "zh-CN")),
+      }));
+  }, [modules]);
+
+  const l2Options = useMemo(() => {
+    if (!moduleFilter.l1) return [] as string[];
+    return moduleTree.find((n) => n.l1 === moduleFilter.l1)?.l2 ?? [];
+  }, [moduleTree, moduleFilter.l1]);
+
   const filteredModuleStats = useMemo(() => {
-    if (moduleFilter === "all") return moduleStats;
-    return moduleStats.filter((s) => s.module === moduleFilter);
+    const prefix = modulePathPrefix(moduleFilter);
+    return moduleStats.filter((s) => moduleMatchesPrefix(s.module, prefix));
   }, [moduleStats, moduleFilter]);
 
   function modulesForRelease(tag: string, body?: string | null) {
@@ -347,10 +394,13 @@ export function ProjectEvolutionTimeline({
           active={tab === "modules"}
           onClick={() => {
             setTab("modules");
-            setModuleFilter("all");
+            setModuleFilter({ l1: "", l2: "" });
           }}
         >
           板块演进
+        </TabButton>
+        <TabButton active={tab === "changes"} onClick={() => setTab("changes")}>
+          AI 变更
         </TabButton>
       </div>
 
@@ -411,35 +461,99 @@ export function ProjectEvolutionTimeline({
             )}
           </section>
         </div>
+      ) : tab === "changes" ? (
+        <ProjectChangeSessions projectId={project.id} sessions={changeSessions} />
       ) : (
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
-            按功能板块查看演进与灵感；默认「全部」会分段列出各板块历程。
+            按「板块 → 子板块」筛选演进与灵感；默认全部时按完整路径分段列出。
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            <ChipButton
-              active={moduleFilter === "all"}
-              onClick={() => setModuleFilter("all")}
-            >
-              全部
-            </ChipButton>
-            {moduleStats.map(({ module: m, evolution: ev, ideas: ids }) => (
-              <ChipButton
-                key={m}
-                active={moduleFilter === m}
-                onClick={() => setModuleFilter(m)}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block text-sm">
+              <span className="text-slate-500">板块</span>
+              <select
+                className="mt-1 block min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={moduleFilter.l1}
+                onChange={(e) =>
+                  setModuleFilter({ l1: e.target.value, l2: "" })
+                }
               >
-                {m}
-                <span className="ml-1 text-[10px] opacity-70">
-                  {ev.length + ids.length}
-                </span>
-              </ChipButton>
-            ))}
+                <option value="">
+                  全部
+                  {moduleStats.length > 0
+                    ? `（${countForPaths(
+                        moduleStats.map((s) => s.module),
+                        moduleStats
+                      )}）`
+                    : ""}
+                </option>
+                {moduleTree.map(({ l1, l2 }) => {
+                  const paths = modules.filter((m) => moduleMatchesPrefix(m, l1));
+                  const n = countForPaths(paths, moduleStats);
+                  return (
+                    <option key={l1} value={l1}>
+                      {l1}
+                      {l2.length > 0 ? ` · ${l2.length} 子板块` : ""}
+                      {n > 0 ? `（${n}）` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-500">子板块</span>
+              <select
+                className="mt-1 block min-w-[140px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                value={moduleFilter.l2}
+                disabled={!moduleFilter.l1 || l2Options.length === 0}
+                onChange={(e) =>
+                  setModuleFilter((f) => ({ ...f, l2: e.target.value }))
+                }
+              >
+                <option value="">
+                  {!moduleFilter.l1
+                    ? "先选板块"
+                    : l2Options.length === 0
+                      ? "无子板块"
+                      : `全部子板块${(() => {
+                          const paths = modules.filter((m) =>
+                            moduleMatchesPrefix(m, moduleFilter.l1)
+                          );
+                          const n = countForPaths(paths, moduleStats);
+                          return n > 0 ? `（${n}）` : "";
+                        })()}`}
+                </option>
+                {l2Options.map((l2) => {
+                  const prefix = `${moduleFilter.l1}·${l2}`;
+                  const paths = modules.filter((m) =>
+                    moduleMatchesPrefix(m, prefix)
+                  );
+                  const n = countForPaths(paths, moduleStats);
+                  return (
+                    <option key={l2} value={l2}>
+                      {l2}
+                      {n > 0 ? `（${n}）` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            {moduleFilter.l1 || moduleFilter.l2 ? (
+              <button
+                type="button"
+                onClick={() => setModuleFilter({ l1: "", l2: "" })}
+                className="mb-0.5 text-xs text-slate-500 hover:text-indigo-600"
+              >
+                清除筛选
+              </button>
+            ) : null}
           </div>
 
           {filteredModuleStats.length === 0 ? (
             <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-              还没有配置板块。可在项目「代码仓库」设置里填写功能板块（按产品功能面，如对话/相册）。
+              {modules.length === 0
+                ? "还没有配置板块。可在项目「代码仓库」设置里填写功能板块（按「体系·功能面·能力」）。"
+                : "当前筛选下没有板块。试试换一级板块，或清除筛选。"}
             </p>
           ) : (
             filteredModuleStats.map(({ module: m, evolution: ev, ideas: ids }) => (
@@ -509,31 +623,6 @@ function TabButton({
         active
           ? { backgroundColor: "#e0e7ff", color: "#312e81" }
           : { backgroundColor: "#ffffff", color: "#334155" }
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
-function ChipButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn("chip-pill", active ? "chip-pill-active" : "chip-pill-idle")}
-      style={
-        active
-          ? { backgroundColor: "#e0e7ff", color: "#312e81" }
-          : { backgroundColor: "#ffffff", color: "#475569" }
       }
     >
       {children}

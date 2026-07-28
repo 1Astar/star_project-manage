@@ -1,5 +1,5 @@
 import { getProjects, getProjectBundle } from "@/lib/db/local-store";
-import { getStudioSnapshot } from "@/lib/studio/store";
+import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { TASK_STATUS_LABELS as STUDIO_TASK_STATUS_LABELS } from "@/lib/studio/types";
 import {
   ROLE_LABELS,
@@ -74,7 +74,7 @@ function daysAgoIso(days: number): string {
  * - Studio：任务 status = in_progress
  */
 export async function getActiveRequirementsAcrossProjects(): Promise<ActiveWorkGroup[]> {
-  const studioSnap = await getStudioSnapshot();
+  const studioSnap = await getScopedStudioSnapshot();
   const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
   const items: ActiveWorkItem[] = [];
 
@@ -162,7 +162,7 @@ export async function getRecentlyCompletedWork(
   days = 14
 ): Promise<CompletedWorkItem[]> {
   const since = daysAgoIso(days);
-  const studioSnap = await getStudioSnapshot();
+  const studioSnap = await getScopedStudioSnapshot();
   const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
   const items: CompletedWorkItem[] = [];
 

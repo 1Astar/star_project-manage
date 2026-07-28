@@ -134,8 +134,11 @@ export function ProjectTaskBoard({ projectId, tasks: initialTasks, hasGitHub }: 
       }
       setMessage(
         data.matched > 0
-          ? `已从 Git 匹配 ${data.matched} 条已完成任务`
-          : "未发现可匹配的 commit，请检查 commit message 是否含任务关键词"
+          ? `已从 Git/Release 匹配 ${data.matched} 条已完成任务` +
+              (data.scope?.releasesScanned != null
+                ? `（扫 commit ${data.scope.commitsScanned ?? "?"} · Release ${data.scope.releasesScanned}）`
+                : "")
+          : "未发现可匹配项：commit message 或已同步 Release 说明需含任务里的长中文短语（命中 1 个即可）"
       );
       router.refresh();
     } catch {

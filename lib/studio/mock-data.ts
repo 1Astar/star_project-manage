@@ -688,6 +688,7 @@ export function getStudioSeedData() {
     assets: mockAssets,
     releases: [] as import("@/lib/studio/types").StudioRelease[],
     projectColumnDefs: [] as import("@/lib/studio/types").StudioProjectColumnDef[],
+    changeSessions: [] as import("@/lib/studio/types").ChangeSession[],
   };
 }
 
@@ -700,6 +701,7 @@ export function getStudioData() {
     assets: mockAssets,
     releases: [] as import("@/lib/studio/types").StudioRelease[],
     projectColumnDefs: [] as import("@/lib/studio/types").StudioProjectColumnDef[],
+    changeSessions: [] as import("@/lib/studio/types").ChangeSession[],
   };
 }
 

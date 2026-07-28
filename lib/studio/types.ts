@@ -166,6 +166,39 @@ export interface EvolutionLog {
   createdAt: string;
 }
 
+/** 人工验收状态（AI 变更会话） */
+export type ChangeSessionAcceptance = "unreviewed" | "passed" | "rejected";
+export type ChangeSessionStatus = "open" | "finished";
+
+/** 一次 AI/协作改动会话（与 EvolutionLog 分工：会话=执行与验收，演进=产品决策） */
+export interface ChangeSession {
+  id: string;
+  projectId: string;
+  /** YYYY-MM-DD，按日汇总 */
+  day: string;
+  goal: string;
+  reason: string;
+  expected: string[];
+  doneItems: string[];
+  pendingItems: string[];
+  aiOps: string[];
+  result: string;
+  humanAcceptance: ChangeSessionAcceptance;
+  module: string;
+  requirementId: string | null;
+  ideaId: string | null;
+  status: ChangeSessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+export const CHANGE_SESSION_ACCEPTANCE_LABELS: Record<ChangeSessionAcceptance, string> = {
+  unreviewed: "未验收",
+  passed: "已通过",
+  rejected: "已退回",
+};
+
 export type TaskCompletionSource = "manual" | "git";
 
 export interface StudioTask {

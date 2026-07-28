@@ -554,6 +554,7 @@ export async function fetchNotionStudioSnapshot(
     assets,
     releases: [],
     projectColumnDefs: [],
+    changeSessions: [],
   };
 
   const pendingModuleFill: PendingModuleItem[] = [];

@@ -4,6 +4,7 @@ import { INBOX_UNLINKED_FILTER } from "@/components/studio/list-filter-bar";
 import { IdeaCapturePanel } from "@/components/studio/idea-capture-panel";
 import { StructuredCapturePanel } from "@/components/studio/structured-capture-panel";
 import { IdeaDigestPanel } from "@/components/studio/idea-digest-panel";
+import { BrainstormSplitPanel } from "@/components/studio/brainstorm-split-panel";
 import { IdeaStreamTimeline } from "@/components/studio/idea-stream-timeline";
 import { InboxTableView } from "@/components/studio/inbox-table-view";
 import {
@@ -165,6 +166,11 @@ export default async function StreamPage({
       }
     >
       <div className="space-y-4 pb-24">
+        <BrainstormSplitPanel
+          projects={projectOptions}
+          defaultProjectId={defaultProjectId}
+        />
+
         <IdeaDigestPanel
           projects={projectOptions}
           ideas={sortedIdeas.map((i) => ({ id: i.id, title: i.title }))}

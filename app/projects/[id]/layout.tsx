@@ -16,6 +16,7 @@ export default async function ProjectLayout({
   if (!ctx.studio && !ctx.pmBundle) notFound();
 
   const session = await getAdminSession();
+  const isAdmin = session?.role === "admin";
   const title = ctx.studio?.title ?? ctx.pmBundle!.project.name;
   const subtitle = ctx.studio?.positioning ?? ctx.pmBundle!.project.description ?? undefined;
 
@@ -23,12 +24,12 @@ export default async function ProjectLayout({
     <WorkbenchShell
       title={title}
       subtitle={subtitle}
-      role={session?.role}
+      role={session?.role ?? "guest"}
       actions={
         <ProjectMoreMenu
           routeId={ctx.routeId}
           pmSlug={ctx.pmSlug}
-          showSecrets={session?.role !== "viewer"}
+          showSecrets={isAdmin}
         />
       }
       nav={<ProjectNav routeId={ctx.routeId} />}

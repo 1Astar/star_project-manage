@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ProjectEvolutionTimeline } from "@/components/project-evolution-timeline";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import {
+  getProjectChangeSessions,
   getProjectEvolution,
   getProjectIdeas,
   getProjectReleases,
@@ -16,10 +17,11 @@ export default async function ProjectEvolutionPage({
   const ctx = await resolveProjectRoute(id);
   if (!ctx.studio) notFound();
 
-  const [evolution, releases, ideas] = await Promise.all([
+  const [evolution, releases, ideas, changeSessions] = await Promise.all([
     getProjectEvolution(ctx.studio.id),
     getProjectReleases(ctx.studio.id),
     getProjectIdeas(ctx.studio.id),
+    getProjectChangeSessions(ctx.studio.id),
   ]);
 
   const iterations = ctx.pmBundle?.iterations ?? [];
@@ -31,6 +33,7 @@ export default async function ProjectEvolutionPage({
       evolution={evolution}
       ideas={ideas}
       iterations={iterations}
+      changeSessions={changeSessions}
     />
   );
 }

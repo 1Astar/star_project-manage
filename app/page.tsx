@@ -25,6 +25,8 @@ import {
   getRecentGitUpdates,
   getNextActionDrafts,
 } from "@/lib/studio/data";
+import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
+import { TomorrowAgendaPanel } from "@/components/tomorrow-agenda-panel";
 import {
   IDEA_TYPE_LABELS,
   EVOLUTION_TYPE_LABELS,
@@ -50,17 +52,20 @@ export default async function WorkbenchPage({
     activeGroups,
     completedWork,
     nextActionDrafts,
+    tomorrowAgenda,
   ] = await Promise.all([
     getTodayFocus(),
     getMainlineProject(),
     getRecentIdeas(5),
-    getRecentEvolution(5),    getAllProjects(),
+    getRecentEvolution(5),
+    getAllProjects(),
     getAllIdeas(),
     getPendingAlerts(),
     getRecentGitUpdates(5),
     getActiveRequirementsAcrossProjects(),
     getRecentlyCompletedWork(20, 14),
     getNextActionDrafts(),
+    getTomorrowAgenda(),
   ]);
 
   const starMapLayout = buildStarMapLayout(allIdeas, allProjects);
@@ -86,11 +91,11 @@ export default async function WorkbenchPage({
     <WorkbenchShell
       title="今日工作台"
       subtitle="灵感 · 项目 · 任务 · 恢复现场"
-      role={session?.role}
+      role={session?.role ?? "guest"}
     >
       {params.error === "keys-forbidden" ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          观看者账号无法访问密钥索引 / 项目密钥。如需查看请使用管理员登录。
+          密钥区仅管理员可见。公开演示不展示密钥入口；需要时请右上角登录。
         </p>
       ) : null}
       <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
@@ -164,6 +169,15 @@ export default async function WorkbenchPage({
             ) : null}
           </p>
         </section>
+      </div>
+
+      <div className="mt-6">
+        <TomorrowAgendaPanel
+          todayDay={tomorrowAgenda.todayDay}
+          yesterdayDay={tomorrowAgenda.yesterdayDay}
+          items={tomorrowAgenda.items}
+          projects={tomorrowAgenda.projects}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">

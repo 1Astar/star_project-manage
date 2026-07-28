@@ -12,6 +12,7 @@ const STUDIO_TO_PM_SLUG: Record<string, string> = {
   "proj-yuanjing-pump": "yuanjing-pump",
   "proj-star-lab-os": "star-lab-os",
   "proj-personal-tools": "personal-tools",
+  "proj-demo-showcase": "demo-showcase",
 };
 
 const PM_TO_STUDIO_ID: Record<string, string> = Object.fromEntries(
@@ -38,6 +39,28 @@ export async function resolveProjectRoute(id: string) {
   const studio =
     studioById ??
     (studioIdFromSlug ? await getStudioProjectById(studioIdFromSlug) : null);
+
+  // 访客 / 观看者只能进演示项目
+  try {
+    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
+    const { isDemoShowcaseId, isViewerRole } = await import("@/lib/demo/showcase");
+    if (isAuthRequired()) {
+      const session = await getAdminSession();
+      if (!session || isViewerRole(session?.role)) {
+        const candidate = studio?.id ?? id;
+        if (!isDemoShowcaseId(candidate) && !isDemoShowcaseId(id)) {
+          return {
+            studio: null,
+            routeId: id,
+            pmSlug: null,
+            pmBundle: null,
+          };
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 
   let pmSlug = studio
     ? getPmSlugForStudioProject(studio)

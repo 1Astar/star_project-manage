@@ -413,19 +413,52 @@ export async function getAllRequirementsBoard(): Promise<{
 
 export async function getProjects(): Promise<Project[]> {
   const db = await readDb();
-  return db.projects;
+  let list = db.projects;
+  try {
+    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
+    const { filterPmProjectsForDemo, isViewerRole } = await import("@/lib/demo/showcase");
+    if (!isAuthRequired()) {
+      /* local open */
+    } else {
+      const session = await getAdminSession();
+      if (!session || isViewerRole(session?.role)) {
+        list = filterPmProjectsForDemo(list);
+      }
+    }
+  } catch {
+    /* ignore auth in scripts */
+  }
+  return list;
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {
   const db = await readDb();
-  return db.projects.find((p) => p.id === id || p.slug === id) ?? null;
+  const project = db.projects.find((p) => p.id === id || p.slug === id) ?? null;
+  if (!project) return null;
+  try {
+    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
+    const { isDemoShowcaseId, isViewerRole } = await import("@/lib/demo/showcase");
+    if (isAuthRequired()) {
+      const session = await getAdminSession();
+      if (
+        (!session || isViewerRole(session?.role)) &&
+        !isDemoShowcaseId(project.slug) &&
+        !isDemoShowcaseId(project.id)
+      ) {
+        return null;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return project;
 }
 
 export async function getProjectBundle(projectId: string) {
-  const db = await readDb();
-  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  const project = await getProjectById(projectId);
   if (!project) return null;
 
+  const db = await readDb();
   const iterations = db.iterations.filter((i) => i.project_id === project.id);
   const iterationIds = new Set(iterations.map((i) => i.id));
   const modules = db.modules.filter((m) => iterationIds.has(m.iteration_id));

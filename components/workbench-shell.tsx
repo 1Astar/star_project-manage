@@ -23,6 +23,8 @@ export const WORKBENCH_NAV = [
   { href: "/settings", label: "设置", icon: "⚙", adminOnly: false },
 ] as const;
 
+type UiRole = AuthRole | "guest";
+
 function isNavActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -42,10 +44,10 @@ export function WorkbenchShell({
   actions?: React.ReactNode;
   nav?: React.ReactNode;
   /** 服务端传入时可跳过 /api/auth/me */
-  role?: AuthRole;
+  role?: AuthRole | "guest";
 }) {
   const pathname = usePathname();
-  const [role, setRole] = useState<AuthRole | null>(roleProp ?? null);
+  const [role, setRole] = useState<UiRole | null>(roleProp ?? null);
 
   useEffect(() => {
     if (roleProp) {
@@ -55,21 +57,24 @@ export function WorkbenchShell({
     let cancelled = false;
     fetch("/api/auth/me")
       .then(async (res) => {
-        if (!res.ok) return;
-        const json = (await res.json()) as { role?: AuthRole };
-        if (!cancelled && (json.role === "admin" || json.role === "viewer")) {
+        const json = (await res.json()) as { role?: UiRole };
+        if (cancelled) return;
+        if (json.role === "admin" || json.role === "viewer" || json.role === "guest") {
           setRole(json.role);
+        } else {
+          setRole("guest");
         }
       })
       .catch(() => {
-        /* ignore */
+        if (!cancelled) setRole("guest");
       });
     return () => {
       cancelled = true;
     };
   }, [roleProp]);
 
-  const effectiveRole = role ?? "admin";
+  const effectiveRole: UiRole = role ?? "guest";
+  const isPublicDemo = effectiveRole === "guest" || effectiveRole === "viewer";
   const navItems = WORKBENCH_NAV.filter(
     (item) => !item.adminOnly || effectiveRole === "admin"
   );
@@ -86,13 +91,15 @@ export function WorkbenchShell({
             <span className="rounded-lg bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
               {appVersionLabel()}
             </span>
-            {effectiveRole === "viewer" ? (
+            {isPublicDemo ? (
               <span className="rounded-lg bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200">
-                观看者
+                公开演示
               </span>
             ) : null}
           </div>
-          <div className="mt-1 text-sm font-bold text-slate-800">个人项目操作台</div>
+          <div className="mt-1 text-sm font-bold text-slate-800">
+            {isPublicDemo ? "演示沙盘 · 晨光手记" : "个人项目操作台"}
+          </div>
         </div>
         <nav className="space-y-0.5">
           {navItems.map((item) => (
@@ -112,7 +119,16 @@ export function WorkbenchShell({
           ))}
         </nav>
         <div className="mt-auto space-y-3 border-t border-slate-200 pt-4 px-2">
-          <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900" />
+          {effectiveRole === "admin" || effectiveRole === "viewer" ? (
+            <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900" />
+          ) : (
+            <Link
+              href={`/login?next=${encodeURIComponent(pathname)}`}
+              className="block w-full rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-left text-sm font-medium text-indigo-800 hover:bg-indigo-100"
+            >
+              管理员登录
+            </Link>
+          )}
           <AppBrandFooter variant="compact" />
         </div>
       </aside>
@@ -126,6 +142,16 @@ export function WorkbenchShell({
             </div>
             <div className="flex items-center gap-2">
               {actions}
+              {effectiveRole === "guest" ? (
+                <Link
+                  href={`/login?next=${encodeURIComponent(pathname)}`}
+                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-100"
+                >
+                  登录
+                </Link>
+              ) : (
+                <LogoutButton className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50 md:hidden" />
+              )}
               <BackButton />
             </div>
           </div>
@@ -133,7 +159,16 @@ export function WorkbenchShell({
         </header>
         <main className="px-6 py-6">{children}</main>
         <div className="space-y-3 px-6 pb-6 md:hidden">
-          <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50" />
+          {effectiveRole === "guest" ? (
+            <Link
+              href={`/login?next=${encodeURIComponent(pathname)}`}
+              className="block w-full rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-center text-sm font-medium text-indigo-800"
+            >
+              管理员登录
+            </Link>
+          ) : (
+            <LogoutButton className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50" />
+          )}
           <AppBrandFooter />
         </div>
       </div>

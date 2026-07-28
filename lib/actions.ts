@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { assertNotViewerWrite } from "@/lib/auth/require-admin";
 import {
   addRequirementComment,
   addTestRecordWithPermission,
@@ -119,6 +120,7 @@ export async function savePoolRequirementAction(input: {
   projectSlug: string;
   updates: RequirementUpdates;
 }) {
+  await assertNotViewerWrite();
   await updatePoolRequirement(input.requirementId, input.updates, {
     name: "产品",
     role: "admin",
@@ -131,6 +133,7 @@ export async function saveRequirementDetailAction(input: {
   projectSlug: string;
   updates: RequirementUpdates;
 }) {
+  await assertNotViewerWrite();
   await updateRequirement(input.requirementId, input.updates, {
     name: "产品",
     role: "admin",
@@ -149,6 +152,7 @@ export async function saveRequirementMetaAction(input: {
     "prd_link" | "prototype_link" | "product_estimate_hours" | "tags" | "custom_fields"
   >;
 }) {
+  await assertNotViewerWrite();
   await updateRequirement(input.requirementId, input.updates, {
     name: "产品",
     role: "admin",

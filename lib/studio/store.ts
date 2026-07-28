@@ -2,12 +2,14 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   assetToRow,
+  changeSessionToRow,
   columnDefToRow,
   evolutionToRow,
   ideaToRow,
   projectToRow,
   releaseToRow,
   rowToAsset,
+  rowToChangeSession,
   rowToColumnDef,
   rowToEvolution,
   rowToIdea,
@@ -16,6 +18,7 @@ import {
   rowToTask,
   taskToRow,
   type StudioAssetRow,
+  type StudioChangeSessionRow,
   type StudioEvolutionRow,
   type StudioIdeaRow,
   type StudioProjectColumnDefRow,
@@ -26,6 +29,7 @@ import {
 import { getStudioSeedData } from "@/lib/studio/mock-data";
 import type {
   Asset,
+  ChangeSession,
   EvolutionLog,
   Idea,
   Project,
@@ -42,6 +46,7 @@ export interface StudioSnapshot {
   assets: Asset[];
   releases: StudioRelease[];
   projectColumnDefs: StudioProjectColumnDef[];
+  changeSessions: ChangeSession[];
 }
 
 let memorySnapshot: StudioSnapshot | null = null;
@@ -68,6 +73,7 @@ async function loadTable<T>(table: string, order?: { column: string; ascending: 
 function normalizeSnapshot(snapshot: StudioSnapshot): StudioSnapshot {
   if (!snapshot.releases) snapshot.releases = [];
   if (!snapshot.projectColumnDefs) snapshot.projectColumnDefs = [];
+  if (!snapshot.changeSessions) snapshot.changeSessions = [];
   for (const p of snapshot.projects) {
     if (!p.customFields) p.customFields = {};
   }
@@ -75,19 +81,31 @@ function normalizeSnapshot(snapshot: StudioSnapshot): StudioSnapshot {
 }
 
 async function readFromSupabase(): Promise<StudioSnapshot> {
-  const [projectRows, ideaRows, evolutionRows, taskRows, assetRows, releaseRows, columnRows] =
-    await Promise.all([
-      loadTable<StudioProjectRow>("studio_projects", { column: "updated_at", ascending: false }),
-      loadTable<StudioIdeaRow>("studio_ideas", { column: "created_at", ascending: false }),
-      loadTable<StudioEvolutionRow>("studio_evolution_logs", { column: "created_at", ascending: false }),
-      loadTable<StudioTaskRow>("studio_tasks"),
-      loadTable<StudioAssetRow>("studio_assets"),
-      loadTable<StudioReleaseRow>("studio_releases", { column: "published_at", ascending: false }),
-      loadTable<StudioProjectColumnDefRow>("studio_project_column_defs", {
-        column: "sort_order",
-        ascending: true,
-      }),
-    ]);
+  const [
+    projectRows,
+    ideaRows,
+    evolutionRows,
+    taskRows,
+    assetRows,
+    releaseRows,
+    columnRows,
+    changeSessionRows,
+  ] = await Promise.all([
+    loadTable<StudioProjectRow>("studio_projects", { column: "updated_at", ascending: false }),
+    loadTable<StudioIdeaRow>("studio_ideas", { column: "created_at", ascending: false }),
+    loadTable<StudioEvolutionRow>("studio_evolution_logs", { column: "created_at", ascending: false }),
+    loadTable<StudioTaskRow>("studio_tasks"),
+    loadTable<StudioAssetRow>("studio_assets"),
+    loadTable<StudioReleaseRow>("studio_releases", { column: "published_at", ascending: false }),
+    loadTable<StudioProjectColumnDefRow>("studio_project_column_defs", {
+      column: "sort_order",
+      ascending: true,
+    }),
+    loadTable<StudioChangeSessionRow>("studio_change_sessions", {
+      column: "created_at",
+      ascending: false,
+    }),
+  ]);
 
   return normalizeSnapshot({
     projects: projectRows.map(rowToProject),
@@ -97,6 +115,7 @@ async function readFromSupabase(): Promise<StudioSnapshot> {
     assets: assetRows.map(rowToAsset),
     releases: releaseRows.map(rowToRelease),
     projectColumnDefs: columnRows.map(rowToColumnDef),
+    changeSessions: changeSessionRows.map(rowToChangeSession),
   });
 }
 
@@ -112,6 +131,10 @@ async function upsertSnapshot(snapshot: StudioSnapshot) {
     {
       table: "studio_project_column_defs",
       rows: (snapshot.projectColumnDefs ?? []).map(columnDefToRow),
+    },
+    {
+      table: "studio_change_sessions",
+      rows: (snapshot.changeSessions ?? []).map(changeSessionToRow),
     },
   ];
 
@@ -138,6 +161,8 @@ function mergeIntoMemory(target: StudioSnapshot, incoming: StudioSnapshot) {
   upsert(target.releases, incoming.releases ?? []);
   if (!target.projectColumnDefs) target.projectColumnDefs = [];
   upsert(target.projectColumnDefs, incoming.projectColumnDefs ?? []);
+  if (!target.changeSessions) target.changeSessions = [];
+  upsert(target.changeSessions, incoming.changeSessions ?? []);
 }
 
 export async function upsertStudioSnapshot(snapshot: StudioSnapshot): Promise<void> {

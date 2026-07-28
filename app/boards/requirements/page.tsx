@@ -13,7 +13,7 @@ export default async function GlobalRequirementsBoardPage() {
     <WorkbenchShell
       title="需求总览"
       subtitle="多条件筛选 · 存视图 · 看板/表格切换"
-      role={session?.role}
+      role={session?.role ?? "guest"}
       actions={
         <Link href="/todos" className="text-sm text-indigo-600 hover:underline">
           我的待办 →

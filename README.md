@@ -42,6 +42,10 @@ ADMIN_PASSWORD=your-password
 ADMIN_SESSION_SECRET=change-me
 REQUIRE_AUTH=false          # 本地开发可关闭登录
 
+# 观看者（对外演示）：只见「晨光手记」沙盘，只读
+VIEWER_USERNAME=viewer
+VIEWER_PASSWORD=12345
+
 # Cron（Vercel 部署时设置）
 CRON_SECRET=your-cron-secret
 

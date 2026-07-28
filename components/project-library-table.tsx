@@ -527,9 +527,9 @@ export function ProjectLibraryTable({
     return (
       <th
         className={cn(
-          "relative px-3 py-3 font-medium",
+          "sticky top-0 z-20 relative bg-slate-50 px-3 py-3 font-medium",
           sticky &&
-            "sticky left-14 z-10 bg-slate-50 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+            "left-14 z-30 shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
         )}
         style={{ width: colW(colKey), minWidth: colW(colKey) }}
       >
@@ -589,12 +589,12 @@ export function ProjectLibraryTable({
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
+        <div className="max-h-[calc(100vh-14rem)] overflow-auto">
           <table className="w-full border-collapse text-sm" style={{ tableLayout: "fixed" }}>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
                 <th
-                  className="sticky left-0 z-10 bg-slate-50 px-1 py-3"
+                  className="sticky left-0 top-0 z-30 bg-slate-50 px-1 py-3"
                   style={{ width: colW("actions"), minWidth: colW("actions") }}
                 />
                 <ResizableTh colKey="title" sticky>

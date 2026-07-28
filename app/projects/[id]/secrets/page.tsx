@@ -9,7 +9,7 @@ export default async function ProjectSecretsPage({
   params: Promise<{ id: string }>;
 }) {
   const session = await getAdminSession();
-  if (session?.role === "viewer") {
+  if (session?.role !== "admin") {
     redirect("/?error=keys-forbidden");
   }
 

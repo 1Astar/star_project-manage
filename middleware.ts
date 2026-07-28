@@ -37,23 +37,35 @@ export function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  if (!token || !token.includes(".")) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "未授权" }, { status: 401 });
+  const hasSession = Boolean(token && token.includes("."));
+  const session = hasSession && token ? peekSessionPayload(token) : null;
+  const isAdmin = session?.role === "admin";
+
+  // 密钥 / 项目密钥：必须管理员
+  if (isKeysSensitivePath(pathname)) {
+    if (!isAdmin) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "需管理员登录后访问密钥区" }, { status: 403 });
+      }
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
     }
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.next();
   }
 
-  if (isKeysSensitivePath(pathname)) {
-    const session = peekSessionPayload(token);
-    if (!session || session.role !== "admin") {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json({ error: "观看者无权访问密钥区" }, { status: 403 });
+  // 未登录：页面可逛（演示沙盘）；写 API 拦在中间件 + 服务端 assert
+  if (!hasSession) {
+    if (pathname.startsWith("/api/")) {
+      if (request.method === "GET" || request.method === "HEAD") {
+        return NextResponse.next();
       }
-      return NextResponse.redirect(new URL("/?error=keys-forbidden", request.url));
+      return NextResponse.json(
+        { error: "公开演示为只读，请管理员登录后操作" },
+        { status: 401 }
+      );
     }
+    return NextResponse.next();
   }
 
   return NextResponse.next();

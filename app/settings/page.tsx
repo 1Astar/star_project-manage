@@ -7,20 +7,20 @@ import { getAdminSession } from "@/lib/auth/session";
 
 export default async function SettingsPage() {
   const session = await getAdminSession();
-  const isViewer = session?.role === "viewer";
+  const isPublicDemo = !session || session.role === "viewer";
 
   return (
     <WorkbenchShell
       title="设置"
       subtitle={
-        isViewer
-          ? "观看者可配置本机 AI / Notion；备份与 Git 总仓仅管理员"
+        isPublicDemo
+          ? "公开演示可配本机 AI / Notion；备份与 Git 总仓需管理员登录"
           : "Notion 导入 · AI 配置 · Git 默认仓 · 备份"
       }
-      role={session?.role}
+      role={session?.role ?? "guest"}
     >
       <div className="space-y-6">
-        {!isViewer ? (
+        {!isPublicDemo ? (
           <>
             <section className="rounded-xl border border-slate-200 bg-white p-6">
               <h2 className="text-sm font-semibold text-slate-700">Studio 备份 / 还原</h2>
@@ -37,7 +37,7 @@ export default async function SettingsPage() {
           </>
         ) : (
           <p className="rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-sm text-amber-900">
-            观看者账号不能访问备份还原、Git 默认仓与密钥相关设置。
+            公开演示不能访问备份还原与 Git 总仓。右上角登录管理员后可用。
           </p>
         )}
         <section className="rounded-xl border border-slate-200 bg-white p-6">
