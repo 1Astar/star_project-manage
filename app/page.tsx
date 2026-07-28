@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { WorkbenchShell } from "@/components/workbench-shell";
 import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
-import { IdeaStarMap } from "@/components/studio/idea-star-map";
+import { WorkbenchStarOrCalendar } from "@/components/workbench-star-or-calendar";
 import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
 import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
 import { WorkbenchProjectLibrary } from "@/components/workbench-project-library";
 import { WorkbenchBlockers } from "@/components/workbench-blockers";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
+import { buildImprovementCalendar } from "@/lib/studio/improvement-calendar";
 import { getAdminSession } from "@/lib/auth/session";
 import {
   getActiveRequirementsAcrossProjects,
@@ -20,6 +21,8 @@ import {
   getRecentEvolution,
   getAllProjects,
   getAllIdeas,
+  getAllEvolutionLogs,
+  getAllChangeSessions,
   getProjectTitle,
   getPendingAlerts,
   getRecentGitUpdates,
@@ -47,6 +50,8 @@ export default async function WorkbenchPage({
     recentEvolution,
     allProjects,
     allIdeas,
+    allEvolution,
+    allChangeSessions,
     alerts,
     gitUpdates,
     activeGroups,
@@ -60,6 +65,8 @@ export default async function WorkbenchPage({
     getRecentEvolution(5),
     getAllProjects(),
     getAllIdeas(),
+    getAllEvolutionLogs(),
+    getAllChangeSessions(),
     getPendingAlerts(),
     getRecentGitUpdates(5),
     getActiveRequirementsAcrossProjects(),
@@ -69,6 +76,13 @@ export default async function WorkbenchPage({
   ]);
 
   const starMapLayout = buildStarMapLayout(allIdeas, allProjects);
+  const projectTitleById = new Map(allProjects.map((p) => [p.id, p.title]));
+  const improvementByDayMap = buildImprovementCalendar({
+    evolution: allEvolution,
+    changeSessions: allChangeSessions,
+    projectTitleById,
+  });
+  const improvementByDay = Object.fromEntries(improvementByDayMap);
 
   const evolutionWithTitles = await Promise.all(
     recentEvolution.map(async (log) => ({
@@ -78,7 +92,6 @@ export default async function WorkbenchPage({
   );
 
   const libraryProjects = allProjects.filter((p) => p.status !== "archived");
-  const projectTitleById = new Map(allProjects.map((p) => [p.id, p.title]));
   const blockerItems = alerts.blockers.map((t) => ({
     taskId: t.id,
     title: t.title,
@@ -101,7 +114,10 @@ export default async function WorkbenchPage({
       <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
 
       <div className="mt-6">
-        <IdeaStarMap layout={starMapLayout} />
+        <WorkbenchStarOrCalendar
+          layout={starMapLayout}
+          improvementByDay={improvementByDay}
+        />
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">

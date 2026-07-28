@@ -26,6 +26,11 @@ export async function getAllEvolutionLogs() {
   return evolutionLogs;
 }
 
+export async function getAllChangeSessions() {
+  const { changeSessions } = await getScopedStudioSnapshot();
+  return changeSessions ?? [];
+}
+
 export async function getProjectById(id: string) {
   const { projects } = await getScopedStudioSnapshot();
   return projects.find((p) => p.id === id) ?? null;

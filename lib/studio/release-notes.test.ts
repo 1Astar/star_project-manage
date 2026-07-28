@@ -57,6 +57,8 @@ const evo: EvolutionLog[] = [
     decision: "",
     module: "迭代记录",
     releaseTag: "v1.9.1",
+    workStartedAt: null,
+    workFinishedAt: null,
     createdAt: "2026-07-20T00:00:00.000Z",
   },
 ];

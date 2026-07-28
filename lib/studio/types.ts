@@ -163,6 +163,10 @@ export interface EvolutionLog {
   module: string;
   /** 可选挂到某个 Release/Tag */
   releaseTag: string | null;
+  /** 聊天开始时间（工时） */
+  workStartedAt: string | null;
+  /** 聊天结束时间（工时） */
+  workFinishedAt: string | null;
   createdAt: string;
 }
 

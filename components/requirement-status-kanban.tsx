@@ -4,55 +4,18 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRequirementDetailAction } from "@/lib/actions";
 import { StudioBadge } from "@/components/studio/shell";
-import { REQUIREMENT_DONE_TAG, type Requirement } from "@/lib/types";
+import type { Requirement } from "@/lib/types";
 import { isLeafRequirement } from "@/lib/requirement-tree";
+import {
+  REQUIREMENT_KANBAN_COLUMNS,
+  REQUIREMENT_STATUS_HINT,
+  applyLifecycleStatus,
+  requirementKanbanColumn,
+  type RequirementLifecycleStatus,
+} from "@/lib/requirement-status";
 import { cn } from "@/lib/utils";
 
-/** 看板固定列顺序（状态标签） */
-export const REQUIREMENT_KANBAN_COLUMNS = [
-  "待开始",
-  "评审",
-  "开发中",
-  "待测试",
-  "待验收",
-  "完成",
-  "阻塞",
-] as const;
-
-const KNOWN_STATUS = new Set<string>([
-  ...REQUIREMENT_KANBAN_COLUMNS,
-  "已完成",
-  "已做",
-  "进行中",
-  "待联调",
-  "搁置",
-  "已记录",
-]);
-
-function normalizeDone(tag: string) {
-  if (tag === "已完成" || tag === "已做") return REQUIREMENT_DONE_TAG;
-  if (tag === "进行中") return "开发中";
-  return tag;
-}
-
-export function requirementColumn(req: Requirement): string {
-  const tags = (req.status_tags ?? []).map(normalizeDone);
-  for (const col of REQUIREMENT_KANBAN_COLUMNS) {
-    if (tags.includes(col)) return col;
-  }
-  if (tags.some((t) => KNOWN_STATUS.has(t) || t.length > 0)) {
-    return "其他";
-  }
-  return "待开始";
-}
-
-function applyColumnTag(prev: string[], column: string): string[] {
-  const retained = (prev ?? [])
-    .map(normalizeDone)
-    .filter((t) => !KNOWN_STATUS.has(t) && t !== column);
-  if (column === "其他") return retained.length ? retained : ["待开始"];
-  return [column, ...retained];
-}
+export { REQUIREMENT_KANBAN_COLUMNS, requirementKanbanColumn as requirementColumn };
 
 export type RequirementKanbanItem = {
   req: Requirement;
@@ -68,6 +31,15 @@ type Props = {
   items?: RequirementKanbanItem[];
   showProjectName?: boolean;
   onOpen?: (reqId: string, projectSlug: string) => void;
+};
+
+const COLUMN_TONE: Record<RequirementLifecycleStatus, string> = {
+  想法: "text-amber-800",
+  已规划: "text-sky-800",
+  AI开发中: "text-violet-800",
+  待验收: "text-orange-800",
+  完成: "text-emerald-800",
+  放弃: "text-slate-500",
 };
 
 export function RequirementStatusKanban({
@@ -96,22 +68,13 @@ export function RequirementStatusKanban({
     return items.filter((i) => isLeafRequirement(i.req, reqs));
   }, [items, initialItems]);
 
-  const columns = useMemo(() => {
-    const extras = new Set<string>();
-    for (const item of boardItems) {
-      if (requirementColumn(item.req) === "其他") extras.add("其他");
-    }
-    const list: string[] = [...REQUIREMENT_KANBAN_COLUMNS];
-    if (extras.has("其他")) list.push("其他");
-    return list;
-  }, [boardItems]);
+  const columns = useMemo(() => [...REQUIREMENT_KANBAN_COLUMNS], []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, RequirementKanbanItem[]>();
     for (const col of columns) map.set(col, []);
     for (const item of boardItems) {
-      const col = requirementColumn(item.req);
-      if (!map.has(col)) map.set(col, []);
+      const col = requirementKanbanColumn(item.req);
       map.get(col)!.push(item);
     }
     return map;
@@ -120,9 +83,9 @@ export function RequirementStatusKanban({
   function moveToColumn(reqId: string, column: string) {
     const item = items.find((i) => i.req.id === reqId);
     if (!item) return;
-    if (requirementColumn(item.req) === column) return;
+    if (requirementKanbanColumn(item.req) === column) return;
 
-    const nextTags = applyColumnTag(item.req.status_tags ?? [], column);
+    const nextTags = applyLifecycleStatus(item.req.status_tags ?? [], column);
     const snapshot = items;
     setItems((prev) =>
       prev.map((i) =>
@@ -149,7 +112,7 @@ export function RequirementStatusKanban({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-slate-500">
-          需求看板 · 按状态标签分列 · 拖卡片到其他列即可改状态
+          需求看板 · {REQUIREMENT_STATUS_HINT}
           {pending ? " · 保存中…" : null}
         </p>
         {message ? <span className="text-xs text-red-600">{message}</span> : null}
@@ -182,7 +145,14 @@ export function RequirementStatusKanban({
               }}
             >
               <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-                <span className="text-sm font-semibold text-slate-800">{col}</span>
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    COLUMN_TONE[col as RequirementLifecycleStatus] ?? "text-slate-800"
+                  )}
+                >
+                  {col}
+                </span>
                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
                   {colItems.length}
                 </span>

@@ -243,6 +243,8 @@ export function buildDemoShowcaseEvolutions(): EvolutionLog[] {
       decision: "固定 ID proj-demo-showcase，观看者登录仅见此项目",
       module: "项目库",
       releaseTag: null,
+      workStartedAt: null,
+      workFinishedAt: null,
       createdAt: T0,
     },
     {
@@ -256,6 +258,8 @@ export function buildDemoShowcaseEvolutions(): EvolutionLog[] {
       decision: "保持数据量小、叙事清晰",
       module: "需求任务",
       releaseTag: "v0.1.0-demo",
+      workStartedAt: null,
+      workFinishedAt: null,
       createdAt: T1,
     },
     {
@@ -269,6 +273,8 @@ export function buildDemoShowcaseEvolutions(): EvolutionLog[] {
       decision: "关账示例",
       module: "迭代记录",
       releaseTag: "v0.2.0-demo",
+      workStartedAt: null,
+      workFinishedAt: null,
       createdAt: T2,
     },
   ];

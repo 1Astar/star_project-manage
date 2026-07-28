@@ -173,7 +173,7 @@ export interface Requirement {
   /** 非叶节点自身直接执行工时（不计入叶子 SUM 重复，展示时加在 Σ叶子 上） */
   direct_hours: number | null;
   actual_hours: number | null;
-  /** 强制关闭父需求（已取消），不再被自动完成覆盖 */
+  /** 强制关闭父需求（放弃），不再被自动完成覆盖 */
   force_closed: boolean;
   tags: string[];
   custom_fields: Record<string, string | number | boolean | null>;
@@ -232,7 +232,7 @@ export const REQUIREMENT_POOL_DEFAULTS: Pick<
   type: "task",
   tags: [],
   custom_fields: {},
-  status_tags: ["待开始"],
+  status_tags: ["想法"],
   assignees: [],
   req_source: null,
   req_source_note: null,
@@ -471,8 +471,8 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
 /** 含此标签视为已完成，并写入 completed_at */
 export const REQUIREMENT_DONE_TAG = "完成";
 
-/** 强制关闭 / 取消方向 */
-export const REQUIREMENT_CANCELLED_TAG = "已取消";
+/** 强制关闭 / 取消方向（规范标签为「放弃」；「已取消」仍兼容） */
+export const REQUIREMENT_CANCELLED_TAG = "放弃";
 
 export function requirementIsDone(req: Pick<Requirement, "status_tags" | "status">): boolean {
   const tags = req.status_tags ?? [];
@@ -487,26 +487,59 @@ export function requirementIsCancelled(
 ): boolean {
   if (req.force_closed) return true;
   return (req.status_tags ?? []).some(
-    (t) => t === REQUIREMENT_CANCELLED_TAG || t === "取消"
+    (t) =>
+      t === REQUIREMENT_CANCELLED_TAG ||
+      t === "已取消" ||
+      t === "取消" ||
+      t === "放弃"
   );
 }
 
 export function deriveTaskStatusFromTags(tags: string[]): TaskStatus {
   const set = new Set(tags);
   if (set.has(REQUIREMENT_DONE_TAG) || set.has("已完成") || set.has("已做")) return "done";
-  if (set.has(REQUIREMENT_CANCELLED_TAG) || set.has("取消")) return "blocked";
-  if (set.has("阻塞")) return "blocked";
+  if (
+    set.has(REQUIREMENT_CANCELLED_TAG) ||
+    set.has("已取消") ||
+    set.has("取消") ||
+    set.has("放弃") ||
+    set.has("搁置") ||
+    set.has("阻塞")
+  ) {
+    return "blocked";
+  }
   if (set.has("待验收") || set.has("验收")) return "acceptance";
   if (set.has("待测试") || set.has("测试")) return "testing";
   if (set.has("待联调") || set.has("联调")) return "integration";
-  if (set.has("开发中") || set.has("进行中") || set.has("评审")) return "in_progress";
-  if (set.has("待开始")) return "pending";
+  if (
+    set.has("AI开发中") ||
+    set.has("开发中") ||
+    set.has("进行中") ||
+    set.has("已规划") ||
+    set.has("评审")
+  ) {
+    return "in_progress";
+  }
+  if (set.has("想法") || set.has("待开始") || set.has("已记录")) return "pending";
   return tags.length ? "in_progress" : "pending";
 }
 
 export function statusTagsFromTaskStatus(status: TaskStatus): string[] {
-  if (status === "done") return [REQUIREMENT_DONE_TAG];
-  return [TASK_STATUS_LABELS[status]];
+  switch (status) {
+    case "done":
+      return [REQUIREMENT_DONE_TAG];
+    case "acceptance":
+      return ["待验收"];
+    case "blocked":
+      return [REQUIREMENT_CANCELLED_TAG];
+    case "integration":
+    case "testing":
+    case "in_progress":
+      return ["AI开发中"];
+    case "pending":
+    default:
+      return ["想法"];
+  }
 }
 
 export const ROLE_LABELS: Record<RoleType, string> = {

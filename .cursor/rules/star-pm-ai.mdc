@@ -1,5 +1,5 @@
 ---
-description: Star PM AI 统一规则指针——必读仓库内 CANONICAL_RULES
+description: Star PM AI 统一规则——写入/发版前必读 skill + CANONICAL
 globs:
   - "**/*"
 alwaysApply: true
@@ -7,16 +7,27 @@ alwaysApply: true
 
 # Star PM · AI 规则（指针）
 
-动手前必读仓库正文（勿在本文件复制长文，避免漂移）：
+## 写入或发版前（强制）
+
+先 **Read** 本仓库 skill，再动手写 PM / 打 tag / `publish_release`：
+
+`.cursor/skills/star-pm-write-release/SKILL.md`
+
+字段总原则：**有则写之，无则跳过**（不编造）。
+
+统一规则正文（勿在本文件复制长文）：
 
 `docs/ai/CANONICAL_RULES.md`
 
-要点摘要：
+## 要点摘要
 
 1. 改代码前先 `compare_sources`（Git / Vercel / Studio），避免用旧版本覆盖新版本  
-2. 灵感/演进写入强烈建议带**板块**（`relatedModule` / `module`）  
-3. 导入缺板块 →「待补齐」仍可导入，不要静默丢  
-4. 发版用 `publish_release`；「同步版本」≠「同步 Git 更新」
-5. 用户确认要做后：**写进 PM → 直接开做**；默认不写 `docs/superpowers/specs` 设计文档（除非明确要求）
+2. 灵感/演进写入：有板块就写（`relatedModule` / `module`）；无则跳过或标待补齐，不要静默丢  
+3. 导入缺板块 →「待补齐」仍可导入  
+4. 发版：CHANGELOG → version → commit → `git tag vX.Y.Z` → push → `publish_release`  
+5. 「同步版本」≠「同步 Git 更新」≠ `publish_release`  
+6. 用户确认要做后：**写进 PM → 直接开做**；默认不写长篇设计文档（除非明确要求）
 
 MCP：先调 `get_ai_rules` 再大批量写入。
+
+每台电脑：拉最新仓库即可带上本 skill（在 `.cursor/skills/`）；个人目录 `~/.cursor/skills/` 为可选镜像，以仓库为准。

@@ -349,6 +349,8 @@ function mapEvolutionPage(page: NotionPage, projectIdByNotion: Map<string, strin
     decision: getPropertyText(page, "结论", "决策", "Decision"),
     module: getPropertyText(page, "板块", "模块", "Module"),
     releaseTag: getPropertyText(page, "版本", "Release", "Tag") || null,
+    workStartedAt: null,
+    workFinishedAt: null,
     createdAt: page.created_time || new Date().toISOString(),
   };
 }

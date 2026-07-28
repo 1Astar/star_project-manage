@@ -189,6 +189,10 @@ export type CreateEvolutionInput = {
   module?: string;
   /** 挂到某个 Release/Tag */
   releaseTag?: string | null;
+  /** 聊天开始时间 ISO */
+  workStartedAt?: string | null;
+  /** 聊天结束时间 ISO */
+  workFinishedAt?: string | null;
 };
 
 export type UpdateEvolutionInput = Partial<Omit<CreateEvolutionInput, "projectId">> & {
@@ -754,6 +758,8 @@ export async function createStudioEvolution(input: CreateEvolutionInput): Promis
     decision,
     module: resolved.module,
     releaseTag: input.releaseTag?.trim() || null,
+    workStartedAt: input.workStartedAt?.trim() || null,
+    workFinishedAt: input.workFinishedAt?.trim() || null,
     createdAt: nowIso(),
   };
 
@@ -791,6 +797,14 @@ export async function updateStudioEvolution(id: string, patch: UpdateEvolutionIn
       patch.releaseTag !== undefined
         ? patch.releaseTag?.trim() || null
         : existing.releaseTag,
+    workStartedAt:
+      patch.workStartedAt !== undefined
+        ? patch.workStartedAt?.trim() || null
+        : existing.workStartedAt,
+    workFinishedAt:
+      patch.workFinishedAt !== undefined
+        ? patch.workFinishedAt?.trim() || null
+        : existing.workFinishedAt,
     createdAt: existing.createdAt,
   };
 
@@ -838,6 +852,8 @@ export type CreateChangeSessionInput = {
   requirementId?: string | null;
   ideaId?: string | null;
   day?: string;
+  /** 聊天开始时间 ISO；缺省 now */
+  startedAt?: string | null;
 };
 
 export type UpdateChangeSessionInput = {
@@ -875,7 +891,7 @@ export async function createChangeSession(
     throw new Error("关联项目不存在");
   }
 
-  const createdAt = nowIso();
+  const createdAt = input.startedAt?.trim() || nowIso();
   const day =
     input.day?.trim().slice(0, 10) || shanghaiDay(createdAt);
 

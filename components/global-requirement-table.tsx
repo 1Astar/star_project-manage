@@ -43,7 +43,7 @@ export function GlobalRequirementTable({ items }: { items: RequirementKanbanItem
                       </Link>
                     </td>
                     <td className="px-3 py-3">
-                      <StudioBadge tone={col === "阻塞" ? "warning" : "muted"}>{col}</StudioBadge>
+                      <StudioBadge tone={col === "放弃" ? "warning" : "muted"}>{col}</StudioBadge>
                     </td>
                     <td className="px-3 py-3">
                       <StudioBadge

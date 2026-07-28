@@ -26,10 +26,12 @@
 
 ## 2. 写入规范（灵感 / 演进 / 决策）
 
+**有则写之，无则跳过**——对话里有的字段写入；没有的不要编造。清单与发版步骤见 Agent Skill `star-pm-write-release`。
+
 | 字段 | 要求 |
 |------|------|
-| **板块** `module` / `relatedModule` | **强烈建议必填**。可用项目自定义 `featureModules`（如 `六爻·笔记·卦象解析`）；未配置时 Star PM 默认：工作台 / 项目库 / 灵感 / 需求任务 / 迭代记录 / 资源中心 / Git / 设置。MCP 用 `update_project.featureModules` 覆盖写入；写入时按「·」增量同步到需求模块树（一级=首段，子模块=其余） |
-| **原因** `reason` | 可空；空则弱提醒 |
+| **板块** `module` / `relatedModule` | **有则写 / 强烈建议**。可用项目自定义 `featureModules`（如 `六爻·笔记·卦象解析`）；未配置时 Star PM 默认：工作台 / 项目库 / 灵感 / 需求任务 / 迭代记录 / 资源中心 / Git / 设置。MCP 用 `update_project.featureModules` 覆盖写入；写入时按「·」增量同步到需求模块树（一级=首段，子模块=其余） |
+| **原因** `reason` | 有则写；空则弱提醒 |
 | **版本** `releaseTag` | 可选；发版前用 `publish_release` 挂上 |
 
 MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标记 **「待补齐·板块」** 仍可入库。
@@ -77,3 +79,10 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 | ChatGPT Action | System / OpenAPI 说明：先调 `get_ai_rules` |
 
 改规则只改本文件，再发版；各入口无需抄正文。
+
+---
+
+## 7. 操作清单（指针）
+
+**AI 写入字段标准、ChangeSession/工时、git tag / CHANGELOG / `publish_release` 逐步清单**  
+见 Agent Skill：`star-pm-write-release`（勿把长清单复制进本文件）。

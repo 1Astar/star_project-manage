@@ -421,6 +421,14 @@ export function registerWorkspaceTools(server: McpServer) {
             "功能板块；留空时按标题/内容关键词自动推断（工作台/项目库/灵感/需求任务/迭代记录/资源中心/Git/设置）"
           ),
         releaseTag: z.string().optional().describe("关联 GitHub Release/Tag，如 v1.9.1"),
+        workStartedAt: z
+          .string()
+          .optional()
+          .describe("聊天开始时间 ISO（工时起点，可从对话时间戳取）"),
+        workFinishedAt: z
+          .string()
+          .optional()
+          .describe("聊天结束时间 ISO（工时终点）"),
       },
     },
     async (input) => {
@@ -435,6 +443,8 @@ export function registerWorkspaceTools(server: McpServer) {
           decision: input.decision,
           module: input.module,
           releaseTag: input.releaseTag ?? null,
+          workStartedAt: input.workStartedAt ?? null,
+          workFinishedAt: input.workFinishedAt ?? null,
         });
         await logAiAction({
           action: "add_evolution",
@@ -455,6 +465,8 @@ export function registerWorkspaceTools(server: McpServer) {
             decision: log.decision,
             module: log.module,
             releaseTag: log.releaseTag,
+            workStartedAt: log.workStartedAt,
+            workFinishedAt: log.workFinishedAt,
             createdAt: log.createdAt,
           },
         });
@@ -766,6 +778,10 @@ export function registerWorkspaceTools(server: McpServer) {
         requirementId: z.string().nullable().optional(),
         ideaId: z.string().nullable().optional(),
         day: z.string().optional().describe("YYYY-MM-DD，默认今天（上海）"),
+        startedAt: z
+          .string()
+          .optional()
+          .describe("聊天开始时间 ISO；缺省为现在"),
       },
     },
     async (input) => {
@@ -779,6 +795,7 @@ export function registerWorkspaceTools(server: McpServer) {
           requirementId: input.requirementId,
           ideaId: input.ideaId,
           day: input.day,
+          startedAt: input.startedAt,
         });
         await logAiAction({
           action: "start_change_session",
@@ -803,6 +820,10 @@ export function registerWorkspaceTools(server: McpServer) {
         pendingItems: stringList.describe("未完成项"),
         aiOps: stringList.describe("AI 操作摘要，如改了哪些文件"),
         result: z.string().optional(),
+        finishedAt: z
+          .string()
+          .optional()
+          .describe("聊天结束时间 ISO；缺省为现在"),
       },
     },
     async (input) => {
@@ -813,6 +834,7 @@ export function registerWorkspaceTools(server: McpServer) {
           pendingItems: input.pendingItems,
           aiOps: input.aiOps,
           result: input.result,
+          finishedAt: input.finishedAt,
         });
         await logAiAction({
           action: "finish_change_session",

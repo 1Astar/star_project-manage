@@ -110,6 +110,8 @@ export interface StudioEvolutionRow {
   decision: string;
   module?: string;
   release_tag?: string | null;
+  work_started_at?: string | null;
+  work_finished_at?: string | null;
   created_at: string;
 }
 
@@ -404,6 +406,8 @@ export function evolutionToRow(log: EvolutionLog): StudioEvolutionRow {
     decision: log.decision,
     module: log.module ?? "",
     release_tag: log.releaseTag,
+    work_started_at: log.workStartedAt,
+    work_finished_at: log.workFinishedAt,
     created_at: log.createdAt,
   };
 }
@@ -420,6 +424,8 @@ export function rowToEvolution(row: StudioEvolutionRow): EvolutionLog {
     decision: row.decision,
     module: row.module ?? "",
     releaseTag: row.release_tag ?? null,
+    workStartedAt: row.work_started_at ?? null,
+    workFinishedAt: row.work_finished_at ?? null,
     createdAt: row.created_at,
   };
 }

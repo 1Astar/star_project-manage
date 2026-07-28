@@ -89,7 +89,7 @@ export async function ensureDemoShowcase(): Promise<{ studioId: string; pmSlug: 
       type: "feature",
       parent_id: parent.id,
       priority: "P2",
-      status_tags: ["待开始"],
+      status_tags: ["想法"],
       detail_work: "演示版不接真实推送",
       inspiration_source: "演示沙盘",
       actor_name: "白昼",

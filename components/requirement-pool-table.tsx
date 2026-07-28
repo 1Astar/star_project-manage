@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
+import { RequirementStatusSelect } from "@/components/requirement-status-select";
 import type { ModuleNode, PoolColumnDef, PoolColumnType, Requirement, RequirementAttachment, RequirementType } from "@/lib/types";
-import { REQUIREMENT_DONE_TAG, REQUIREMENT_TYPE_LABELS } from "@/lib/types";
+import { REQUIREMENT_TYPE_LABELS } from "@/lib/types";
+import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { createPoolColumnAction, deletePoolColumnAction, listRequirementMigrateTargetsAction } from "@/lib/actions";
 import {
   childrenOf,
@@ -150,6 +152,7 @@ type Props = {
     updates: Partial<{
       title: string;
       type: RequirementType;
+      status_tags: string[];
       next_step: string | null;
       priority: string | null;
       product_estimate_hours: number | null;
@@ -1251,13 +1254,14 @@ export function RequirementPoolTable({
       {filtersOpen ? (
         <div className="flex flex-wrap items-end gap-3 border-b border-slate-100 bg-slate-50/80 px-4 py-3 text-xs">
           <div className="min-w-[160px] flex-1">
-            <p className="mb-1 font-medium text-slate-600">状态标签</p>
+            <p className="mb-1 font-medium text-slate-600">状态</p>
             <div className="flex flex-wrap gap-1">
               {allStatusTags.length === 0 ? (
                 <span className="text-slate-400">暂无</span>
               ) : (
                 allStatusTags.map((tag) => {
                   const on = filterStatuses.includes(tag);
+                  const label = requirementLifecycleStatus({ status_tags: [tag] });
                   return (
                     <button
                       key={tag}
@@ -1274,7 +1278,7 @@ export function RequirementPoolTable({
                           : "bg-white text-slate-600 ring-slate-200"
                       )}
                     >
-                      {tag}
+                      {label}
                     </button>
                   );
                 })
@@ -1705,26 +1709,13 @@ export function RequirementPoolTable({
                       if (key === "status_tags") {
                         return (
                           <td key={col.id} className="px-3 py-2.5 align-top">
-                            <div className="flex flex-wrap gap-1">
-                              {(req.status_tags ?? []).length ? (
-                                (req.status_tags ?? []).map((tag) => (
-                                  <StudioBadge
-                                    key={tag}
-                                    tone={
-                                      tag === REQUIREMENT_DONE_TAG || tag === "已完成"
-                                        ? "default"
-                                        : tag === "评审"
-                                          ? "warning"
-                                          : "muted"
-                                    }
-                                  >
-                                    {tag}
-                                  </StudioBadge>
-                                ))
-                              ) : (
-                                <span className="text-slate-300">空白</span>
-                              )}
-                            </div>
+                            <RequirementStatusSelect
+                              compact
+                              tags={req.status_tags ?? ["想法"]}
+                              onChange={(next) =>
+                                onInlineSave(req.id, { status_tags: next })
+                              }
+                            />
                           </td>
                         );
                       }

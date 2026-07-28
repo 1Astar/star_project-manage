@@ -37,7 +37,7 @@ function classifyReq(req: Requirement): "done" | "active" | "todo" | "skip" {
   if (requirementIsDone(req)) return "done";
   const tags = req.status_tags ?? [];
   if (
-    tags.some((t) => /进行|开发|测试|评审|验收/.test(t)) ||
+    tags.some((t) => /进行|开发|测试|评审|验收|规划|想法/.test(t)) ||
     req.status === "in_progress" ||
     req.status === "testing" ||
     req.status === "integration" ||

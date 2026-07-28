@@ -140,10 +140,10 @@ export function deriveParentStatusTags(
   const anyProgress = activeKids.some(
     (k) =>
       requirementIsDone(k) ||
-      (k.status_tags ?? []).some((t) => t !== "待开始")
+      (k.status_tags ?? []).some((t) => t !== "想法" && t !== "待开始")
   );
   if (requirementIsDone(parent) || !tags.length) {
-    return tags.length ? tags : [anyProgress ? "进行中" : "待开始"];
+    return tags.length ? tags : [anyProgress ? "AI开发中" : "想法"];
   }
   return null;
 }

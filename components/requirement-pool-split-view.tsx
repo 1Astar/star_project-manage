@@ -15,6 +15,7 @@ import {
 } from "@/lib/actions";
 import { RequirementMemoryTimeline, type TimelineEntity } from "@/components/requirement-memory-timeline";
 import { RequirementPoolTable } from "@/components/requirement-pool-table";
+import { RequirementStatusSelect } from "@/components/requirement-status-select";
 import { StudioBadge } from "@/components/studio/shell";
 import type {
   Iteration,
@@ -413,7 +414,7 @@ export function RequirementPoolSplitView({
               })),
             ]}
             onForceClose={() => {
-              if (!confirm("强制关闭该需求（标为已取消）？用于不做这个方向。")) return;
+              if (!confirm("强制关闭该需求（标为放弃）？用于不做这个方向。")) return;
               startTransition(async () => {
                 await forceCloseRequirementAction({
                   requirementId: drawerReq.id,
@@ -553,7 +554,7 @@ function RequirementSidePeek({
   const [reqType, setReqType] = useState<RequirementType>(requirement.type ?? "task");
   const [detailWork, setDetailWork] = useState(requirement.detail_work ?? "");
   const [acceptance, setAcceptance] = useState(requirement.acceptance_criteria ?? "");
-  const [statusTags, setStatusTags] = useState(requirement.status_tags ?? ["待开始"]);
+  const [statusTags, setStatusTags] = useState(requirement.status_tags ?? ["想法"]);
   const [assignees, setAssignees] = useState(requirement.assignees ?? []);
   const [priority, setPriority] = useState(requirement.priority ?? "P1");
   const [hours, setHours] = useState(
@@ -604,7 +605,7 @@ function RequirementSidePeek({
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <span>Side Peek</span>
           {done ? <StudioBadge>完成</StudioBadge> : null}
-          {requirement.force_closed ? <StudioBadge tone="warning">已取消</StudioBadge> : null}
+          {requirement.force_closed ? <StudioBadge tone="warning">放弃</StudioBadge> : null}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -651,12 +652,7 @@ function RequirementSidePeek({
           </select>
         </label>
 
-        <TagEditor
-          label="状态标签（输入文字添加，如：评审、完成）"
-          tags={statusTags}
-          onChange={setStatusTags}
-          placeholder="例：评审 / 开发中 / 完成"
-        />
+        <RequirementStatusSelect tags={statusTags} onChange={setStatusTags} />
 
         <div className="space-y-1.5">
           <span className="text-xs text-slate-500">需求指派（可多选）</span>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ProjectChangeSessions } from "@/components/project-change-sessions";
+import { ModuleProgressTable } from "@/components/module-progress-table";
 import { StudioBadge } from "@/components/studio/shell";
 import { parseFeaturePathToChain, resolveFeatureModules } from "@/lib/studio/project-modules";
 import { inferChangeDirection, inferModulesFromText } from "@/lib/studio/infer-modules";
@@ -142,11 +143,6 @@ export function ProjectEvolutionTimeline({
     if (!moduleFilter.l1) return [] as string[];
     return moduleTree.find((n) => n.l1 === moduleFilter.l1)?.l2 ?? [];
   }, [moduleTree, moduleFilter.l1]);
-
-  const filteredModuleStats = useMemo(() => {
-    const prefix = modulePathPrefix(moduleFilter);
-    return moduleStats.filter((s) => moduleMatchesPrefix(s.module, prefix));
-  }, [moduleStats, moduleFilter]);
 
   function modulesForRelease(tag: string, body?: string | null) {
     const set = new Set<string>();
@@ -466,7 +462,7 @@ export function ProjectEvolutionTimeline({
       ) : (
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
-            按「板块 → 子板块」筛选演进与灵感；默认全部时按完整路径分段列出。
+            板块进程表：大板块 → 子板块；提出时间取灵感与演进更早者；改进时间线 + 工时（聊天起止）。
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="block text-sm">
@@ -549,52 +545,13 @@ export function ProjectEvolutionTimeline({
             ) : null}
           </div>
 
-          {filteredModuleStats.length === 0 ? (
-            <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-              {modules.length === 0
-                ? "还没有配置板块。可在项目「代码仓库」设置里填写功能板块（按「体系·功能面·能力」）。"
-                : "当前筛选下没有板块。试试换一级板块，或清除筛选。"}
-            </p>
-          ) : (
-            filteredModuleStats.map(({ module: m, evolution: ev, ideas: ids }) => (
-              <section
-                key={m}
-                className="space-y-3 rounded-xl border border-slate-200 bg-white p-4"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-slate-900">{m}</h3>
-                  <p className="text-xs text-slate-400">
-                    演进 {ev.length} · 灵感 {ids.length}
-                  </p>
-                </div>
-                {ev.length === 0 && ids.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    该板块还没有带标签的演进或灵感。补演进时选板块即可。
-                  </p>
-                ) : null}
-                {ev.map((log) => (
-                  <EvolutionCard key={log.id} log={log} />
-                ))}
-                {ids.map((idea) => (
-                  <article
-                    key={idea.id}
-                    className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StudioBadge tone="muted">灵感</StudioBadge>
-                      <span className="text-xs text-slate-400">
-                        {formatDate(idea.occurredAt || idea.createdAt)}
-                      </span>
-                    </div>
-                    <h4 className="mt-1 text-sm font-semibold text-slate-900">{idea.title}</h4>
-                    {idea.oneLineIdea ? (
-                      <p className="mt-1 text-sm text-slate-600">{idea.oneLineIdea}</p>
-                    ) : null}
-                  </article>
-                ))}
-              </section>
-            ))
-          )}
+          <ModuleProgressTable
+            modules={modules}
+            evolution={evolution}
+            ideas={ideas}
+            changeSessions={changeSessions}
+            pathPrefix={modulePathPrefix(moduleFilter)}
+          />
         </div>
       )}
 

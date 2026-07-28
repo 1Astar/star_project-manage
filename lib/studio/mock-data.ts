@@ -43,9 +43,9 @@ export const mockProjects: Project[] = [
       links:
         "Notion 主页：https://app.notion.com/p/Moonpie-395a86f50915810a9bf2da9551d6e782\n参考看板：https://app.notion.com/p/90c63edbe2ae4997ba6db7b6c7367f8a",
       retrospectives:
-        "3/28：定位从「手势塔罗网页」调整为「随心而行」，增加学习维度。\n4/2：结果页被评价「像调试页」，列入 P1。",
+        "7/6：仓库首提 Initial commit（Mystic Lab MVP）；同日定为随心而行产品起点。\n7/8：连续 release 打磨结果页、牌面与解读。",
     },
-    createdAt: "2026-03-15T08:00:00.000Z",
+    createdAt: "2026-07-06T09:47:18.000Z",
     updatedAt: "2026-07-08T06:00:00.000Z",
   },
   {
@@ -254,8 +254,8 @@ export const mockIdeas: Idea[] = [
     relatedProjectId: "proj-moonpie",
     relatedIdeaId: null,
     subtasks: [],
-    status: "converted",
-    createdAt: "2026-03-10T14:00:00.000Z",
+    status: "done",
+    createdAt: "2026-07-06T09:47:18.000Z",
   },
   {
     id: "idea-002",
@@ -367,7 +367,7 @@ export const mockIdeas: Idea[] = [
     relatedIdeaId: null,
     subtasks: [],
     status: "parked",
-    createdAt: "2026-06-25T11:00:00.000Z",
+    createdAt: "2026-07-10T11:00:00.000Z",
   },
 ].map((idea) => ({
   suggestedNextStep: "",
@@ -400,7 +400,9 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     decision: "P1 先做塔罗抽牌和结果页，小六壬/梅花易数停车",
     module: '',
     releaseTag: null,
-    createdAt: "2026-03-28T10:00:00.000Z",
+    workStartedAt: null,
+    workFinishedAt: null,
+    createdAt: "2026-07-06T12:00:00.000Z",
   },
   {
     id: "evo-002",
@@ -413,7 +415,9 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     decision: "下一步：优化 UI 层级和文案结构",
     module: '',
     releaseTag: null,
-    createdAt: "2026-04-02T15:00:00.000Z",
+    workStartedAt: null,
+    workFinishedAt: null,
+    createdAt: "2026-07-08T04:00:00.000Z",
   },
   {
     id: "evo-003",
@@ -422,15 +426,18 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     logType: "stage_review",
     before: "仅有静态原型",
     after: "摄像头手势识别 + 抽牌动画 + 基础结果展示",
-    reason: "MVP 第一步验证技术可行性",
+    reason: "MVP 第一步验证技术可行性（git Initial commit 2026-07-06）",
     decision: "进入结果页优化阶段",
     module: '',
-    releaseTag: null,
-    createdAt: "2026-06-15T09:00:00.000Z",
+    releaseTag: "v0.1.0",
+    workStartedAt: null,
+    workFinishedAt: null,
+    createdAt: "2026-07-06T09:47:18.000Z",
   },
   {
     id: "evo-004",
     title: "Star PM 接入 Supabase",
+
     projectId: "proj-star-pm",
     logType: "tech_decision",
     before: "本地 JSON 文件存储",
@@ -439,6 +446,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     decision: "本地开发也走 Supabase，保留 seed 降级",
     module: '',
     releaseTag: null,
+    workStartedAt: null,
+    workFinishedAt: null,
     createdAt: "2026-07-07T14:00:00.000Z",
   },
   {
@@ -452,6 +461,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     decision: "Supabase 持久化 + tasks 页三块区域已上线",
     module: '',
     releaseTag: null,
+    workStartedAt: null,
+    workFinishedAt: null,
     createdAt: T,
   },
   {
@@ -465,6 +476,8 @@ export const mockEvolutionLogs: EvolutionLog[] = [
     decision: "等 P0 完成后再评估",
     module: '',
     releaseTag: null,
+    workStartedAt: null,
+    workFinishedAt: null,
     createdAt: "2026-07-05T10:00:00.000Z",
   },
 ];

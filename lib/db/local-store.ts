@@ -74,6 +74,11 @@ import {
   deriveParentStatusTags,
   isLeafRequirement,
 } from "@/lib/requirement-tree";
+import {
+  applyLifecycleStatus,
+  canonicalizeStatusTags,
+  requirementLifecycleStatus,
+} from "@/lib/requirement-status";
 
 export type { DatabaseSnapshot } from "@/lib/db/types";
 
@@ -115,10 +120,11 @@ function isValidDb(db: DatabaseSnapshot | null | undefined): db is DatabaseSnaps
 }
 
 function normalizeRequirement(req: Requirement): Requirement {
-  const tags =
+  const rawTags =
     Array.isArray(req.status_tags) && req.status_tags.length > 0
       ? req.status_tags.map(String)
       : statusTagsFromTaskStatus(req.status ?? "pending");
+  const tags = canonicalizeStatusTags(rawTags);
   const typeRaw = (req as Requirement & { req_type?: string }).type
     ?? (req as Requirement & { req_type?: string }).req_type
     ?? "task";
@@ -665,7 +671,9 @@ export async function updateRequirement(
     }
   }
   if (status_tags && force_closed == null) {
-    req.status_tags = status_tags.map((t) => t.trim()).filter(Boolean);
+    req.status_tags = canonicalizeStatusTags(
+      status_tags.map((t) => t.trim()).filter(Boolean)
+    );
     req.status = deriveTaskStatusFromTags(req.status_tags);
     const done = requirementIsDone(req);
     if (done) {
@@ -779,6 +787,7 @@ export async function addTestRecord(input: {
       }
     }
     req.status = "in_progress";
+    req.status_tags = applyLifecycleStatus(req.status_tags ?? [], "AI开发中");
     req.updated_at = nowIso();
 
     db.notifications.unshift({
@@ -794,6 +803,7 @@ export async function addTestRecord(input: {
     });
   } else {
     req.status = "acceptance";
+    req.status_tags = applyLifecycleStatus(req.status_tags ?? [], "待验收");
     req.updated_at = nowIso();
     db.notifications.unshift({
       id: uid("notif-"),
@@ -1788,7 +1798,7 @@ export async function syncStudioIdeasIntoPool(
         ? ["完成"]
         : idea.status === "parked"
           ? ["搁置"]
-          : ["待开始"];
+          : ["想法"];
     try {
       const windowNote =
         options?.actorNote ||
@@ -1853,7 +1863,7 @@ export async function syncStudioIdeasIntoPool(
         title: evo.title,
         detail_work: body || null,
         inspiration_source: formatAgentInspiration({ windowNote }),
-        status_tags: ["已记录"],
+        status_tags: ["想法"],
         studio_idea_id: key,
         submitted_at: evo.createdAt?.slice(0, 10) ?? undefined,
         type: "feature",
@@ -1995,6 +2005,11 @@ export async function promotePoolRequirement(
 
   req.in_pool = false;
   req.iteration_id = targetIterationId;
+  // 想法入迭代 → 已规划
+  if (requirementLifecycleStatus(req) === "想法") {
+    req.status_tags = applyLifecycleStatus(req.status_tags ?? [], "已规划");
+    req.status = deriveTaskStatusFromTags(req.status_tags);
+  }
   req.updated_at = nowIso();
 
   const acceptance: AcceptanceItem = {

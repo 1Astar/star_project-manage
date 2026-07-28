@@ -11,7 +11,6 @@ import {
 } from "@/components/requirement-status-kanban";
 import { GlobalRequirementTable } from "@/components/global-requirement-table";
 import type { RequirementBoardItem } from "@/lib/db/local-store";
-import { REQUIREMENT_DONE_TAG } from "@/lib/types";
 import {
   DEFAULT_REQ_BOARD_FILTERS,
   filtersEqual,
@@ -133,7 +132,7 @@ export function GlobalRequirementBoard({ initialItems, projects }: Props) {
       .filter((item) => {
         if (filters.projectId && item.project_id !== filters.projectId) return false;
         const col = requirementColumn(item.requirement);
-        if (filters.hideDone && (col === REQUIREMENT_DONE_TAG || col === "完成")) {
+        if (filters.hideDone && col === "完成") {
           return false;
         }
         if (filters.statuses.length > 0 && !filters.statuses.includes(col)) {

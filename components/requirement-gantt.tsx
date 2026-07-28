@@ -119,7 +119,7 @@ function toRow(
   if (!start) return null;
   if (!end || end < start) end = start;
   const tags = req.status_tags ?? [];
-  const statusLabel = tags[0] || (requirementIsDone(req) ? REQUIREMENT_DONE_TAG : "待开始");
+  const statusLabel = tags[0] || (requirementIsDone(req) ? REQUIREMENT_DONE_TAG : "想法");
   const hours = displayEstimateHours(req, all);
   return {
     id: req.id,
@@ -307,7 +307,7 @@ export function RequirementGantt({
             title: req.title,
             start: fallback,
             end: addDays(fallback, 2),
-            statusLabel: (req.status_tags ?? [])[0] || "待开始",
+            statusLabel: (req.status_tags ?? [])[0] || "想法",
             done: requirementIsDone(req),
             depth,
             isParent: !isLeafRequirement(req, filteredRequirements),
