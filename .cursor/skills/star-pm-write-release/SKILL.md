@@ -181,14 +181,15 @@ Release:
 - [ ] 0. 发版前测试（见下）——未过不打 tag
 - [ ] 1. 功能已验证；migration 文件已进仓（若有）
 - [ ] 2. 写 CHANGELOG.md 顶条（中文，按能力点列）
-- [ ] 3. 同步 package.json version（与 tag 去掉 v 后一致，如 1.10.31）
+- [ ] 3. 同步 package.json version（与 tag 去掉 v 后一致）
 - [ ] 4. git status / diff / log 确认范围
-- [ ] 5. commit（用户要求时）：信息写清 why；含 CHANGELOG + version
-- [ ] 6. git tag vX.Y.Z（打在该 commit 上）
-- [ ] 7. git push + git push origin vX.Y.Z（用户要求时）
-- [ ] 8. MCP publish_release（projectId + tag=vX.Y.Z）
-- [ ] 9. 口头提醒：Supabase 执行新 migration（若有）
+- [ ] 5. commit（用户要求时）
+- [ ] 6. **先** git tag vX.Y.Z，再 git push + **git push origin vX.Y.Z**
+- [ ] 7. **然后** MCP publish_release（勿与 push tag 并行，以免远程抢建错位 tag）
+- [ ] 8. 口头提醒：Supabase 执行新 migration（若有）
 ```
+
+**顺序铁律**：本地 tag → push commit → push tag → 再 `publish_release`。不要并行。
 
 #### 发版前测试（最低门槛）
 
