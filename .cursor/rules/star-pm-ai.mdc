@@ -15,19 +15,15 @@ alwaysApply: true
 
 字段总原则：**有则写之，无则跳过**（不编造）。
 
-统一规则正文（勿在本文件复制长文）：
+统一规则正文：`docs/ai/CANONICAL_RULES.md`
 
-`docs/ai/CANONICAL_RULES.md`
+## 协作与验收
 
-## 要点摘要
-
-1. 改代码前先 `compare_sources`（Git / Vercel / Studio），避免用旧版本覆盖新版本  
-2. 灵感/演进写入：有板块就写（`relatedModule` / `module`）；无则跳过或标待补齐，不要静默丢  
-3. 导入缺板块 →「待补齐」仍可导入  
-4. 发版：CHANGELOG → version → commit → `git tag vX.Y.Z` → push → `publish_release`  
+1. **要求不够明确 → 先细问再做**；问清后再实现  
+2. **不写 spec / 长篇计划文件**；计划与需求**直接写进 PM**  
+3. **测试要对齐初始要求**（+ PM 条目），再跑 tsc/单测/冒烟；未过不发版  
+4. 改代码前 `compare_sources`；发版：CHANGELOG → version → commit → tag → `publish_release`  
 5. 「同步版本」≠「同步 Git 更新」≠ `publish_release`  
-6. 用户确认要做后：**写进 PM → 直接开做**；默认不写长篇设计文档（除非明确要求）
 
-MCP：先调 `get_ai_rules` 再大批量写入。
-
-每台电脑：拉最新仓库即可带上本 skill（在 `.cursor/skills/`）；个人目录 `~/.cursor/skills/` 为可选镜像，以仓库为准。
+MCP：先调 `get_ai_rules` 再大批量写入。  
+跨机：拉最新仓库即可带上 `.cursor/skills/star-pm-write-release`。

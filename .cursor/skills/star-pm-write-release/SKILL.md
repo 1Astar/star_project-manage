@@ -42,9 +42,12 @@ description: >-
 
 ### 1.1 动手前
 
-1. 改代码或大范围写文件前：MCP **`compare_sources`**（Git / Vercel / Studio）。  
-2. Vercel 领先 Git → 先同步回 Git，禁止用旧本地覆盖。  
-3. 用户确认要做 → **先写进 PM（带板块）→ 直接开做**；默认不写长篇 `docs/superpowers/specs`（除非用户要设计文档）。
+1. **需求是否清楚？** 对照用户**初始要求**；若觉得不够明确 → **先细问再做**（一次一问或少量关键项），问清后再动手。  
+2. **不写** `docs/superpowers/specs` / 长篇设计文档 / 单独 implementation plan 文件（除非用户明确要）。  
+3. **计划与项目需求直接写进 PM**（灵感 / 任务 / 演进 / 需求池，带板块；**有则写之，无则跳过**）。  
+4. 改代码或大范围写文件前：MCP **`compare_sources`**（Git / Vercel / Studio）。  
+5. Vercel 领先 Git → 先同步回 Git，禁止用旧本地覆盖。  
+6. 用户确认要做 → **写进 PM → 直接开做**。
 
 ### 1.2 通用字段标准
 
@@ -153,7 +156,8 @@ Write:
 
 ## 2. Git 发版规范
 
-仅在用户明确说 **发版 / release / 打 tag / 发布** 时执行。  
+仅在用户明确说 **发版 / release / 打 tag / 发布**，或说 **差不多了 / 做完了可以发** 时执行。  
+**默认节奏：功能做完并验证过 → 即可发版**（不必攒多刀再发；小改动升「修改次数」即可）。  
 未要求 **commit** 不要 commit；未要求 **push** 不要 push。
 
 ### 2.1 版本号
@@ -174,6 +178,7 @@ Write:
 
 ```
 Release:
+- [ ] 0. 发版前测试（见下）——未过不打 tag
 - [ ] 1. 功能已验证；migration 文件已进仓（若有）
 - [ ] 2. 写 CHANGELOG.md 顶条（中文，按能力点列）
 - [ ] 3. 同步 package.json version（与 tag 去掉 v 后一致，如 1.10.31）
@@ -184,6 +189,18 @@ Release:
 - [ ] 8. MCP publish_release（projectId + tag=vX.Y.Z）
 - [ ] 9. 口头提醒：Supabase 执行新 migration（若有）
 ```
+
+#### 发版前测试（最低门槛）
+
+测试要对齐用户的**初始要求**（及已写入 PM 的条目），不是只看「类型能过」。
+
+1. **对照验收**：把初始要求 / PM 里的目标点成清单，逐条确认做到了；缺的标出来，勿假装完成  
+2. **相关单测**（若本版动到对应模块）：如 `npx tsx lib/requirement-status.test.ts`  
+3. **`npx tsc --noEmit`**（类型检查必须过）  
+4. 有 UI 关键改动时：本地或预览点主路径冒烟  
+5. 勿把「我觉得没问题」当测试；失败先修再发版  
+
+纯文案 / 仅 skill·规则改动：确认路径正确即可；顺带改了 ts 仍建议 `tsc`。
 
 ### 2.3 CHANGELOG 写法
 
