@@ -1,4 +1,5 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { runWithMcpAdminScope } from "@/lib/auth/request-scope";
 import { verifyMcpToken } from "@/lib/mcp/auth";
 
 type McpHandler = (req: Request) => Response | Promise<Response>;
@@ -7,6 +8,8 @@ type McpHandler = (req: Request) => Response | Promise<Response>;
  * Bearer / custom-header auth without RFC 9728 OAuth discovery.
  * Cursor treats WWW-Authenticate resource_metadata as "must do OAuth"
  * and then ignores mcp.json headers — so we must not advertise OAuth.
+ *
+ * 通过鉴权后进入 MCP 管理员作用域：可读可写真实私域（不进演示沙盘）。
  */
 export function withBearerMcpAuth(handler: McpHandler): McpHandler {
   return async (req: Request) => {
@@ -36,6 +39,6 @@ export function withBearerMcpAuth(handler: McpHandler): McpHandler {
     }
 
     (req as Request & { auth?: AuthInfo }).auth = authInfo;
-    return handler(req);
+    return await runWithMcpAdminScope(() => handler(req));
   };
 }

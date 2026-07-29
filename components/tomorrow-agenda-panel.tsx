@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   todayDay: string;
   yesterdayDay: string;
+  tomorrowDay?: string;
   items: TomorrowAgendaItem[];
   projects: Array<{ id: string; title: string }>;
   initialProjectId?: string | null;
@@ -23,6 +24,7 @@ function priorityTone(p: string) {
 export function TomorrowAgendaPanel({
   todayDay,
   yesterdayDay,
+  tomorrowDay,
   items,
   projects,
   initialProjectId,
@@ -34,17 +36,15 @@ export function TomorrowAgendaPanel({
     return items.filter((i) => i.projectId === projectId);
   }, [items, projectId]);
 
-  const changedCount = filtered.filter((i) => i.reason !== "open_task").length;
-
   return (
     <section className="rounded-xl border border-indigo-100 bg-white">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">明日待办清单</h2>
+          <h2 className="text-sm font-semibold text-slate-900">明日待办</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            自动生成（不落库）· 基准日 {todayDay} · 优先纳入 {yesterdayDay}{" "}
-            有变更且未完 · 共 {filtered.length} 条
-            {changedCount > 0 ? `（其中昨日相关 ${changedCount}）` : ""}
+            只收明天真要推的（非完整 backlog）· 基准 {todayDay}
+            {tomorrowDay ? ` · 目标日 ${tomorrowDay}` : ""} · 含 {yesterdayDay}{" "}
+            变更未完 / 会话未勾完 / 到期=明天 · 共 {filtered.length} 条
           </p>
         </div>
         <label className="flex items-center gap-1.5 text-xs text-slate-600">
@@ -66,7 +66,7 @@ export function TomorrowAgendaPanel({
 
       {filtered.length === 0 ? (
         <p className="px-4 py-8 text-center text-sm text-slate-400">
-          当前筛选下没有待办。昨天没改需求、也没有未完成 Studio 任务时会比较空。
+          明天暂无专属事项。昨日无未完变更、也没有到期日为明天的任务时会为空——完整待办请看下方区块。
         </p>
       ) : (
         <ul className="divide-y divide-slate-100">
@@ -85,10 +85,9 @@ export function TomorrowAgendaPanel({
                     <span
                       className={cn(
                         "rounded px-1.5 py-0.5 text-[10px]",
-                        item.reason === "yesterday_changed" ||
-                          item.reason === "change_session_pending"
-                          ? "bg-amber-50 text-amber-800"
-                          : "bg-slate-50 text-slate-500"
+                        item.reason === "due_tomorrow"
+                          ? "bg-sky-50 text-sky-800"
+                          : "bg-amber-50 text-amber-800"
                       )}
                     >
                       {item.reasonLabel}

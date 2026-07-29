@@ -705,3 +705,146 @@ export async function deleteProjectModuleAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/overview`);
   revalidatePath(`/projects/${input.projectSlug}/tasks`);
 }
+
+/** PM 工作台：需求通过 / 打回（打回默认同建 Bug） */
+export async function productReviewRequirementAction(input: {
+  requirementId: string;
+  passed: boolean;
+  note?: string;
+  /** 打回时是否建 Bug，默认 true */
+  createBug?: boolean;
+  bugTitle?: string;
+  bugSeverity?: import("@/lib/types").BugSeverity;
+  bugType?: import("@/lib/types").BugType;
+}) {
+  await assertNotViewerWrite();
+  const { productReviewRequirement, createBug, readDb } = await import(
+    "@/lib/db/local-store"
+  );
+  const { getAdminSession } = await import("@/lib/auth/session");
+  const session = await getAdminSession();
+  const actor = {
+    name: session?.email?.split("@")[0] || "产品",
+    role: session?.role === "admin" ? "admin" : "product",
+  };
+  if (!input.passed && !input.note?.trim()) {
+    throw new Error("打回请填写原因 / 补充（会记为 Bug）");
+  }
+  const result = await productReviewRequirement(
+    input.requirementId,
+    { passed: input.passed, note: input.note },
+    actor
+  );
+
+  let bugId: string | null = null;
+  if (!input.passed && input.createBug !== false) {
+    const db = await readDb();
+    const req = db.requirements.find((r) => r.id === input.requirementId);
+    if (req) {
+      const bug = await createBug({
+        project_id: req.project_id,
+        requirement_id: req.id,
+        title: (input.bugTitle?.trim() || `验收打回：${req.title}`).slice(0, 120),
+        description: input.note!.trim(),
+        severity: input.bugSeverity ?? 3,
+        bug_type: input.bugType ?? "other",
+      });
+      bugId = bug.id;
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/todos");
+  revalidatePath("/boards/requirements");
+  return { ok: true as const, requirementId: result.req.id, bugId };
+}
+
+/** PM 工作台：变更会话验收（打回默认同建 Bug） */
+export async function productReviewChangeSessionAction(input: {
+  sessionId: string;
+  passed: boolean;
+  note?: string;
+  pmProjectId?: string;
+  createBug?: boolean;
+  bugTitle?: string;
+  bugSeverity?: import("@/lib/types").BugSeverity;
+  bugType?: import("@/lib/types").BugType;
+}) {
+  await assertNotViewerWrite();
+  const { updateChangeSession } = await import("@/lib/studio/mutations");
+  const { createBug } = await import("@/lib/db/local-store");
+  if (!input.passed && !input.note?.trim()) {
+    throw new Error("打回请填写原因 / 补充（会记为 Bug）");
+  }
+  const session = await updateChangeSession(input.sessionId, {
+    humanAcceptance: input.passed ? "passed" : "rejected",
+    result: input.note?.trim()
+      ? `${input.passed ? "通过" : "打回"}：${input.note.trim()}`
+      : input.passed
+        ? "产品验收通过"
+        : "产品打回",
+  });
+
+  let bugId: string | null = null;
+  if (!input.passed && input.createBug !== false && input.pmProjectId) {
+    const bug = await createBug({
+      project_id: input.pmProjectId,
+      title: (
+        input.bugTitle?.trim() || `验收打回：${session.goal || "变更会话"}`
+      ).slice(0, 120),
+      description: input.note!.trim(),
+      severity: input.bugSeverity ?? 3,
+      bug_type: input.bugType ?? "other",
+    });
+    bugId = bug.id;
+  }
+
+  revalidatePath("/");
+  revalidatePath("/todos");
+  return { ok: true as const, bugId };
+}
+
+/** PM 工作台：验收 Side Peek 数据 */
+export async function fetchWorkbenchAcceptancePeekAction(input: {
+  changeSessionId?: string;
+  requirementId?: string;
+}) {
+  if (input.changeSessionId) {
+    const { getChangeSessionById, getProjectById } = await import("@/lib/studio/data");
+    const session = await getChangeSessionById(input.changeSessionId);
+    if (!session) throw new Error("变更会话不存在");
+    const project = await getProjectById(session.projectId);
+    return {
+      kind: "change_session" as const,
+      session,
+      projectTitle: project?.title ?? session.projectId,
+      href: `/projects/${session.projectId}/evolution`,
+    };
+  }
+  if (input.requirementId) {
+    const { readDb } = await import("@/lib/db/local-store");
+    const db = await readDb();
+    const req = db.requirements.find((r) => r.id === input.requirementId);
+    if (!req) throw new Error("需求不存在");
+    const project = db.projects.find((p) => p.id === req.project_id);
+    const slug = project?.slug || req.project_id;
+    return {
+      kind: "requirement" as const,
+      requirement: {
+        id: req.id,
+        title: req.title,
+        status: req.status,
+        status_tags: req.status_tags,
+        priority: req.priority,
+        detail_work: req.detail_work,
+        acceptance_criteria: req.acceptance_criteria,
+        next_step: req.next_step,
+        completed_at: req.completed_at,
+        updated_at: req.updated_at,
+      },
+      projectTitle: project?.name ?? req.project_id,
+      href: `/projects/${slug}/requirements/${req.id}`,
+    };
+  }
+  throw new Error("缺少 changeSessionId 或 requirementId");
+}

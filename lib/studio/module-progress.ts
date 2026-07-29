@@ -45,6 +45,26 @@ function earliestIso(dates: Array<string | null | undefined>): string | null {
   return ok[0] ?? null;
 }
 
+function isImportProvenanceNote(text: string): boolean {
+  return /^自\s*(Release|CHANGELOG|GitHub)/i.test(text.trim());
+}
+
+/** 板块进程副文案：优先真正补充，跳过「自 Release 导入」类备注 */
+export function evolutionProgressNote(log: EvolutionLog): string | null {
+  const title = log.title.trim();
+  const after = log.after?.trim() || "";
+  const before = log.before?.trim() || "";
+  const decision = log.decision?.trim() || "";
+  const reason = log.reason?.trim() || "";
+
+  if (after && after !== title) return after;
+  if (decision) return decision;
+  if (before) return `此前：${before}`;
+  if (reason && !isImportProvenanceNote(reason)) return reason;
+  if (log.releaseTag?.trim()) return `版本 ${log.releaseTag.trim()}`;
+  return null;
+}
+
 function toNodeFromEvolution(log: EvolutionLog): ModuleProgressNode {
   const startedAt = log.workStartedAt ?? null;
   const finishedAt = log.workFinishedAt ?? null;
@@ -53,7 +73,7 @@ function toNodeFromEvolution(log: EvolutionLog): ModuleProgressNode {
     kind: "evolution",
     title: log.title,
     at: log.createdAt,
-    note: log.reason || log.after || null,
+    note: evolutionProgressNote(log),
     startedAt,
     finishedAt,
     durationMs: workDurationMs(startedAt, finishedAt),

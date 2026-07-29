@@ -29,6 +29,7 @@ import {
   summarizeProject,
 } from "@/lib/mcp/summarize";
 import { StudioDuplicateError } from "@/lib/studio/entity-dedupe";
+import type { Requirement } from "@/lib/types";
 
 const projectStatusSchema = z.enum(["mainline", "active", "demo", "parking", "archived"]);
 const projectPrioritySchema = z.enum(["P0", "P1", "P2", "P3"]);
@@ -294,11 +295,17 @@ export function registerWorkspaceTools(server: McpServer) {
           .describe(
             "功能板块名单（完整覆盖）。例：[\"六爻·笔记·卦象解析\",\"八字·排盘·四柱\"]；传 [] 清空自定义（回退内置目录）"
           ),
+        markShippedComplete: z
+          .boolean()
+          .optional()
+          .describe(
+            "true：把本项目已上线但未标完成的需求/任务补标完成（匹配已完成 Studio 任务、标题含 ✅/[done]、机读 status=done；父需求仅在子项全完成时标）"
+          ),
       },
     },
     async (input) => {
       try {
-        const { projectId, featureModules, ...patch } = input;
+        const { projectId, featureModules, markShippedComplete, ...patch } = input;
         const { project, moduleTreeSync } = await updateStudioProjectWithModuleSync(
           projectId,
           {
@@ -314,6 +321,19 @@ export function registerWorkspaceTools(server: McpServer) {
               : {}),
           }
         );
+
+        let shipped: {
+          markedRequirements: number;
+          markedTasks: number;
+          samples: string[];
+        } | null = null;
+        if (markShippedComplete) {
+          const { markShippedCompleteForProject } = await import(
+            "@/lib/mcp/mark-shipped-complete"
+          );
+          shipped = await markShippedCompleteForProject(projectId);
+        }
+
         await logAiAction({
           action: "update_project",
           payload: {
@@ -323,6 +343,7 @@ export function registerWorkspaceTools(server: McpServer) {
               ...(featureModules !== undefined
                 ? { featureModulesCount: featureModules.length }
                 : {}),
+              ...(markShippedComplete ? { markShippedComplete: true, shipped } : {}),
             },
           },
         });
@@ -330,6 +351,7 @@ export function registerWorkspaceTools(server: McpServer) {
           ok: true,
           project: slimProject(project),
           moduleTreeSync,
+          ...(shipped ? { shippedComplete: shipped } : {}),
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "update_project 失败");
@@ -472,6 +494,199 @@ export function registerWorkspaceTools(server: McpServer) {
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "add_evolution 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_evolution",
+    {
+      title: "Update Evolution",
+      description: "更新演进标题/板块/版本号等（用于修编码损坏标题、补板块）。",
+      inputSchema: {
+        evolutionId: z.string().min(1),
+        title: z.string().optional(),
+        module: z.string().optional(),
+        releaseTag: z.string().nullable().optional(),
+        after: z.string().optional(),
+        reason: z.string().optional(),
+        decision: z.string().optional(),
+        workStartedAt: z.string().nullable().optional().describe("工时起点 ISO；null 清空"),
+        workFinishedAt: z.string().nullable().optional().describe("工时终点 ISO；null 清空"),
+      },
+    },
+    async (input) => {
+      try {
+        const { updateStudioEvolution } = await import("@/lib/studio/mutations");
+        const { evolutionId, ...patch } = input;
+        const log = await updateStudioEvolution(evolutionId, patch);
+        await logAiAction({
+          action: "update_evolution",
+          payload: { evolutionId: log.id, title: log.title },
+        });
+        return mcpJson({
+          ok: true,
+          evolution: {
+            id: log.id,
+            title: log.title,
+            module: log.module,
+            releaseTag: log.releaseTag,
+            after: log.after,
+            workStartedAt: log.workStartedAt,
+            workFinishedAt: log.workFinishedAt,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_evolution 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_evolutions",
+    {
+      title: "List Evolutions",
+      description: "列出项目演进；可按标题含问号等过滤，便于修复编码损坏条目。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        titleContains: z.string().optional().describe("标题包含，如 ?"),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { getProjectEvolution } = await import("@/lib/studio/data");
+        let logs = await getProjectEvolution(input.projectId);
+        if (input.titleContains) {
+          logs = logs.filter((l) => l.title.includes(input.titleContains!));
+        }
+        const limit = input.limit ?? 50;
+        const slim = logs.slice(0, limit).map((l) => ({
+          id: l.id,
+          title: l.title,
+          module: l.module,
+          releaseTag: l.releaseTag,
+          createdAt: l.createdAt,
+          after: l.after?.slice(0, 120) ?? "",
+        }));
+        return mcpJson({ ok: true, count: logs.length, returned: slim.length, evolutions: slim });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_evolutions 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "repair_corrupt_evolution_titles",
+    {
+      title: "Repair Corrupt Evolution Titles",
+      description:
+        "把标题含「?」的演进按仓库 CHANGELOG 匹配并写回中文标题（编码损坏修复）。默认 dryRun=true。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        dryRun: z.boolean().optional().describe("默认 true：只预览不写库"),
+      },
+    },
+    async (input) => {
+      try {
+        const { getProjectEvolution } = await import("@/lib/studio/data");
+        const { updateStudioEvolution } = await import("@/lib/studio/mutations");
+        const {
+          buildChangelogEvolutionItems,
+          readRepoChangelog,
+        } = await import("@/lib/studio/import-changelog");
+
+        const logs = (await getProjectEvolution(input.projectId)).filter((l) =>
+          l.title.includes("?")
+        );
+        const md = readRepoChangelog();
+        const candidates = buildChangelogEvolutionItems(md, input.projectId);
+
+        function score(corrupt: string, cand: string): number {
+          if (corrupt.includes("studio_app_settings") && cand.includes("studio_app_settings")) {
+            return 900;
+          }
+          if (corrupt.length === cand.length) {
+            let ok = 0;
+            let fixed = 0;
+            for (let i = 0; i < corrupt.length; i++) {
+              if (corrupt[i] === "?") continue;
+              fixed += 1;
+              if (corrupt[i] === cand[i]) ok += 1;
+            }
+            if (fixed > 0 && ok === fixed) return 800 + ok;
+          }
+          // ASCII fingerprint
+          const ascii = corrupt.replace(/[^A-Za-z0-9_.:()+\-\/]/g, "");
+          if (ascii.length >= 6 && cand.replace(/\s/g, "").includes(ascii.slice(0, 12))) {
+            return 600 + ascii.length;
+          }
+          return -1;
+        }
+
+        const plan: Array<{
+          id: string;
+          oldTitle: string;
+          newTitle: string | null;
+          releaseTag: string | null;
+          score: number;
+        }> = [];
+
+        for (const log of logs) {
+          let best: (typeof candidates)[number] | null = null;
+          let bestScore = -1;
+          for (const c of candidates) {
+            const s = score(log.title, c.title);
+            if (s > bestScore) {
+              bestScore = s;
+              best = c;
+            }
+          }
+          plan.push({
+            id: log.id,
+            oldTitle: log.title,
+            newTitle: bestScore >= 500 ? best!.title : null,
+            releaseTag: bestScore >= 500 ? best!.releaseTag : null,
+            score: bestScore,
+          });
+        }
+
+        const dryRun = input.dryRun !== false;
+        const applied: string[] = [];
+        if (!dryRun) {
+          for (const p of plan) {
+            if (!p.newTitle) continue;
+            await updateStudioEvolution(p.id, {
+              title: p.newTitle,
+              releaseTag: p.releaseTag,
+            });
+            applied.push(p.id);
+          }
+        }
+
+        await logAiAction({
+          action: "repair_corrupt_evolution_titles",
+          payload: {
+            projectId: input.projectId,
+            dryRun,
+            found: plan.length,
+            matched: plan.filter((p) => p.newTitle).length,
+            applied: applied.length,
+          },
+        });
+
+        return mcpJson({
+          ok: true,
+          dryRun,
+          found: plan.length,
+          matched: plan.filter((p) => p.newTitle).length,
+          applied: applied.length,
+          plan,
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "repair_corrupt_evolution_titles 失败"
+        );
       }
     }
   );
@@ -923,6 +1138,577 @@ export function registerWorkspaceTools(server: McpServer) {
         return mcpJson({ ok: true, session });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "get_change_session 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_requirements",
+    {
+      title: "List Requirements",
+      description:
+        "列出项目需求池+已上板需求（含状态/优先级/完成时间）。projectId 可为 Studio id 或 PM slug。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        status: z
+          .string()
+          .optional()
+          .describe("可选：按生命周期过滤，如 完成 / 想法 / AI开发中 / 开发中"),
+        limit: z.number().int().min(1).max(500).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { requirementIsDone } = await import("@/lib/types");
+        const { requirementLifecycleStatus } = await import("@/lib/requirement-status");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const slug = ctx.pmSlug ?? input.projectId;
+        const { getPoolBundle, getProjectBundle, getProjects } = await import(
+          "@/lib/db/local-store"
+        );
+
+        const studioId =
+          ctx.studio?.id ??
+          (input.projectId.startsWith("proj-") ? input.projectId : null);
+        const pmAll = await getProjects();
+        const keys = [
+          slug,
+          studioId ? `studio-${studioId}` : null,
+          input.projectId,
+          ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title)?.slug : null,
+          ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title)?.id : null,
+        ].filter(Boolean) as string[];
+
+        const byId = new Map<string, Requirement>();
+        let usedKey = slug;
+        for (const key of keys) {
+          const [pool, board] = await Promise.all([
+            getPoolBundle(key).catch(() => null),
+            getProjectBundle(key).catch(() => null),
+          ]);
+          const list = [
+            ...(pool?.poolRequirements ?? []),
+            ...(board?.requirements ?? []),
+          ];
+          if (list.length > 0) {
+            usedKey = key;
+            for (const r of list) byId.set(r.id, r);
+          }
+        }
+        let reqs = [...byId.values()];
+        const doneCountAll = reqs.filter((r) => requirementIsDone(r)).length;
+        if (input.status?.trim()) {
+          const want = input.status.trim();
+          reqs = reqs.filter((r) => requirementLifecycleStatus(r) === want);
+        }
+        const limit = input.limit ?? 200;
+        const slim = reqs.slice(0, limit).map((r) => ({
+          id: r.id,
+          title: r.title,
+          priority: r.priority,
+          status: r.status,
+          statusTags: r.status_tags,
+          lifecycle: requirementLifecycleStatus(r),
+          done: requirementIsDone(r),
+          completedAt: r.completed_at,
+          inPool: r.in_pool,
+          parentId: r.parent_id,
+          type: r.type,
+          iterationId: r.iteration_id,
+          productEstimateHours: r.product_estimate_hours,
+          directHours: r.direct_hours,
+          submittedAt: r.submitted_at,
+        }));
+        await logAiAction({
+          action: "list_requirements",
+          payload: {
+            projectId: input.projectId,
+            count: reqs.length,
+            doneCount: doneCountAll,
+            usedKey,
+          },
+        });
+        return mcpJson({
+          ok: true,
+          projectId: input.projectId,
+          pmSlug: usedKey,
+          count: reqs.length,
+          doneCount: doneCountAll,
+          returned: slim.length,
+          requirements: slim,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_requirements 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_requirement",
+    {
+      title: "Update Requirement",
+      description:
+        "更新需求状态/优先级等。标完成时传 statusTags:[\"完成\"] 或 lifecycle:\"完成\"；会写 completed_at。",
+      inputSchema: {
+        requirementId: z.string().min(1),
+        statusTags: z.array(z.string()).optional(),
+        lifecycle: z
+          .string()
+          .optional()
+          .describe("规范生命周期：想法/已规划/AI开发中/开发中/待验收/完成/放弃"),
+        priority: z.string().nullable().optional(),
+        title: z.string().optional(),
+        forceClosed: z.boolean().optional().describe("父需求强制关闭（放弃）"),
+        completedAt: z.string().nullable().optional().describe("ISO；标完成时可指定完成时间"),
+        parentId: z.string().nullable().optional().describe("挂到父需求 id；null 取消挂父"),
+        type: z.enum(["epic", "feature", "task"]).optional(),
+        moduleL1Id: z.string().nullable().optional().describe("一级模块 id"),
+        iterationId: z
+          .string()
+          .optional()
+          .describe("挂到规划迭代 id（可仍留需求池）"),
+        productEstimateHours: z
+          .number()
+          .nullable()
+          .optional()
+          .describe("叶子预计工时（需求池「工时」列）"),
+        directHours: z
+          .number()
+          .nullable()
+          .optional()
+          .describe("父节点附加直接工时"),
+      },
+    },
+    async (input) => {
+      try {
+        const { updateRequirement } = await import("@/lib/db/local-store");
+        const { applyLifecycleStatus, requirementLifecycleStatus } = await import(
+          "@/lib/requirement-status"
+        );
+        const { AGENT_ACTOR_NAME } = await import("@/lib/cursor-actor");
+        const { requirementIsDone } = await import("@/lib/types");
+
+        let status_tags = input.statusTags;
+        if (input.lifecycle?.trim()) {
+          status_tags = applyLifecycleStatus(status_tags ?? [], input.lifecycle.trim());
+        }
+        const updates: {
+          status_tags?: string[];
+          priority?: string | null;
+          title?: string;
+          force_closed?: boolean;
+          completed_at?: string | null;
+          parent_id?: string | null;
+          type?: import("@/lib/types").RequirementType;
+          module_l1_id?: string | null;
+          iteration_id?: string;
+          product_estimate_hours?: number | null;
+          direct_hours?: number | null;
+        } = {};
+        if (status_tags) updates.status_tags = status_tags;
+        if (input.priority !== undefined) updates.priority = input.priority;
+        if (input.title !== undefined) updates.title = input.title;
+        if (input.forceClosed !== undefined) updates.force_closed = input.forceClosed;
+        if (input.completedAt !== undefined) updates.completed_at = input.completedAt;
+        if (input.parentId !== undefined) updates.parent_id = input.parentId;
+        if (input.type !== undefined) updates.type = input.type;
+        if (input.moduleL1Id !== undefined) updates.module_l1_id = input.moduleL1Id;
+        if (input.iterationId !== undefined) updates.iteration_id = input.iterationId;
+        if (input.productEstimateHours !== undefined) {
+          updates.product_estimate_hours = input.productEstimateHours;
+        }
+        if (input.directHours !== undefined) updates.direct_hours = input.directHours;
+
+        const req = await updateRequirement(input.requirementId, updates, {
+          name: AGENT_ACTOR_NAME,
+          role: "ai",
+        });
+
+        await logAiAction({
+          action: "update_requirement",
+          payload: { requirementId: req.id, lifecycle: requirementLifecycleStatus(req) },
+        });
+        return mcpJson({
+          ok: true,
+          requirement: {
+            id: req.id,
+            title: req.title,
+            priority: req.priority,
+            statusTags: req.status_tags,
+            lifecycle: requirementLifecycleStatus(req),
+            done: requirementIsDone(req),
+            completedAt: req.completed_at,
+            iterationId: req.iteration_id,
+            productEstimateHours: req.product_estimate_hours,
+            directHours: req.direct_hours,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_requirement 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "create_bug",
+    {
+      title: "Create Bug",
+      description:
+        "在 PM 项目下创建 Bug（写入 bugs 表）。projectId 可为 Studio id（如 proj-star-pm）或 PM slug。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        reproSteps: z.string().optional(),
+        severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微，默认 3"),
+        bugType: z
+          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
+          .optional(),
+        requirementId: z.string().nullable().optional(),
+        assignee: z.string().optional(),
+        status: z
+          .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
+          .optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { createBug, getProjects, updateBug } = await import("@/lib/db/local-store");
+        type BugStatus = import("@/lib/types").TaskStatus;
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) {
+          return mcpError(`找不到 PM 项目：${input.projectId}`);
+        }
+
+        let bug = await createBug({
+          project_id: pm.id,
+          requirement_id: input.requirementId ?? null,
+          title: input.title.trim(),
+          description: input.description,
+          repro_steps: input.reproSteps,
+          assignee: input.assignee,
+          severity: (input.severity as 1 | 2 | 3 | 4 | undefined) ?? 3,
+          bug_type: input.bugType ?? "other",
+        });
+
+        if (input.status && input.status !== "pending") {
+          bug = await updateBug(bug.id, { status: input.status as BugStatus });
+        }
+
+        await logAiAction({
+          action: "create_bug",
+          payload: { bugId: bug.id, projectId: pm.id, title: bug.title },
+        });
+
+        return mcpJson({
+          ok: true,
+          bug: {
+            id: bug.id,
+            title: bug.title,
+            projectId: bug.project_id,
+            pmSlug: pm.slug,
+            status: bug.status,
+            severity: bug.severity,
+            bugType: bug.bug_type,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "create_bug 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_bugs",
+    {
+      title: "List Bugs",
+      description: "列出项目 Bug。projectId 可为 Studio id 或 PM slug；可按 status 过滤。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        status: z
+          .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
+          .optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects, listBugsByProject } = await import("@/lib/db/local-store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+
+        let bugs = await listBugsByProject(pm.id);
+        if (input.status) bugs = bugs.filter((b) => b.status === input.status);
+        const limit = input.limit ?? 50;
+        const slim = bugs.slice(0, limit).map((b) => ({
+          id: b.id,
+          title: b.title,
+          status: b.status,
+          severity: b.severity,
+          bugType: b.bug_type,
+          description: b.description,
+          createdAt: b.created_at,
+        }));
+        return mcpJson({
+          ok: true,
+          pmSlug: pm.slug,
+          count: bugs.length,
+          returned: slim.length,
+          bugs: slim,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_bugs 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "organize_star_pm_req_tree",
+    {
+      title: "Organize Star PM Req Tree",
+      description:
+        "整理 Star PM 需求散条：同步功能板块到模块树、按关键词挂到父 epic、写入 module_l1。dry=true 只预览。",
+      inputSchema: {
+        dry: z.boolean().optional().describe("true=只统计不写入"),
+      },
+    },
+    async (input) => {
+      try {
+        const { organizeStarPmRequirementTree } = await import(
+          "@/lib/studio/organize-req-tree"
+        );
+        const result = await organizeStarPmRequirementTree({ dry: input.dry === true });
+        await logAiAction({
+          action: "organize_star_pm_req_tree",
+          payload: {
+            dry: input.dry === true,
+            reparented: result.reparented,
+            moduleTagged: result.moduleTagged,
+          },
+        });
+        return mcpJson({
+          ok: true,
+          ...result,
+          unmatchedPreview: result.unmatched.slice(0, 40),
+          unmatchedCount: result.unmatched.length,
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "organize_star_pm_req_tree 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_iterations",
+    {
+      title: "List Planning Iterations",
+      description: "列出项目规划迭代（不含需求池）。projectId 可为 Studio id 或 PM slug。",
+      inputSchema: {
+        projectId: z.string().min(1),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects, getPoolBundle } = await import("@/lib/db/local-store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) return mcpError(`找不到项目：${input.projectId}`);
+        const bundle = await getPoolBundle(pm.id);
+        const iterations = (bundle?.activeIterations ?? []).map((i) => ({
+          id: i.id,
+          name: i.name,
+          startDate: i.start_date,
+          endDate: i.end_date,
+          releaseTag: i.release_tag,
+          sortOrder: i.sort_order,
+        }));
+        return mcpJson({ ok: true, projectId: pm.id, pmSlug: pm.slug, iterations });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_iterations 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "create_planning_iteration",
+    {
+      title: "Create Planning Iteration",
+      description: "创建规划迭代（一期=小版本）。name / release_tag / 起止日。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        name: z.string().min(1),
+        startDate: z.string().nullable().optional(),
+        endDate: z.string().nullable().optional(),
+        releaseTag: z.string().nullable().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { createPlanningIteration, getProjects } = await import("@/lib/db/local-store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) return mcpError(`找不到项目：${input.projectId}`);
+        const iter = await createPlanningIteration({
+          projectId: pm.id,
+          name: input.name,
+          start_date: input.startDate ?? null,
+          end_date: input.endDate ?? null,
+          release_tag: input.releaseTag ?? null,
+        });
+        await logAiAction({
+          action: "create_planning_iteration",
+          payload: { iterationId: iter.id, name: iter.name, projectId: pm.id },
+        });
+        return mcpJson({
+          ok: true,
+          iteration: {
+            id: iter.id,
+            name: iter.name,
+            startDate: iter.start_date,
+            endDate: iter.end_date,
+            releaseTag: iter.release_tag,
+          },
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "create_planning_iteration 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_planning_iteration",
+    {
+      title: "Update Planning Iteration",
+      description: "更新规划迭代名称/起止日/release_tag。",
+      inputSchema: {
+        iterationId: z.string().min(1),
+        name: z.string().optional(),
+        startDate: z.string().nullable().optional(),
+        endDate: z.string().nullable().optional(),
+        releaseTag: z.string().nullable().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { updatePlanningIteration } = await import("@/lib/db/local-store");
+        const updates: {
+          name?: string;
+          start_date?: string | null;
+          end_date?: string | null;
+          release_tag?: string | null;
+        } = {};
+        if (input.name !== undefined) updates.name = input.name;
+        if (input.startDate !== undefined) updates.start_date = input.startDate;
+        if (input.endDate !== undefined) updates.end_date = input.endDate;
+        if (input.releaseTag !== undefined) updates.release_tag = input.releaseTag;
+        const iter = await updatePlanningIteration(input.iterationId, updates);
+        await logAiAction({
+          action: "update_planning_iteration",
+          payload: { iterationId: iter.id, updates },
+        });
+        return mcpJson({
+          ok: true,
+          iteration: {
+            id: iter.id,
+            name: iter.name,
+            startDate: iter.start_date,
+            endDate: iter.end_date,
+            releaseTag: iter.release_tag,
+          },
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "update_planning_iteration 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "align_project_periods",
+    {
+      title: "Align Periods And Hours",
+      description:
+        "建/对齐规划迭代起止与 release_tag；默认只建议归期不覆盖 iteration_id（assignIterations=true 才按提出日强挂）。可选回填叶子 product_estimate_hours。时间窗复盘请看迭代面板「按时间」。",
+      inputSchema: {
+        projectId: z.string().min(1).describe("Studio id 或 PM slug；传 all 则扫活跃项目"),
+        dryRun: z.boolean().optional().describe("只预览不写库"),
+        fillHours: z.boolean().optional().describe("默认 true；false 只处理期次不写工时"),
+        assignIterations: z
+          .boolean()
+          .optional()
+          .describe("默认 false；true 才按首次提出时间覆盖挂期"),
+      },
+    },
+    async (input) => {
+      try {
+        const {
+          alignAllActiveProjects,
+          alignProjectPeriodsAndHours,
+        } = await import("@/lib/mcp/align-periods-hours");
+        if (input.projectId === "all") {
+          const results = await alignAllActiveProjects({
+            dryRun: input.dryRun,
+            fillHours: input.fillHours,
+            assignIterations: input.assignIterations,
+          });
+          await logAiAction({
+            action: "align_project_periods",
+            payload: { projectId: "all", count: results.length },
+          });
+          return mcpJson({ ok: true, results });
+        }
+        const result = await alignProjectPeriodsAndHours(input.projectId, {
+          dryRun: input.dryRun,
+          fillHours: input.fillHours,
+          assignIterations: input.assignIterations,
+        });
+        await logAiAction({
+          action: "align_project_periods",
+          payload: {
+            projectId: result.projectId,
+            assigned: result.requirementsAssigned,
+            suggested: result.requirementsSuggested,
+            hoursFilled: result.hoursFilled,
+            assignIterations: result.assignIterations,
+          },
+        });
+        return mcpJson({ ok: true, result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "align_project_periods 失败"
+        );
       }
     }
   );

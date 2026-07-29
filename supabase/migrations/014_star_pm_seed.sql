@@ -27,9 +27,12 @@ insert into projects (
   local_run_guide = excluded.local_run_guide,
   code_path = excluded.code_path;
 
-insert into iterations (id, project_id, name, sort_order, created_at) values
-  ('a2000001-0001-4001-8001-000000000003', 'a1000001-0001-4001-8001-000000000003', '202607 V1.2 Studio 整合', 1, '2026-06-22T00:00:00Z')
-on conflict (id) do nothing;
+insert into iterations (id, project_id, name, sort_order, created_at, start_date, end_date, release_tag) values
+  ('a2000001-0001-4001-8001-000000000003', 'a1000001-0001-4001-8001-000000000003', '202607 V1.2 Studio 整合', 1, '2026-06-22T00:00:00Z', '2026-06-22', '2026-07-01', 'v1.2')
+on conflict (id) do update set
+  start_date = coalesce(iterations.start_date, excluded.start_date),
+  end_date = coalesce(iterations.end_date, excluded.end_date),
+  release_tag = coalesce(iterations.release_tag, excluded.release_tag);
 
 insert into requirements (id, project_id, iteration_id, title, sub_function, detail_work, acceptance_criteria, priority, status, sort_order, created_at, updated_at) values
   ('b1000001-0001-4001-8001-000000000006', 'a1000001-0001-4001-8001-000000000003', 'a2000001-0001-4001-8001-000000000003', 'Star PM 桥接 Studio 项目', 'proj-star-pm ↔ star-pm', 'PM 需求看板 + Studio 任务同页展示', '打开 /projects/proj-star-pm 可见上下双轨任务区', 'P0', 'in_progress', 1, '2026-06-22T00:00:00Z', '2026-06-22T00:00:00Z'),

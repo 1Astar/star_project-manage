@@ -1,6 +1,8 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
+import { runWithMcpAdminScope } from "@/lib/auth/request-scope";
 import { getMcpRedisUrl } from "@/lib/mcp/config";
 import { registerStarPmTools } from "@/lib/mcp/server";
+import { MCP_OAUTH_SERVER_NAME, MCP_SERVER_VERSION } from "@/lib/mcp/version";
 import { verifyOAuthAccessToken } from "@/lib/mcp/oauth/verify-oauth-token";
 
 export const maxDuration = 60;
@@ -12,8 +14,8 @@ const handler = createMcpHandler(
   },
   {
     serverInfo: {
-      name: "star-pm-gpt",
-      version: "1.3.2",
+      name: MCP_OAUTH_SERVER_NAME,
+      version: MCP_SERVER_VERSION,
     },
   },
   {
@@ -30,7 +32,10 @@ const handler = createMcpHandler(
  * origin when building WWW-Authenticate resource_metadata, which would produce:
  * /api/mcp-oauth/mcp/.well-known/... (broken).
  */
-const authHandler = withMcpAuth(handler, verifyOAuthAccessToken, {
+const scopedHandler = async (req: Request) =>
+  runWithMcpAdminScope(() => handler(req));
+
+const authHandler = withMcpAuth(scopedHandler, verifyOAuthAccessToken, {
   required: true,
   resourceMetadataPath: "/.well-known/oauth-protected-resource/api/mcp-oauth/mcp",
 });

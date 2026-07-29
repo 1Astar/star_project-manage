@@ -4,7 +4,15 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import { RequirementStatusSelect } from "@/components/requirement-status-select";
-import type { ModuleNode, PoolColumnDef, PoolColumnType, Requirement, RequirementAttachment, RequirementType } from "@/lib/types";
+import type {
+  ModuleNode,
+  PoolColumnDef,
+  PoolColumnType,
+  ProjectMember,
+  Requirement,
+  RequirementAttachment,
+  RequirementType,
+} from "@/lib/types";
 import { REQUIREMENT_TYPE_LABELS } from "@/lib/types";
 import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { createPoolColumnAction, deletePoolColumnAction, listRequirementMigrateTargetsAction } from "@/lib/actions";
@@ -16,6 +24,8 @@ import {
 } from "@/lib/requirement-tree";
 import { cn } from "@/lib/utils";
 import { parseAgentSourceLabel } from "@/lib/cursor-actor";
+import { assigneeRosterNames } from "@/lib/assignee-roster";
+import { AssigneePickerCell } from "@/components/assignee-picker-cell";
 
 export type PoolColumnKey =
   | "title"
@@ -134,6 +144,7 @@ type Props = {
   attachments: RequirementAttachment[];
   columnDefs: PoolColumnDef[];
   tagOptions?: string[];
+  members?: ProjectMember[];
   drawerReqId: string | null;
   pending: boolean;
   onOpenReq: (id: string) => void;
@@ -155,6 +166,7 @@ type Props = {
       status_tags: string[];
       next_step: string | null;
       priority: string | null;
+      assignees: string[];
       product_estimate_hours: number | null;
       direct_hours: number | null;
       sort_order: number;
@@ -416,6 +428,7 @@ export function RequirementPoolTable({
   modules = [],
   attachments,
   columnDefs,
+  members = [],
   drawerReqId,
   pending,
   onOpenReq,
@@ -433,7 +446,9 @@ export function RequirementPoolTable({
   const [visible, setVisible] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [colOrder, setColOrder] = useState<ColumnId[]>(DEFAULT_VISIBLE);
   const [colWidths, setColWidths] = useState<Record<string, number>>(DEFAULT_POOL_COL_WIDTHS);
-  const [colsOpen, setColsOpen] = useState(false);
+  /** 列菜单挂在工具栏或表头 + */
+  const [colsMenu, setColsMenu] = useState<null | "toolbar" | "header">(null);
+  const colsMenuRef = useRef<HTMLDivElement | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("sort_order");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
@@ -464,6 +479,25 @@ export function RequirementPoolTable({
   const [newColType, setNewColType] = useState<PoolColumnType>("text");
   const [newColOptions, setNewColOptions] = useState("");
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
+
+  useEffect(() => {
+    if (!colsMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setColsMenu(null);
+    };
+    const onPointer = (e: MouseEvent) => {
+      const el = colsMenuRef.current;
+      if (el && !el.contains(e.target as Node)) setColsMenu(null);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onPointer);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mousedown", onPointer);
+    };
+  }, [colsMenu]);
+
+  const assigneeOptions = useMemo(() => assigneeRosterNames(members), [members]);
 
   const activeCustoms = useMemo(
     () =>
@@ -721,6 +755,39 @@ export function RequirementPoolTable({
     return result;
   }, [colOrder, visible, activeCustoms]);
 
+  /** 列面板：按 colOrder 排列（含未勾选），可在此拖拽调序 */
+  const pickerColumnRows = useMemo(() => {
+    const rows: Array<{
+      id: ColumnId;
+      label: string;
+      pinned: boolean;
+      customDefId?: string;
+    }> = [];
+    const seen = new Set<string>();
+    const pushId = (id: ColumnId) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      if (id === "title") {
+        rows.push({ id, label: "需求名称", pinned: true });
+        return;
+      }
+      const ck = parseCustomColumnKey(id);
+      if (ck) {
+        const def = activeCustoms.find((d) => d.key === ck);
+        if (!def) return;
+        rows.push({ id, label: def.label, pinned: false, customDefId: def.id });
+        return;
+      }
+      const meta = ALL_COLUMNS.find((c) => c.key === id);
+      if (!meta) return;
+      rows.push({ id, label: meta.label, pinned: false });
+    };
+    for (const id of colOrder) pushId(id);
+    for (const col of ALL_COLUMNS) pushId(col.key);
+    for (const def of activeCustoms) pushId(customColumnStorageKey(def.key));
+    return rows;
+  }, [colOrder, activeCustoms]);
+
   const rootModules = useMemo(
     () =>
       modules
@@ -853,11 +920,36 @@ export function RequirementPoolTable({
 
   function toggleColumn(key: ColumnId) {
     if (key === "title") return;
-    const next = visible.includes(key)
-      ? visible.filter((k) => k !== key)
-      : [...visible, key];
+    const turningOn = !visible.includes(key);
+    const next = turningOn
+      ? [...visible, key]
+      : visible.filter((k) => k !== key);
     if (!next.includes("title")) next.unshift("title");
     persistVisible(next);
+    if (turningOn && !colOrder.includes(key)) {
+      persistOrder(pinLeadingColumns([...colOrder, key]));
+    }
+  }
+
+  function onColDrop(overKey: ColumnId) {
+    if (!dragCol || dragCol === overKey || dragCol === "title" || overKey === "title") {
+      setDragCol(null);
+      return;
+    }
+    let next = [...colOrder];
+    for (const id of [dragCol, overKey]) {
+      if (!next.includes(id)) next.push(id);
+    }
+    const from = next.indexOf(dragCol);
+    const to = next.indexOf(overKey);
+    if (from < 0 || to < 0) {
+      setDragCol(null);
+      return;
+    }
+    next.splice(from, 1);
+    next.splice(to, 0, dragCol);
+    setDragCol(null);
+    persistOrder(next);
   }
 
   function onDragStart(id: string) {
@@ -979,24 +1071,6 @@ export function RequirementPoolTable({
     window.addEventListener("mouseup", onUp);
   }
 
-  function onColDrop(overKey: ColumnId) {
-    if (!dragCol || dragCol === overKey) {
-      setDragCol(null);
-      return;
-    }
-    const next = [...colOrder];
-    const from = next.indexOf(dragCol);
-    const to = next.indexOf(overKey);
-    if (from < 0 || to < 0) {
-      setDragCol(null);
-      return;
-    }
-    next.splice(from, 1);
-    next.splice(to, 0, dragCol);
-    setDragCol(null);
-    persistOrder(next);
-  }
-
   function addCustomColumn(e: React.FormEvent) {
     e.preventDefault();
     const label = newColLabel.trim();
@@ -1016,6 +1090,7 @@ export function RequirementPoolTable({
         setNewColLabel("");
         setNewColOptions("");
         setNewColType("text");
+        setColsMenu(null);
         router.refresh();
       } catch {
         /* parent toast not available; silent */
@@ -1052,6 +1127,122 @@ export function RequirementPoolTable({
     (filterAssignee.trim() ? 1 : 0) +
     (filterRootModule ? 1 : 0);
 
+  const columnPickerPanel = (align: "left" | "right") => (
+    <div
+      className={cn(
+        "absolute z-40 mt-1 flex w-72 max-h-[min(70vh,520px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg",
+        align === "right" ? "right-0" : "left-0"
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <form
+        onSubmit={(e) => {
+          addCustomColumn(e);
+        }}
+        className="shrink-0 space-y-1.5 border-b border-slate-100 bg-slate-50/80 px-2.5 py-2"
+      >
+        <p className="text-[10px] font-medium text-slate-500">添加列</p>
+        <input
+          value={newColLabel}
+          onChange={(e) => setNewColLabel(e.target.value)}
+          placeholder="列名"
+          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+          autoFocus={colsMenu === "header"}
+        />
+        <select
+          value={newColType}
+          onChange={(e) => setNewColType(e.target.value as PoolColumnType)}
+          className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+        >
+          {COLUMN_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        {newColType === "select" ? (
+          <input
+            value={newColOptions}
+            onChange={(e) => setNewColOptions(e.target.value)}
+            placeholder="选项，逗号分隔"
+            className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+          />
+        ) : null}
+        <button
+          type="submit"
+          disabled={colPending || !newColLabel.trim()}
+          className="w-full rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {colPending ? "添加中…" : "添加列"}
+        </button>
+      </form>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+          显示列 · 拖 ⠿ 调顺序
+        </p>
+        {pickerColumnRows.map((row) => (
+          <div
+            key={row.id}
+            onDragOver={(e) => {
+              if (!dragCol || row.pinned) return;
+              e.preventDefault();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (row.pinned) return;
+              onColDrop(row.id);
+            }}
+            className={cn(
+              "flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs text-slate-700 hover:bg-slate-50",
+              dragCol === row.id && "opacity-50",
+              !visible.includes(row.id) && !row.pinned && "text-slate-400"
+            )}
+          >
+            {row.pinned ? (
+              <span className="w-4 shrink-0 text-center text-[10px] text-slate-200">⠿</span>
+            ) : (
+              <span
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  setDragCol(row.id);
+                }}
+                onDragEnd={() => setDragCol(null)}
+                className="w-4 shrink-0 cursor-grab select-none text-center text-[10px] text-slate-300 active:cursor-grabbing"
+                title="拖拽调整列顺序"
+                aria-label="拖拽调整列顺序"
+              >
+                ⠿
+              </span>
+            )}
+            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 py-0.5">
+              <input
+                type="checkbox"
+                checked={visible.includes(row.id)}
+                disabled={row.pinned}
+                onChange={() => toggleColumn(row.id)}
+              />
+              <span className="truncate">{row.label}</span>
+            </label>
+            {row.customDefId ? (
+              <button
+                type="button"
+                disabled={colPending}
+                className="shrink-0 px-1 text-[10px] text-red-500 hover:underline disabled:opacity-50"
+                onClick={() => removeCustomColumn(row.customDefId!)}
+              >
+                删
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <p className="shrink-0 border-t border-slate-100 px-2.5 py-1.5 text-[10px] text-slate-400">
+        在此或表头拖 ⠿ 调顺序；表头右边改列宽
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2">
@@ -1067,112 +1258,25 @@ export function RequirementPoolTable({
         >
           筛选{activeFilterCount ? ` (${activeFilterCount})` : ""}
         </button>
-        <div className="relative">
+        <div
+          className="relative"
+          ref={colsMenu === "toolbar" ? colsMenuRef : undefined}
+        >
           <button
             type="button"
-            onClick={() => setColsOpen((v) => !v)}
-            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            onClick={() =>
+              setColsMenu((m) => (m === "toolbar" ? null : "toolbar"))
+            }
+            className={cn(
+              "rounded-lg border px-2.5 py-1 text-xs font-medium",
+              colsMenu
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
           >
             列
           </button>
-          {colsOpen ? (
-            <div className="absolute left-0 z-30 mt-1 max-h-[70vh] w-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-              <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                内置列
-              </p>
-              {ALL_COLUMNS.map((col) => (
-                <label
-                  key={col.key}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={visible.includes(col.key)}
-                    disabled={col.key === "title"}
-                    onChange={() => toggleColumn(col.key)}
-                  />
-                  {col.label}
-                </label>
-              ))}
-              <div className="my-1 border-t border-slate-100" />
-              <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                自定义列
-              </p>
-              {activeCustoms.length === 0 ? (
-                <p className="px-2 py-1 text-[11px] text-slate-400">暂无，在下方添加</p>
-              ) : (
-                activeCustoms.map((def) => {
-                  const id = customColumnStorageKey(def.key);
-                  return (
-                    <div
-                      key={def.id}
-                      className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
-                    >
-                      <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={visible.includes(id)}
-                          onChange={() => toggleColumn(id)}
-                        />
-                        <span className="truncate">{def.label}</span>
-                      </label>
-                      <button
-                        type="button"
-                        disabled={colPending}
-                        className="shrink-0 text-[10px] text-red-500 hover:underline disabled:opacity-50"
-                        onClick={() => removeCustomColumn(def.id)}
-                      >
-                        删
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-              <form
-                onSubmit={addCustomColumn}
-                className="mt-1 space-y-1.5 border-t border-slate-100 px-2 pt-2"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <p className="text-[10px] font-medium text-slate-500">添加列</p>
-                <input
-                  value={newColLabel}
-                  onChange={(e) => setNewColLabel(e.target.value)}
-                  placeholder="列名"
-                  className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                />
-                <select
-                  value={newColType}
-                  onChange={(e) => setNewColType(e.target.value as PoolColumnType)}
-                  className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                >
-                  {COLUMN_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-                {newColType === "select" ? (
-                  <input
-                    value={newColOptions}
-                    onChange={(e) => setNewColOptions(e.target.value)}
-                    placeholder="选项，逗号分隔"
-                    className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-                  />
-                ) : null}
-                <button
-                  type="submit"
-                  disabled={colPending || !newColLabel.trim()}
-                  className="w-full rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                >
-                  {colPending ? "添加中…" : "添加列"}
-                </button>
-              </form>
-              <div className="my-1 border-t border-slate-100" />
-              <p className="mt-1 px-2 text-[10px] text-slate-400">
-                表头右边可拖改列宽；行拖中间挂子节点，上下半区改顺序
-              </p>
-            </div>
-          ) : null}
+          {colsMenu === "toolbar" ? columnPickerPanel("left") : null}
         </div>
         {dropMsg ? (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-900">
@@ -1392,16 +1496,10 @@ export function RequirementPoolTable({
                 return (
                   <th
                     key={col.id}
-                    draggable={!isTitle}
-                    onDragStart={() => {
-                      if (isTitle) return;
-                      setDragCol(col.id);
-                    }}
                     onDragOver={(e) => {
-                      e.preventDefault();
+                      if (dragCol) e.preventDefault();
                     }}
                     onDrop={() => onColDrop(col.id)}
-                    onDragEnd={() => setDragCol(null)}
                     className={cn(
                       "relative px-3 py-2.5 font-medium",
                       isTitle &&
@@ -1432,10 +1530,27 @@ export function RequirementPoolTable({
                           ? "谁提出 / 归属哪类干系人（客户、用户、产品经理…）"
                           : builtinKey === "inspiration_source"
                             ? "念头从哪件事触发（会话、视频、整理现场…），不是干系人类型"
-                            : "拖拽调整列顺序；拖右边改宽；点击排序"
+                            : "拖 ⠿ 调整列顺序；拖右边改宽；点击排序"
                     }
                   >
-                    <span className="mr-1 text-[10px] text-slate-300">⠿</span>
+                    {!isTitle ? (
+                      <span
+                        draggable
+                        onDragStart={(e) => {
+                          e.stopPropagation();
+                          setDragCol(col.id);
+                        }}
+                        onDragEnd={() => setDragCol(null)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mr-1 inline-block cursor-grab select-none text-[10px] text-slate-300 active:cursor-grabbing"
+                        title="拖拽调整列顺序"
+                        aria-label="拖拽调整列顺序"
+                      >
+                        ⠿
+                      </span>
+                    ) : (
+                      <span className="mr-1 text-[10px] text-slate-300">⠿</span>
+                    )}
                     {col.label}
                     {isActive ? (sortDir === "asc" ? " ↑" : " ↓") : sortable ? " ↕" : ""}
                     <span
@@ -1448,13 +1563,41 @@ export function RequirementPoolTable({
                 );
               })}
               <th className="min-w-[56px] px-2 py-2.5 font-medium">操作</th>
+              <th
+                className="sticky right-0 z-20 bg-slate-50 px-1 py-2.5 shadow-[-2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+                style={{ width: 44, minWidth: 44, maxWidth: 44 }}
+              >
+                <div
+                  className="relative flex justify-center"
+                  ref={colsMenu === "header" ? colsMenuRef : undefined}
+                >
+                  <button
+                    type="button"
+                    aria-label="添加或显示列"
+                    title="添加列 / 勾选显示列"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setColsMenu((m) => (m === "header" ? null : "header"));
+                    }}
+                    className={cn(
+                      "flex h-7 w-7 items-center justify-center rounded-md text-base font-medium leading-none",
+                      colsMenu === "header"
+                        ? "bg-indigo-100 text-indigo-700"
+                        : "text-slate-500 hover:bg-slate-200/80 hover:text-slate-800"
+                    )}
+                  >
+                    +
+                  </button>
+                  {colsMenu === "header" ? columnPickerPanel("right") : null}
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {displayRows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length + 2}
+                  colSpan={columns.length + 3}
                   className="px-4 py-16 text-center text-slate-400"
                 >
                   {requirements.length === 0
@@ -1806,12 +1949,15 @@ export function RequirementPoolTable({
                       }
                       if (key === "assignees") {
                         return (
-                          <td key={col.id} className="px-3 py-2.5 text-slate-600">
-                            {req.assignees?.length ? (
-                              req.assignees.join("、")
-                            ) : (
-                              <span className="text-slate-300">空白</span>
-                            )}
+                          <td key={col.id} className="px-2 py-2 text-slate-600">
+                            <AssigneePickerCell
+                              value={req.assignees ?? []}
+                              options={assigneeOptions}
+                              disabled={pending}
+                              onChange={(next) =>
+                                onInlineSave(req.id, { assignees: next })
+                              }
+                            />
                           </td>
                         );
                       }
@@ -2020,6 +2166,13 @@ export function RequirementPoolTable({
                         打开
                       </button>
                     </td>
+                    <td
+                      className={cn(
+                        "sticky right-0 z-[1] px-1 py-2.5 shadow-[-2px_0_6px_-2px_rgba(0,0,0,0.06)]",
+                        active ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"
+                      )}
+                      style={{ width: 44, minWidth: 44, maxWidth: 44 }}
+                    />
                   </tr>
                 );
               })

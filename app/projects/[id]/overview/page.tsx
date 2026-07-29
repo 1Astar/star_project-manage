@@ -4,7 +4,7 @@ import { fetchPoolData, fetchProjectBoard, fetchProjectBugs } from "@/lib/action
 import { ProjectModuleTree } from "@/components/project-module-tree";
 import { StudioBadge } from "@/components/studio/shell";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { getProjectTasks } from "@/lib/studio/data";
+import { getProjectTasks, getProjectEvolution, getProjectChangeSessions } from "@/lib/studio/data";
 import { listProjectAttachments, listProjectModules } from "@/lib/db/local-store";
 import { describeActivity } from "@/lib/activity";
 import {
@@ -14,6 +14,12 @@ import {
   type RoleType,
   type TaskStatus,
 } from "@/lib/types";
+import {
+  lifecycleToTaskStatus,
+  requirementLifecycleStatus,
+} from "@/lib/requirement-status";
+import { TASK_STATUS_LABELS as STUDIO_TASK_STATUS_LABELS } from "@/lib/studio/types";
+import { sumWorkDurationMs } from "@/lib/studio/work-hours";
 
 function statusProgress(status: string) {
   if (status === "done") return 100;
@@ -23,6 +29,21 @@ function statusProgress(status: string) {
   if (status === "in_progress") return 40;
   if (status === "blocked") return 25;
   return 10;
+}
+
+/** 优先用字段；字段空时从标题里扒 P0–P3（脑暴常写进标题） */
+function displayPriority(priority: string | null | undefined, title: string): string {
+  const raw = (priority ?? "").trim().toUpperCase();
+  if (raw === "P0" || raw === "P1" || raw === "P2" || raw === "P3") return raw;
+  const fromTitle = title.match(/(?:^|【|\s)(P[0-3])(?:\s|】|$)/i);
+  if (fromTitle?.[1]) return fromTitle[1]!.toUpperCase();
+  return "—";
+}
+
+function priorityTone(p: string): "p0" | "p1" | "muted" {
+  if (p === "P0") return "p0";
+  if (p === "P1") return "p1";
+  return "muted";
 }
 
 export default async function ProjectOverviewPage({
@@ -43,6 +64,12 @@ export default async function ProjectOverviewPage({
     pmProjectId ? listProjectModules(pmProjectId) : Promise.resolve([]),
   ]);
   const studioTasks = ctx.studio ? await getProjectTasks(ctx.studio.id) : [];
+  const [evolutions, changeSessions] = ctx.studio
+    ? await Promise.all([
+        getProjectEvolution(ctx.studio.id),
+        getProjectChangeSessions(ctx.studio.id),
+      ])
+    : [[], []];
   const bugs = pmBundle ? await fetchProjectBugs(pmBundle.project.id) : [];
   const attachments = pmBundle ? await listProjectAttachments(pmBundle.project.id) : [];
 
@@ -60,11 +87,27 @@ export default async function ProjectOverviewPage({
   const totalReq = allReqs.length || 1;
   const progressPct = Math.round((doneReq / totalReq) * 100);
 
+  const chatWorkMs =
+    sumWorkDurationMs(
+      evolutions.map((e) => ({
+        startedAt: e.workStartedAt,
+        finishedAt: e.workFinishedAt,
+      }))
+    ) +
+    sumWorkDurationMs(
+      changeSessions.map((s) => ({
+        startedAt: s.createdAt,
+        finishedAt: s.finishedAt,
+      }))
+    );
+  const chatWorkHours = Math.round((chatWorkMs / 3600000) * 10) / 10;
+  const taskActual = roleTasks.reduce((s, t) => s + (t.actual_hours ?? 0), 0);
+  // 预计 = 任务预计 + 需求叶子预计（对话工时已可拆进 product_estimate_hours，不再叠加入预计防双计）
   const estimated =
     roleTasks.reduce((s, t) => s + (t.estimate_hours ?? 0), 0) +
     allReqs.reduce((s, r) => s + (r.product_estimate_hours ?? 0), 0);
-  const consumed = roleTasks.reduce((s, t) => s + (t.actual_hours ?? 0), 0);
-  const remaining = Math.max(0, estimated - consumed);
+  const consumed = Math.round((taskActual + chatWorkHours) * 10) / 10;
+  const remaining = Math.max(0, Math.round((estimated - consumed) * 10) / 10);
   const hoursPct = estimated > 0 ? Math.min(100, Math.round((consumed / estimated) * 100)) : 0;
 
   const openBugs = bugs.filter((b) => b.status !== "done").length;
@@ -77,22 +120,33 @@ export default async function ProjectOverviewPage({
   }
 
   const ganttItems = [
-    ...allReqs.slice(0, 10).map((r) => ({
-      id: r.id,
-      title: r.title,
-      status: r.status,
-      href: r.in_pool
-        ? `/projects/${ctx.routeId}/tasks?req=${r.id}`
-        : `/projects/${ctx.routeId}/requirements/${r.id}`,
-      kind: r.in_pool ? ("pool" as const) : ("pm" as const),
-    })),
+    ...allReqs.slice(0, 10).map((r) => {
+      const life = requirementLifecycleStatus(r);
+      const machine = lifecycleToTaskStatus(life);
+      return {
+        id: r.id,
+        title: r.title,
+        status: machine,
+        statusLabel: life,
+        priority: displayPriority(r.priority, r.title),
+        href: r.in_pool
+          ? `/projects/${ctx.routeId}/tasks?req=${r.id}`
+          : `/projects/${ctx.routeId}/requirements/${r.id}`,
+        kind: r.in_pool ? ("pool" as const) : ("pm" as const),
+      };
+    }),
     ...studioTasks
       .filter((t) => t.status !== "done")
       .slice(0, 4)
       .map((t) => ({
         id: t.id,
         title: t.title,
-        status: t.status,
+        status: t.status === "in_progress" ? "in_progress" : t.status === "done" ? "done" : "pending",
+        statusLabel:
+          STUDIO_TASK_STATUS_LABELS[t.status] ??
+          TASK_STATUS_LABELS[t.status as TaskStatus] ??
+          t.status,
+        priority: displayPriority(t.priority, t.title),
         href: `/projects/${ctx.routeId}/tasks`,
         kind: "studio" as const,
       })),
@@ -138,11 +192,14 @@ export default async function ProjectOverviewPage({
                       className="block rounded px-0.5 py-0.5 hover:bg-slate-50"
                     >
                       <div className="mb-0.5 flex items-center justify-between gap-2 text-[11px]">
-                        <span className="truncate font-medium text-slate-700">
+                        <span className="min-w-0 truncate font-medium text-slate-700">
                           {item.title}
                         </span>
-                        <span className="shrink-0 text-slate-400">
-                          {TASK_STATUS_LABELS[item.status as TaskStatus] ?? item.status}
+                        <span className="flex shrink-0 items-center gap-1">
+                          <StudioBadge tone={priorityTone(item.priority)}>
+                            {item.priority}
+                          </StudioBadge>
+                          <span className="text-slate-400">{item.statusLabel}</span>
                         </span>
                       </div>
                       <div className="h-1 overflow-hidden rounded-full bg-slate-100">
@@ -241,7 +298,7 @@ export default async function ProjectOverviewPage({
         <section className="rounded-lg border border-slate-200 bg-white p-3">
           <h3 className="text-xs font-semibold text-slate-800">工时</h3>
           <div className="mt-2 mb-0.5 flex justify-between text-[10px] text-slate-500">
-            <span>已消耗 / 预计</span>
+            <span>已消耗（含对话） / 预计（需求+任务）</span>
             <span>
               {consumed}h / {estimated}h · {hoursPct}%
             </span>

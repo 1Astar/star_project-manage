@@ -357,6 +357,120 @@ export function registerStarPmTools(server: McpServer) {
     },
     async (input) => {
       try {
+        // 桥接：Cursor MCP 会话未刷新时可用 create_task 回填 Bug
+        // progressNote 首行 `__CREATE_BUG__`，次行可选 JSON：{severity,bugType,reproSteps,description}
+        const note = input.progressNote ?? "";
+        // 桥接：Cursor MCP 会话未刷新时可用 create_task 触发期次+工时对齐
+        // progressNote 首行 `__ALIGN_PERIODS__`，可选次行 JSON：{dryRun,fillHours,assignIterations}；title 可为 projectId 或 all
+        if (note.startsWith("__ALIGN_PERIODS__")) {
+          const {
+            alignAllActiveProjects,
+            alignProjectPeriodsAndHours,
+          } = await import("@/lib/mcp/align-periods-hours");
+          let meta: {
+            dryRun?: boolean;
+            fillHours?: boolean;
+            assignIterations?: boolean;
+          } = {};
+          const lines = note.split(/\n/);
+          const jsonLine = lines[1]?.trim();
+          if (jsonLine?.startsWith("{")) {
+            try {
+              meta = JSON.parse(jsonLine);
+            } catch {
+              meta = {};
+            }
+          }
+          const target = input.title.trim() === "all" ? "all" : input.projectId;
+          const payload =
+            target === "all"
+              ? {
+                  ok: true,
+                  via: "align_project_periods",
+                  results: await alignAllActiveProjects({
+                    dryRun: meta.dryRun,
+                    fillHours: meta.fillHours,
+                    assignIterations: meta.assignIterations,
+                  }),
+                }
+              : {
+                  ok: true,
+                  via: "align_project_periods",
+                  result: await alignProjectPeriodsAndHours(target, {
+                    dryRun: meta.dryRun,
+                    fillHours: meta.fillHours,
+                    assignIterations: meta.assignIterations,
+                  }),
+                };
+          await logAiAction({
+            action: "align_project_periods",
+            payload: { target, via: "create_task" },
+          });
+          return mcpJson(payload);
+        }
+
+        if (note.startsWith("__CREATE_BUG__")) {
+          const { resolveProjectRoute } = await import("@/lib/project-bridge");
+          const { createBug, getProjects } = await import("@/lib/db/local-store");
+          const lines = note.split(/\n/);
+          let meta: {
+            severity?: 1 | 2 | 3 | 4;
+            bugType?: import("@/lib/types").BugType;
+            reproSteps?: string;
+            description?: string;
+          } = {};
+          const jsonLine = lines[1]?.trim();
+          if (jsonLine?.startsWith("{")) {
+            try {
+              meta = JSON.parse(jsonLine);
+            } catch {
+              meta = {};
+            }
+          }
+          const bodyText = lines
+            .slice(jsonLine?.startsWith("{") ? 2 : 1)
+            .join("\n")
+            .trim();
+          const description = meta.description ?? (bodyText || undefined);
+
+          const ctx = await resolveProjectRoute(input.projectId);
+          const pmAll = await getProjects();
+          const pm =
+            (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+            pmAll.find((p) => p.id === input.projectId) ||
+            pmAll.find((p) => p.slug === input.projectId) ||
+            (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+          if (!pm) {
+            return mcpError(`找不到 PM 项目：${input.projectId}`);
+          }
+
+          const bug = await createBug({
+            project_id: pm.id,
+            title: input.title.replace(/^【Bug】\s*/, "").trim(),
+            description,
+            repro_steps: meta.reproSteps,
+            severity: meta.severity ?? 3,
+            bug_type: meta.bugType ?? "other",
+          });
+          await logAiAction({
+            action: "create_bug",
+            payload: { bugId: bug.id, projectId: pm.id, title: bug.title, via: "create_task" },
+          });
+          return mcpJson({
+            ok: true,
+            via: "create_bug",
+            bug: {
+              id: bug.id,
+              title: bug.title,
+              projectId: bug.project_id,
+              pmSlug: pm.slug,
+              status: bug.status,
+              severity: bug.severity,
+              bugType: bug.bug_type,
+            },
+          });
+        }
+
         const task = await createStudioTask({
           title: input.title,
           projectId: input.projectId,

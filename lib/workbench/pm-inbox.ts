@@ -1,0 +1,301 @@
+/**
+ * PM 工作台「今日要做」：只验收「还没看过」的；已上版的免验
+ */
+import { readDb } from "@/lib/db/local-store";
+import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import {
+  requirementIsCancelled,
+  TASK_STATUS_LABELS,
+  type TaskStatus,
+} from "@/lib/types";
+import { requirementLifecycleStatus } from "@/lib/requirement-status";
+import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
+
+/** 变更会话回看（天） */
+const SESSION_LOOKBACK_DAYS = 14;
+
+const STUDIO_TO_PM_SLUG: Record<string, string> = {
+  "proj-ai-pet": "ai-pet",
+  "proj-ai-controller": "ai-controller",
+  "proj-star-pm": "star-pm",
+  "proj-c84ff6fa": "yoking-pump",
+  "proj-star-lab-os": "star-lab-os",
+  "proj-personal-tools": "personal-tools",
+  "proj-moonpie": "moonpie",
+};
+
+const PM_SLUG_TO_STUDIO: Record<string, string> = Object.fromEntries(
+  Object.entries(STUDIO_TO_PM_SLUG).map(([studioId, slug]) => [slug, studioId])
+);
+
+function routeIdForPmSlug(slug: string): string {
+  return PM_SLUG_TO_STUDIO[slug] ?? slug;
+}
+
+function shanghaiDay(iso?: string | null): string {
+  const d = iso ? new Date(iso) : new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+function addShanghaiDays(day: string, delta: number): string {
+  const d = new Date(`${day}T12:00:00+08:00`);
+  d.setDate(d.getDate() + delta);
+  return shanghaiDay(d.toISOString());
+}
+
+function withinLookback(
+  iso: string | null | undefined,
+  todayDay: string,
+  days: number
+): boolean {
+  if (!iso) return false;
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : shanghaiDay(iso);
+  const oldest = addShanghaiDays(todayDay, -(days - 1));
+  return day >= oldest && day <= todayDay;
+}
+
+export type PmAcceptanceSource = "formal" | "change_session";
+
+export type PmAcceptanceItem = {
+  id: string;
+  title: string;
+  /** 路由用（常为 Studio id） */
+  projectId: string;
+  /** PM projects.id，建 Bug 用 */
+  pmProjectId: string;
+  projectTitle: string;
+  href: string;
+  source: PmAcceptanceSource;
+  sourceLabel: string;
+  requirementId?: string;
+  changeSessionId?: string;
+  note?: string;
+  at: string;
+};
+
+export type PmFollowUpItem = {
+  id: string;
+  title: string;
+  projectId: string;
+  projectTitle: string;
+  href: string;
+  kind: "blocker" | "yesterday_open" | "open_bug";
+  kindLabel: string;
+  note?: string;
+};
+
+export type PmOpenBugItem = {
+  id: string;
+  title: string;
+  projectId: string;
+  projectTitle: string;
+  href: string;
+  severity: number;
+  statusLabel: string;
+  note?: string;
+};
+
+const SOURCE_LABEL: Record<PmAcceptanceSource, string> = {
+  formal: "正式待验",
+  change_session: "变更会话",
+};
+
+const SOURCE_RANK: Record<PmAcceptanceSource, number> = {
+  formal: 0,
+  change_session: 1,
+};
+
+function hasProductPass(
+  records: Array<{ requirement_id: string; passed: boolean }>,
+  requirementId: string
+): boolean {
+  return records.some((r) => r.requirement_id === requirementId && r.passed === true);
+}
+
+/**
+ * 待你验收（收紧）：
+ * - 正式生命周期「待验收」且你还没点通过
+ * - 近 N 天变更会话 humanAcceptance=unreviewed（你还没收口）
+ * 不含：已标完成、已挂 releaseTag 的上版条目（版本上已有 = 免验）
+ */
+export async function getPmAcceptanceQueue(opts?: {
+  todayDay?: string;
+}): Promise<{ todayDay: string; lookbackDays: number; items: PmAcceptanceItem[] }> {
+  const todayDay = opts?.todayDay ?? shanghaiDay();
+  const db = await readDb();
+  const studio = await getScopedStudioSnapshot();
+  const studioById = new Map(studio.projects.map((p) => [p.id, p]));
+  const pmById = new Map(db.projects.map((p) => [p.id, p]));
+
+  const items: PmAcceptanceItem[] = [];
+  const seenReq = new Set<string>();
+
+  for (const req of db.requirements) {
+    if (requirementIsCancelled(req)) continue;
+    const life = requirementLifecycleStatus(req);
+    if (life !== "待验收" && req.status !== "acceptance") continue;
+    if (hasProductPass(db.acceptance_records, req.id)) continue;
+    if (seenReq.has(req.id)) continue;
+    seenReq.add(req.id);
+
+    const pmProject = pmById.get(req.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    const projectTitle =
+      studioById.get(routeId)?.title ?? pmProject.name ?? "未知项目";
+    items.push({
+      id: `req:${req.id}`,
+      title: req.title,
+      projectId: routeId,
+      pmProjectId: pmProject.id,
+      projectTitle,
+      href: `/projects/${routeId}/requirements/${req.id}`,
+      source: "formal",
+      sourceLabel: SOURCE_LABEL.formal,
+      requirementId: req.id,
+      at: req.updated_at || todayDay,
+    });
+  }
+
+  for (const session of studio.changeSessions ?? []) {
+    if (session.humanAcceptance !== "unreviewed") continue;
+    // 只收已收工或仍有未勾项的会话（纯进行中空会话不打扰）
+    const finished = Boolean(session.finishedAt);
+    const hasPending = (session.pendingItems?.length ?? 0) > 0;
+    if (!finished && !hasPending) continue;
+
+    const at = session.finishedAt || session.updatedAt || session.createdAt;
+    const inWindow =
+      withinLookback(at, todayDay, SESSION_LOOKBACK_DAYS) ||
+      withinLookback(`${session.day}T12:00:00+08:00`, todayDay, SESSION_LOOKBACK_DAYS);
+    if (!inWindow) continue;
+
+    const project = studioById.get(session.projectId);
+    if (!project || project.status === "archived") continue;
+    const pmSlug = STUDIO_TO_PM_SLUG[project.id];
+    const pmProject = pmSlug
+      ? [...pmById.values()].find((p) => p.slug === pmSlug)
+      : undefined;
+    if (!pmProject) continue;
+
+    items.push({
+      id: `chg:${session.id}`,
+      title: session.goal || "变更会话待收口",
+      projectId: project.id,
+      pmProjectId: pmProject.id,
+      projectTitle: project.title,
+      href: `/projects/${project.id}/evolution`,
+      source: "change_session",
+      sourceLabel: SOURCE_LABEL.change_session,
+      changeSessionId: session.id,
+      note: hasPending
+        ? `未勾完 ${session.pendingItems!.length} 项`
+        : "会话已收工，待你过目",
+      at,
+    });
+  }
+
+  items.sort(
+    (a, b) =>
+      SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || b.at.localeCompare(a.at)
+  );
+
+  return { todayDay, lookbackDays: SESSION_LOOKBACK_DAYS, items };
+}
+
+export async function getPmFollowUps(opts?: {
+  todayDay?: string;
+}): Promise<{ todayDay: string; items: PmFollowUpItem[] }> {
+  const todayDay = opts?.todayDay ?? shanghaiDay();
+  const studio = await getScopedStudioSnapshot();
+  const studioById = new Map(studio.projects.map((p) => [p.id, p]));
+  const items: PmFollowUpItem[] = [];
+  const seen = new Set<string>();
+
+  for (const t of studio.tasks) {
+    if (!t.blocker?.trim() || t.status === "done") continue;
+    const project = studioById.get(t.projectId);
+    if (!project || project.status === "archived") continue;
+    const id = `block:${t.id}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    items.push({
+      id,
+      title: t.title,
+      projectId: project.id,
+      projectTitle: project.title,
+      href: `/projects/${project.id}/tasks?view=studio`,
+      kind: "blocker",
+      kindLabel: "阻塞",
+      note: t.blocker.trim(),
+    });
+  }
+
+  const agenda = await getTomorrowAgenda({ todayDay });
+  for (const a of agenda.items) {
+    if (a.reason !== "yesterday_changed" && a.reason !== "change_session_pending") {
+      continue;
+    }
+    const id = `follow:${a.id}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    items.push({
+      id,
+      title: a.title,
+      projectId: a.projectId,
+      projectTitle: a.projectTitle,
+      href: a.href,
+      kind: "yesterday_open",
+      kindLabel: a.reasonLabel,
+      note: a.note,
+    });
+  }
+
+  return { todayDay, items };
+}
+
+/** 全项目未关闭 Bug（工作台露出） */
+export async function getOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
+  const db = await readDb();
+  const studio = await getScopedStudioSnapshot();
+  const studioById = new Map(studio.projects.map((p) => [p.id, p]));
+  const items: PmOpenBugItem[] = [];
+
+  for (const bug of db.bugs) {
+    if (bug.status === "done") continue;
+    const pmProject = db.projects.find((p) => p.id === bug.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    const projectTitle =
+      studioById.get(routeId)?.title ?? pmProject.name ?? "未知项目";
+    items.push({
+      id: bug.id,
+      title: bug.title,
+      projectId: routeId,
+      projectTitle,
+      href: `/projects/${routeId}/bugs/${bug.id}`,
+      severity: bug.severity,
+      statusLabel: TASK_STATUS_LABELS[bug.status] ?? bug.status,
+      note: bug.description?.slice(0, 80) || undefined,
+    });
+  }
+
+  items.sort((a, b) => a.severity - b.severity || a.title.localeCompare(b.title, "zh-CN"));
+  return items;
+}
+
+/** 明日清单在工作台只保留「到期=明天」，昨日未完进跟进栏 */
+export function filterTomorrowDueOnly<T extends { reason: string }>(items: T[]): T[] {
+  return items.filter((i) => i.reason === "due_tomorrow");
+}
+
+export function pmStatusLabel(status: TaskStatus): string {
+  return TASK_STATUS_LABELS[status] ?? status;
+}
+
+export { SESSION_LOOKBACK_DAYS as LOOKBACK_DAYS };

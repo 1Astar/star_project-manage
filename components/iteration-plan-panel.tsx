@@ -8,8 +8,9 @@ import {
 } from "@/lib/actions";
 import {
   ITERATION_STATUS_LABELS,
-  iterationModuleSummary,
+  iterationPeriodSummary,
   iterationTimeStatus,
+  type IterationViewMode,
 } from "@/lib/iteration-status";
 import type { Iteration, Requirement } from "@/lib/types";
 import type { StudioRelease } from "@/lib/studio/types";
@@ -34,10 +35,13 @@ export function IterationPlanPanel({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState(iterations[0]?.id ?? "");
+  const [viewMode, setViewMode] = useState<IterationViewMode>("scope");
   const [message, setMessage] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newStart, setNewStart] = useState("");
+  const [newStart, setNewStart] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date())
+  );
   const [newEnd, setNewEnd] = useState("");
   const [newTag, setNewTag] = useState("");
 
@@ -45,10 +49,19 @@ export function IterationPlanPanel({
 
   const summary = useMemo(() => {
     if (!selected) return null;
-    return iterationModuleSummary(requirements, selected.id);
-  }, [requirements, selected]);
+    return iterationPeriodSummary(requirements, selected, viewMode);
+  }, [requirements, selected, viewMode]);
 
   const status = selected ? iterationTimeStatus(selected) : null;
+
+  function todayShanghai() {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai" }).format(new Date());
+  }
+
+  function openCreate() {
+    setCreating(true);
+    setNewStart(todayShanghai());
+  }
 
   function saveSelected(patch: {
     name?: string;
@@ -80,12 +93,12 @@ export function IterationPlanPanel({
           projectId,
           projectSlug,
           name: newName,
-          start_date: newStart || null,
+          start_date: newStart || todayShanghai(),
           end_date: newEnd || null,
           release_tag: newTag || null,
         });
         setNewName("");
-        setNewStart("");
+        setNewStart(todayShanghai());
         setNewEnd("");
         setNewTag("");
         setCreating(false);
@@ -104,12 +117,12 @@ export function IterationPlanPanel({
         <div>
           <h2 className="text-sm font-semibold text-slate-800">迭代计划</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            起止日切状态 · 可挂 GitHub 版本 · 下方为本期顶层模块概况
+            范围=挂本期 · 时间=完成日落在起止内 · 起止切状态 · 可挂 GitHub 版本
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => (creating ? setCreating(false) : openCreate())}
           className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
         >
           {creating ? "取消" : "+ 新建迭代"}
@@ -134,9 +147,10 @@ export function IterationPlanPanel({
             />
           </label>
           <label className="text-xs">
-            <span className="text-slate-500">开始</span>
+            <span className="text-slate-500">开始（默认今天）</span>
             <input
               type="date"
+              required
               value={newStart}
               onChange={(e) => setNewStart(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm"
@@ -199,6 +213,11 @@ export function IterationPlanPanel({
                   <span className="font-medium">{it.name}</span>
                   <span className="ml-2 text-[10px] text-slate-400">
                     {ITERATION_STATUS_LABELS[st]}
+                  </span>
+                  <span className="mt-0.5 block text-[10px] text-slate-400">
+                    {it.start_date || it.end_date
+                      ? `${it.start_date ?? "?"} → ${it.end_date ?? "?"}`
+                      : "未写开始日"}
                   </span>
                 </button>
               );
@@ -263,26 +282,67 @@ export function IterationPlanPanel({
                 </label>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                {status ? <StudioBadge tone="muted">{ITERATION_STATUS_LABELS[status]}</StudioBadge> : null}
-                {summary ? (
-                  <span>
-                    本期需求 {summary.total} · 完成 {summary.done}
-                    {summary.total > 0
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="inline-flex rounded-lg border border-slate-200 p-0.5 text-xs"
+                  role="group"
+                  aria-label="汇总口径"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("scope")}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-medium transition",
+                      viewMode === "scope"
+                        ? "bg-slate-800 text-white"
+                        : "text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    按范围
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("window")}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 font-medium transition",
+                      viewMode === "window"
+                        ? "bg-slate-800 text-white"
+                        : "text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    按时间
+                  </button>
+                </div>
+                {status ? (
+                  <StudioBadge tone="muted">{ITERATION_STATUS_LABELS[status]}</StudioBadge>
+                ) : null}
+                {summary && !summary.needsDates ? (
+                  <span className="text-xs text-slate-600">
+                    {viewMode === "scope" ? "本期需求" : "窗内完成"} {summary.total}
+                    {viewMode === "scope" ? ` · 完成 ${summary.done}` : null}
+                    {viewMode === "scope" && summary.total > 0
                       ? `（${Math.round((summary.done / summary.total) * 100)}%）`
                       : ""}
                   </span>
                 ) : null}
                 {selected.release_tag ? (
-                  <span className="text-indigo-600">版本 {selected.release_tag}</span>
+                  <span className="text-xs text-indigo-600">版本 {selected.release_tag}</span>
                 ) : null}
               </div>
 
               <div>
-                <h3 className="mb-2 text-xs font-semibold text-slate-700">本期模块概况</h3>
-                {!summary || summary.rows.length === 0 ? (
+                <h3 className="mb-2 text-xs font-semibold text-slate-700">
+                  {viewMode === "scope" ? "本期模块概况（规划范围）" : "时间窗完成概况"}
+                </h3>
+                {summary?.needsDates ? (
+                  <p className="text-xs text-amber-700">
+                    按时间需先设本期开始/结束日，再统计完成日落在窗内的需求。
+                  </p>
+                ) : !summary || summary.rows.length === 0 ? (
                   <p className="text-xs text-slate-400">
-                    暂无顶层模块。把大型模块（epic）或根需求加入本迭代后会出现汇总。
+                    {viewMode === "scope"
+                      ? "暂无顶层模块。把大型模块（epic）或根需求加入本迭代后会出现汇总。"
+                      : "该时间窗内没有带完成日的已完成需求。"}
                   </p>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-slate-100">
@@ -291,8 +351,12 @@ export function IterationPlanPanel({
                         <tr>
                           <th className="px-3 py-2 font-medium">模块</th>
                           <th className="px-3 py-2 font-medium">完成</th>
-                          <th className="px-3 py-2 font-medium">进行</th>
-                          <th className="px-3 py-2 font-medium">待开始</th>
+                          {viewMode === "scope" ? (
+                            <>
+                              <th className="px-3 py-2 font-medium">进行</th>
+                              <th className="px-3 py-2 font-medium">待开始</th>
+                            </>
+                          ) : null}
                           <th className="px-3 py-2 font-medium">合计</th>
                         </tr>
                       </thead>
@@ -301,8 +365,14 @@ export function IterationPlanPanel({
                           <tr key={row.moduleId}>
                             <td className="px-3 py-2 font-medium text-slate-800">{row.title}</td>
                             <td className="px-3 py-2 tabular-nums text-emerald-700">{row.done}</td>
-                            <td className="px-3 py-2 tabular-nums text-amber-700">{row.active}</td>
-                            <td className="px-3 py-2 tabular-nums text-slate-600">{row.todo}</td>
+                            {viewMode === "scope" ? (
+                              <>
+                                <td className="px-3 py-2 tabular-nums text-amber-700">
+                                  {row.active}
+                                </td>
+                                <td className="px-3 py-2 tabular-nums text-slate-600">{row.todo}</td>
+                              </>
+                            ) : null}
                             <td className="px-3 py-2 tabular-nums text-slate-800">{row.total}</td>
                           </tr>
                         ))}

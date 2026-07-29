@@ -1,10 +1,10 @@
 /**
  * 需求生命周期状态机（看板主列）
  *
- * 想法 → 已规划 → AI开发中 → 待验收 → 完成
+ * 想法 → 已规划 → AI开发中 → 开发中 → 待验收 → 完成
  * 旁路：放弃
  *
- * 旧标签（待开始/评审/开发中/…）读时归一到上述主状态，写时落规范标签。
+ * 旧标签（待开始/评审/进行中/…）读时归一到上述主状态，写时落规范标签。
  */
 
 import type { TaskStatus } from "@/lib/types";
@@ -13,6 +13,7 @@ export const REQUIREMENT_STATUS_FLOW = [
   "想法",
   "已规划",
   "AI开发中",
+  "开发中",
   "待验收",
   "完成",
 ] as const;
@@ -39,12 +40,12 @@ const LEGACY_TO_LIFECYCLE: Record<string, RequirementLifecycleStatus> = {
   已规划: "已规划",
   评审: "已规划",
   AI开发中: "AI开发中",
-  开发中: "AI开发中",
-  进行中: "AI开发中",
-  待联调: "AI开发中",
-  联调: "AI开发中",
-  待测试: "AI开发中",
-  测试: "AI开发中",
+  开发中: "开发中",
+  进行中: "开发中",
+  待联调: "开发中",
+  联调: "开发中",
+  待测试: "开发中",
+  测试: "开发中",
   待验收: "待验收",
   验收: "待验收",
   完成: "完成",
@@ -88,9 +89,10 @@ export function requirementLifecycleStatus(
     case "blocked":
       return "放弃";
     case "in_progress":
+      return "AI开发中";
     case "integration":
     case "testing":
-      return "AI开发中";
+      return "开发中";
     case "pending":
     default:
       return "想法";
@@ -140,6 +142,7 @@ export function lifecycleToTaskStatus(life: RequirementLifecycleStatus): TaskSta
     case "放弃":
       return "blocked";
     case "AI开发中":
+    case "开发中":
       return "in_progress";
     case "已规划":
       return "in_progress";
@@ -150,4 +153,4 @@ export function lifecycleToTaskStatus(life: RequirementLifecycleStatus): TaskSta
 }
 
 export const REQUIREMENT_STATUS_HINT =
-  "想法 → 已规划 → AI开发中 → 待验收 → 完成（可拖到「放弃」退出）";
+  "想法 → 已规划 → AI开发中 → 开发中 → 待验收 → 完成（可拖到「放弃」退出）";

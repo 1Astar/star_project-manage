@@ -28,6 +28,7 @@ import type {
   RequirementType,
 } from "@/lib/types";
 import { requirementIsDone } from "@/lib/types";
+import { assigneeRosterNames } from "@/lib/assignee-roster";
 import { cn } from "@/lib/utils";
 
 const REQ_SOURCE_OPTIONS = [
@@ -178,6 +179,7 @@ export function RequirementPoolSplitView({
           attachments={attachments}
           columnDefs={columnDefs}
           tagOptions={tagOptions}
+          members={members}
           drawerReqId={drawerReqId}
           pending={pending}
           onOpenReq={openReq}
@@ -575,7 +577,7 @@ function RequirementSidePeek({
   const [prototypeLink, setPrototypeLink] = useState(requirement.prototype_link ?? "");
   const [iterationId, setIterationId] = useState(activeIterations[0]?.id ?? "");
   const [uploading, setUploading] = useState(false);
-  const memberNames = members.map((m) => m.name);
+  const memberNames = assigneeRosterNames(members);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -655,31 +657,27 @@ function RequirementSidePeek({
         <RequirementStatusSelect tags={statusTags} onChange={setStatusTags} />
 
         <div className="space-y-1.5">
-          <span className="text-xs text-slate-500">需求指派（可多选）</span>
-          {memberNames.length === 0 ? (
-            <p className="text-xs text-slate-400">暂无成员，可在项目设置添加后勾选</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {memberNames.map((name) => {
-                const on = assignees.includes(name);
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => toggleAssignee(name)}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-xs ring-1",
-                      on
-                        ? "bg-violet-50 text-violet-800 ring-violet-200"
-                        : "bg-white text-slate-600 ring-slate-200"
-                    )}
-                  >
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <span className="text-xs text-slate-500">需求指派（可多选 · 产品=你 · 白昼=我）</span>
+          <div className="flex flex-wrap gap-2">
+            {memberNames.map((name) => {
+              const on = assignees.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleAssignee(name)}
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs ring-1",
+                    on
+                      ? "bg-violet-50 text-violet-800 ring-violet-200"
+                      : "bg-white text-slate-600 ring-slate-200"
+                  )}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
           <TagEditor
             label="或直接输入指派人"
             tags={assignees.filter((a) => !memberNames.includes(a))}

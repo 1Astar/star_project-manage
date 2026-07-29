@@ -123,7 +123,7 @@ export function AppShell({
               href="/todos"
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
             >
-              我的待办
+              今日要做
             </Link>
             <LogoutButton />
           </div>
@@ -150,7 +150,7 @@ export function ProjectNav({ projectId, slug }: { projectId: string; slug: strin
     { href: `${base}/hours`, label: "工时统计" },
     { href: `${base}/import`, label: "Excel 导入" },
     { href: `${base}/settings`, label: "设置" },
-    { href: "/todos", label: "我的待办" },
+    { href: "/todos", label: "今日要做" },
     { href: "/ui-preview", label: "UI 方向" },
   ];
 

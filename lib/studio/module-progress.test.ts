@@ -69,11 +69,40 @@ const child = rows.find((r) => r.path === "六爻·学习·五步课")!;
 assert.equal(child.proposedAt?.slice(0, 10), "2026-07-06");
 assert.equal(child.totalDurationMs, 60 * 60000);
 
+{
+  const { evolutionProgressNote } = require("./module-progress") as typeof import("./module-progress");
+  const imported: EvolutionLog = {
+    ...evolution[0]!,
+    title: "feat: v1.9.8 待办进行中",
+    after: "feat: v1.9.8 待办进行中",
+    reason: "自 Release v1.9.8 说明导入；板块推断为「迭代记录」",
+    releaseTag: "v1.9.8",
+  };
+  assert.equal(evolutionProgressNote(imported), "版本 v1.9.8");
+  const rich: EvolutionLog = {
+    ...evolution[0]!,
+    title: "板块进程表",
+    after: "灰字显示补充并可点开",
+    reason: "自 Release v1.9.9 说明导入",
+  };
+  assert.equal(evolutionProgressNote(rich), "灰字显示补充并可点开");
+}
+
 const cal = buildImprovementCalendar({
-  evolution,
+  evolution: [
+    {
+      ...evolution[0]!,
+      releaseTag: "v0.1.0",
+    },
+  ],
   changeSessions: [],
   projectTitleById: new Map([["p", "随心而行"]]),
 });
-assert.equal(cal.get("2026-07-10")?.items.length, 1);
+const day = cal.get("2026-07-10");
+assert.equal(day?.items.length, 1);
+assert.equal(day?.summary.projectCount, 1);
+assert.equal(day?.summary.releaseCount, 1);
+assert.equal(day?.summary.releaseTags[0], "v0.1.0");
+assert.ok(day?.byProject[0]?.directions.includes("六爻·学习·五步课"));
 
 console.log("module-progress + work-hours + calendar ok");

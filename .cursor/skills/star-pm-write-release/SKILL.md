@@ -272,7 +272,51 @@ Release:
 
 ---
 
-## 5. MCP 速查
+## 5. MCP 接入与速查
+
+**端点（生产）**：`https://star-project-manage.vercel.app/api/mcp`  
+鉴权：HTTP Header `Authorization: Bearer <token>`（管理员作用域；无 Bearer → 演示沙盘，**禁止写真实私域**）。  
+**密钥只放本机配置 / 环境变量，禁止写入 skill、仓库、聊天记录。**
+
+### 5.1 Cursor（`~/.cursor/mcp.json`）
+
+```json
+{
+  "mcpServers": {
+    "star-pm": {
+      "url": "https://star-project-manage.vercel.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <YOUR_TOKEN>"
+      }
+    }
+  }
+}
+```
+
+Cursor 里服务器名常显示为 `user-star-pm` / `star-pm`。仓库模板：`.cursor/mcp.json.example`。
+
+### 5.2 Codex（`~/.codex/config.toml`）
+
+用环境变量挂 Bearer（推荐名 `STAR_PM_MCP_TOKEN`）：
+
+```bash
+codex mcp add star-pm --url https://star-project-manage.vercel.app/api/mcp --bearer-token-env-var STAR_PM_MCP_TOKEN
+```
+
+等价 TOML：
+
+```toml
+[mcp_servers.star-pm]
+url = "https://star-project-manage.vercel.app/api/mcp"
+bearer_token_env_var = "STAR_PM_MCP_TOKEN"
+```
+
+本机用户环境变量设好 `STAR_PM_MCP_TOKEN` 后重启 Codex。  
+ChatGPT 网页 Custom GPT：走 OAuth 路径 `/api/mcp-oauth/mcp`（与 Cursor Bearer 不同），见产品文档；本 skill 默认指 Cursor/Codex Bearer。
+
+### 5.3 工具速查
+
+大批量写入前先 `get_ai_rules`。
 
 | 动作 | Tool |
 |------|------|
@@ -280,8 +324,17 @@ Release:
 | 比版本 | `compare_sources` |
 | 开改 / 收工 | `start_change_session` / `finish_change_session` |
 | 演进 / 决策 | `add_evolution` / `add_decision` |
-| 灵感 | `capture_idea` / `update_idea` |
+| 灵感 | `capture_idea` / `update_idea` / `get_idea` / `list_ideas` |
+| 项目 | `list_projects` / `get_project` / `update_project` |
+| 需求 | `list_requirements` / `update_requirement` / `create_task` |
+| 迭代期 | `list_iterations` / `create_planning_iteration` / `align_project_periods` |
+| Bug | `create_bug` / `list_bugs` |
 | 发版 | `publish_release` |
 | CHANGELOG→演进 | `import_changelog_evolution` |
+
+会话未刷新时桥接（经已挂载的 `create_task`）：
+
+- Bug：`progressNote` 首行 `__CREATE_BUG__`
+- 期次+工时对齐：`progressNote` 首行 `__ALIGN_PERIODS__`（可选次行 JSON `{dryRun,fillHours}`）
 
 仓库规则正文：`docs/ai/CANONICAL_RULES.md`（改规则只改那份，再发版）。

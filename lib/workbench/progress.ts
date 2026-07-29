@@ -216,3 +216,60 @@ export async function getRecentlyCompletedWork(
   items.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   return items.slice(0, limit);
 }
+
+/** 近 N 天完成的需求（池+板 completed_at），供改进日历每日总结 */
+export async function getCompletedRequirementsForCalendar(
+  days = 60
+): Promise<
+  Array<{
+    id: string;
+    title: string;
+    projectId: string;
+    projectTitle: string;
+    completedAt: string;
+  }>
+> {
+  const since = daysAgoIso(days);
+  const studioSnap = await getScopedStudioSnapshot();
+  const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
+  const out: Array<{
+    id: string;
+    title: string;
+    projectId: string;
+    projectTitle: string;
+    completedAt: string;
+  }> = [];
+
+  const { getPoolBundle } = await import("@/lib/db/local-store");
+  const pmProjects = await getProjects();
+  await Promise.all(
+    pmProjects.map(async (pmProject) => {
+      const [bundle, pool] = await Promise.all([
+        getProjectBundle(pmProject.id),
+        getPoolBundle(pmProject.id).catch(() => null),
+      ]);
+      const routeId = routeIdForPmSlug(pmProject.slug);
+      const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
+      const reqs = [
+        ...(bundle?.requirements ?? []),
+        ...(pool?.poolRequirements ?? []),
+      ];
+      const seen = new Set<string>();
+      for (const req of reqs) {
+        if (seen.has(req.id)) continue;
+        seen.add(req.id);
+        const when = req.completed_at;
+        if (!when || when < since) continue;
+        out.push({
+          id: req.id,
+          title: req.title,
+          projectId: routeId,
+          projectTitle,
+          completedAt: when,
+        });
+      }
+    })
+  );
+
+  return out;
+}

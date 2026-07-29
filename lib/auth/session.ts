@@ -57,6 +57,9 @@ export function verifySession(token: string): AuthSession | null {
 }
 
 export async function getAdminSession(): Promise<AuthSession | null> {
+  const { getMcpAdminSession } = await import("@/lib/auth/request-scope");
+  const mcp = getMcpAdminSession();
+  if (mcp) return mcp;
   if (!isAuthRequired()) {
     return { email: "dev", role: "admin" };
   }

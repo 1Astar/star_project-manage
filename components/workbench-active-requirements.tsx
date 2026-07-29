@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { StudioBadge } from "@/components/studio/shell";
+import { WorkbenchCollapsibleSection } from "@/components/workbench-collapsible-section";
 import type { ActiveWorkGroup } from "@/lib/workbench/progress";
 
 function sourceLabel(source: "pm" | "studio") {
@@ -10,21 +13,19 @@ export function WorkbenchActiveRequirements({ groups }: { groups: ActiveWorkGrou
   const total = groups.reduce((n, g) => n + g.items.length, 0);
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">各项目进行中的需求</h2>
-          <p className="mt-0.5 text-xs text-slate-500">
-            PM 已入迭代 · Studio 进行中 · 共 {total} 条
-          </p>
-        </div>
-        <Link href="/projects" className="text-xs text-indigo-600 hover:underline">
+    <WorkbenchCollapsibleSection
+      storageKey="star-pm:wb-collapse:active-reqs"
+      title="各项目进行中的需求"
+      subtitle={`PM 已入迭代 · Studio 进行中 · 共 ${total} 条 · 默认可收起以免挡项目库`}
+      defaultOpen={false}
+      headerRight={
+        <Link href="/projects" className="text-indigo-600 hover:underline">
           项目库 →
         </Link>
-      </div>
-
+      }
+    >
       {groups.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400">当前没有进行中的需求</p>
+        <p className="py-6 text-center text-sm text-slate-400">当前没有进行中的需求</p>
       ) : (
         <div className="space-y-5">
           {groups.map((group) => (
@@ -61,6 +62,6 @@ export function WorkbenchActiveRequirements({ groups }: { groups: ActiveWorkGrou
           ))}
         </div>
       )}
-    </section>
+    </WorkbenchCollapsibleSection>
   );
 }

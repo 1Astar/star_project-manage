@@ -3,77 +3,67 @@ import { WorkbenchShell } from "@/components/workbench-shell";
 import { QuickCaptureModal } from "@/components/studio/quick-capture-modal";
 import { WorkbenchStarOrCalendar } from "@/components/workbench-star-or-calendar";
 import { StudioBadge } from "@/components/studio/shell";
-import { WorkbenchActiveRequirements } from "@/components/workbench-active-requirements";
-import { WorkbenchCompletedFeed } from "@/components/workbench-completed-feed";
 import { WorkbenchProjectLibrary } from "@/components/workbench-project-library";
 import { WorkbenchBlockers } from "@/components/workbench-blockers";
+import { WorkbenchPmToday } from "@/components/workbench-pm-today";
+import { WorkbenchFocusScroll } from "@/components/workbench-focus-scroll";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
 import { buildImprovementCalendar } from "@/lib/studio/improvement-calendar";
 import { getAdminSession } from "@/lib/auth/session";
 import {
-  getActiveRequirementsAcrossProjects,
-  getRecentlyCompletedWork,
-} from "@/lib/workbench/progress";
-import {
-  getTodayFocus,
-  getMainlineProject,
-  getRecentIdeas,
-  getRecentEvolution,
   getAllProjects,
   getAllIdeas,
   getAllEvolutionLogs,
   getAllChangeSessions,
-  getProjectTitle,
   getPendingAlerts,
-  getRecentGitUpdates,
   getNextActionDrafts,
 } from "@/lib/studio/data";
 import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
-import { TomorrowAgendaPanel } from "@/components/tomorrow-agenda-panel";
 import {
-  IDEA_TYPE_LABELS,
-  EVOLUTION_TYPE_LABELS,
-  PROJECT_STATUS_LABELS,
-} from "@/lib/studio/types";
+  filterTomorrowDueOnly,
+  getOpenBugsAcrossProjects,
+  getPmAcceptanceQueue,
+  getPmFollowUps,
+} from "@/lib/workbench/pm-inbox";
+import { getSuggestedMainline } from "@/lib/workbench/mainline-score";
+import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 
 export default async function WorkbenchPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; focus?: string }>;
 }) {
   const params = searchParams ? await searchParams : {};
   const session = await getAdminSession();
   const [
-    focus,
-    mainline,
-    recentIdeas,
-    recentEvolution,
+    suggestedMainline,
     allProjects,
     allIdeas,
     allEvolution,
     allChangeSessions,
     alerts,
-    gitUpdates,
-    activeGroups,
-    completedWork,
     nextActionDrafts,
     tomorrowAgenda,
+    acceptanceQueue,
+    followUps,
+    openBugs,
   ] = await Promise.all([
-    getTodayFocus(),
-    getMainlineProject(),
-    getRecentIdeas(5),
-    getRecentEvolution(5),
+    getSuggestedMainline(),
     getAllProjects(),
     getAllIdeas(),
     getAllEvolutionLogs(),
     getAllChangeSessions(),
     getPendingAlerts(),
-    getRecentGitUpdates(5),
-    getActiveRequirementsAcrossProjects(),
-    getRecentlyCompletedWork(20, 14),
     getNextActionDrafts(),
     getTomorrowAgenda(),
+    getPmAcceptanceQueue(),
+    getPmFollowUps(),
+    getOpenBugsAcrossProjects(),
   ]);
+
+  const focus = suggestedMainline
+    ? { project: suggestedMainline.project, task: suggestedMainline.focusTask }
+    : null;
 
   const starMapLayout = buildStarMapLayout(allIdeas, allProjects);
   const projectTitleById = new Map(allProjects.map((p) => [p.id, p.title]));
@@ -84,13 +74,6 @@ export default async function WorkbenchPage({
   });
   const improvementByDay = Object.fromEntries(improvementByDayMap);
 
-  const evolutionWithTitles = await Promise.all(
-    recentEvolution.map(async (log) => ({
-      log,
-      projectName: await getProjectTitle(log.projectId),
-    }))
-  );
-
   const libraryProjects = allProjects.filter((p) => p.status !== "archived");
   const blockerItems = alerts.blockers.map((t) => ({
     taskId: t.id,
@@ -100,25 +83,21 @@ export default async function WorkbenchPage({
     projectTitle: projectTitleById.get(t.projectId) ?? "未知项目",
   }));
 
+  const tomorrowDue = filterTomorrowDueOnly(tomorrowAgenda.items);
+
   return (
     <WorkbenchShell
       title="今日工作台"
-      subtitle="灵感 · 项目 · 任务 · 恢复现场"
+      subtitle="日历 · 项目 · 今日 / 明日"
       role={session?.role ?? "guest"}
     >
+      <WorkbenchFocusScroll focus={params.focus} />
       {params.error === "keys-forbidden" ? (
         <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           密钥区仅管理员可见。公开演示不展示密钥入口；需要时请右上角登录。
         </p>
       ) : null}
       <QuickCaptureModal projects={allProjects.map((p) => ({ id: p.id, label: p.title }))} />
-
-      <div className="mt-6">
-        <WorkbenchStarOrCalendar
-          layout={starMapLayout}
-          improvementByDay={improvementByDay}
-        />
-      </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -154,121 +133,85 @@ export default async function WorkbenchPage({
         </section>
 
         <section className="rounded-xl border border-amber-200 bg-amber-50/40 px-4 py-3">
-          <div className="text-xs font-medium text-amber-700/80">当前主线</div>
-          {mainline ? (
-            <Link href={`/projects/${mainline.id}`} className="mt-1 block">
-              <StudioBadge tone="mainline">{PROJECT_STATUS_LABELS.mainline}</StudioBadge>
-              <div className="mt-1 truncate text-sm font-semibold text-slate-900">
-                {mainline.title}
+          <div className="text-xs font-medium text-amber-700/80">当前主线 · 算法</div>
+          {suggestedMainline ? (
+            <Link href={`/projects/${suggestedMainline.project.id}`} className="mt-1 block">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StudioBadge tone="mainline">
+                  {suggestedMainline.pinned
+                    ? "钉主线加权"
+                    : PROJECT_STATUS_LABELS[suggestedMainline.project.status]}
+                </StudioBadge>
+                <span className="text-[10px] text-amber-800/70">
+                  分 {suggestedMainline.score}
+                </span>
               </div>
+              <div className="mt-1 truncate text-sm font-semibold text-slate-900">
+                {suggestedMainline.project.title}
+              </div>
+              {suggestedMainline.reasons.length > 0 ? (
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {suggestedMainline.reasons.join(" · ")}
+                </p>
+              ) : null}
             </Link>
           ) : (
-            <p className="mt-1 text-xs text-slate-400">未设置主线</p>
+            <p className="mt-1 text-xs text-slate-400">暂无候选项目</p>
           )}
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
           <div className="text-xs font-medium text-slate-400">待处理</div>
           <p className="mt-1 text-sm text-slate-700">
+            待验收{" "}
+            <a href="#pm-today" className="font-semibold text-orange-700 hover:underline">
+              {acceptanceQueue.items.length}
+            </a>
+            <span className="mx-1 text-slate-300">·</span>
+            Bug{" "}
+            <a href="#pm-today" className="font-semibold text-rose-700 hover:underline">
+              {openBugs.length}
+            </a>
+            <span className="mx-1 text-slate-300">·</span>
+            跟进{" "}
+            <a href="#pm-today" className="font-semibold text-amber-700 hover:underline">
+              {followUps.items.length}
+            </a>
+            <span className="mx-1 text-slate-300">·</span>
             收件箱{" "}
             <Link href="/stream" className="font-semibold text-indigo-600 hover:underline">
               {alerts.inboxCount}
             </Link>
             {blockerItems.length > 0 ? <WorkbenchBlockers items={blockerItems} /> : null}
-            {alerts.emptyNextActionCount > 0 ? (
-              <Link
-                href="/projects"
-                className="ml-2 text-amber-700/90 hover:underline"
-              >
-                下一步空白 {alerts.emptyNextActionCount}
-              </Link>
-            ) : null}
           </p>
         </section>
       </div>
 
+      {/* 1) 星球 / 日历 */}
       <div className="mt-6">
-        <TomorrowAgendaPanel
-          todayDay={tomorrowAgenda.todayDay}
-          yesterdayDay={tomorrowAgenda.yesterdayDay}
-          items={tomorrowAgenda.items}
-          projects={tomorrowAgenda.projects}
+        <WorkbenchStarOrCalendar
+          layout={starMapLayout}
+          improvementByDay={improvementByDay}
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <WorkbenchActiveRequirements groups={activeGroups} />
-        <WorkbenchCompletedFeed items={completedWork} />
-      </div>
-
+      {/* 2) 项目（默认收缩） */}
       <WorkbenchProjectLibrary
         projects={libraryProjects}
         nextActionDrafts={nextActionDrafts}
       />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-500">最近灵感</h2>
-            <Link href="/stream" className="text-xs text-indigo-600 hover:underline">
-              收件箱
-            </Link>
-          </div>
-          <ul className="mt-3 space-y-3">
-            {recentIdeas.map((idea) => (
-              <li key={idea.id} className="border-b border-slate-50 pb-3 last:border-0">
-                <div className="font-medium text-slate-800">{idea.title}</div>
-                <p className="mt-0.5 text-xs text-slate-500">{idea.oneLineIdea}</p>
-                <div className="mt-1 flex gap-2">
-                  <StudioBadge>{IDEA_TYPE_LABELS[idea.type]}</StudioBadge>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-500">最近演进</h2>
-            <Link href="/evolution" className="text-xs text-indigo-600 hover:underline">
-              全部
-            </Link>
-          </div>
-          <ul className="mt-3 divide-y divide-slate-100">
-            {evolutionWithTitles.map(({ log, projectName }) => (
-              <li key={log.id} className="py-3">
-                <div className="flex flex-wrap gap-2 text-xs text-slate-400">
-                  <StudioBadge>{EVOLUTION_TYPE_LABELS[log.logType]}</StudioBadge>
-                  {projectName}
-                </div>
-                <div className="mt-1 text-sm font-medium text-slate-800">{log.title}</div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {log.before} → {log.after}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-6">
-          <h2 className="text-sm font-semibold text-slate-500">最近 Git 更新</h2>
-          <ul className="mt-3 space-y-3 text-sm">
-            {gitUpdates.map((item) => (
-              <li key={item.projectId}>
-                <Link
-                  href={`/projects/${item.projectId}`}
-                  className="font-medium text-slate-800 hover:text-indigo-700"
-                >
-                  {item.title}
-                </Link>
-                <p className="mt-0.5 text-xs text-slate-500">{item.message}</p>
-              </li>
-            ))}
-            {gitUpdates.length === 0 ? (
-              <li className="text-slate-400">暂无 Git 记录</li>
-            ) : null}
-          </ul>
-        </section>
+      {/* 3) 今日清单 + 明日待办 */}
+      <div className="mt-6">
+        <WorkbenchPmToday
+          acceptance={acceptanceQueue.items}
+          followUps={followUps.items}
+          openBugs={openBugs}
+          lookbackDays={acceptanceQueue.lookbackDays}
+          todayDay={tomorrowAgenda.todayDay}
+          tomorrowDay={tomorrowAgenda.tomorrowDay}
+          tomorrowItems={tomorrowDue}
+        />
       </div>
     </WorkbenchShell>
   );

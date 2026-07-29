@@ -37,6 +37,7 @@ const COLUMN_TONE: Record<RequirementLifecycleStatus, string> = {
   想法: "text-amber-800",
   已规划: "text-sky-800",
   AI开发中: "text-violet-800",
+  开发中: "text-blue-800",
   待验收: "text-orange-800",
   完成: "text-emerald-800",
   放弃: "text-slate-500",
@@ -57,6 +58,8 @@ export function RequirementStatusKanban({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  /** 点列头筛选到该状态；点旁边空白取消 */
+  const [focusColumn, setFocusColumn] = useState<RequirementLifecycleStatus | null>(null);
 
   useEffect(() => {
     setItems(buildItems(projectSlug, initialReqs, initialItems));
@@ -68,17 +71,21 @@ export function RequirementStatusKanban({
     return items.filter((i) => isLeafRequirement(i.req, reqs));
   }, [items, initialItems]);
 
-  const columns = useMemo(() => [...REQUIREMENT_KANBAN_COLUMNS], []);
+  const columns = useMemo(() => {
+    const all = [...REQUIREMENT_KANBAN_COLUMNS];
+    if (!focusColumn) return all;
+    return all.filter((c) => c === focusColumn);
+  }, [focusColumn]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, RequirementKanbanItem[]>();
-    for (const col of columns) map.set(col, []);
+    for (const col of REQUIREMENT_KANBAN_COLUMNS) map.set(col, []);
     for (const item of boardItems) {
       const col = requirementKanbanColumn(item.req);
       map.get(col)!.push(item);
     }
     return map;
-  }, [boardItems, columns]);
+  }, [boardItems]);
 
   function moveToColumn(reqId: string, column: string) {
     const item = items.find((i) => i.req.id === reqId);
@@ -114,21 +121,36 @@ export function RequirementStatusKanban({
         <p className="text-xs text-slate-500">
           需求看板 · {REQUIREMENT_STATUS_HINT}
           {pending ? " · 保存中…" : null}
+          {focusColumn ? (
+            <span className="ml-1 text-indigo-600">
+              · 仅看「{focusColumn}」· 点旁边空白取消筛选
+            </span>
+          ) : (
+            <span className="ml-1 text-slate-400">· 点列名可只看该状态</span>
+          )}
         </p>
         {message ? <span className="text-xs text-red-600">{message}</span> : null}
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div
+        className="flex min-h-[12rem] gap-3 overflow-x-auto pb-2"
+        onClick={() => {
+          if (focusColumn) setFocusColumn(null);
+        }}
+      >
         {columns.map((col) => {
           const colItems = grouped.get(col) ?? [];
           const isOver = overColumn === col;
+          const isFocused = focusColumn === col;
           return (
             <div
               key={col}
               className={cn(
                 "flex w-64 shrink-0 flex-col rounded-xl border bg-slate-50",
-                isOver ? "border-indigo-400 ring-2 ring-indigo-200" : "border-slate-200"
+                isOver ? "border-indigo-400 ring-2 ring-indigo-200" : "border-slate-200",
+                isFocused ? "ring-2 ring-indigo-200" : ""
               )}
+              onClick={(e) => e.stopPropagation()}
               onDragOver={(e) => {
                 e.preventDefault();
                 setOverColumn(col);
@@ -144,7 +166,14 @@ export function RequirementStatusKanban({
                 if (id) moveToColumn(id, col);
               }}
             >
-              <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between border-b border-slate-200 px-3 py-2 text-left hover:bg-white/70"
+                title={isFocused ? "再次点击取消筛选" : "只看此状态"}
+                onClick={() =>
+                  setFocusColumn((prev) => (prev === col ? null : col))
+                }
+              >
                 <span
                   className={cn(
                     "text-sm font-semibold",
@@ -156,7 +185,7 @@ export function RequirementStatusKanban({
                 <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
                   {colItems.length}
                 </span>
-              </div>
+              </button>
               <ul className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto p-2">
                 {colItems.length === 0 ? (
                   <li className="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-400">
@@ -222,6 +251,14 @@ export function RequirementStatusKanban({
             </div>
           );
         })}
+        {/* 右侧留白，方便点空白取消筛选 */}
+        {focusColumn ? (
+          <div
+            className="min-w-[4rem] flex-1 self-stretch rounded-xl border border-dashed border-slate-200/80"
+            title="点击取消筛选"
+            aria-label="取消筛选"
+          />
+        ) : null}
       </div>
     </div>
   );

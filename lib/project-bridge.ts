@@ -8,6 +8,7 @@ const STUDIO_TO_PM_SLUG: Record<string, string> = {
   "proj-ai-pet": "ai-pet",
   "proj-ai-controller": "ai-controller",
   "proj-star-pm": "star-pm",
+  // 随心而行：库内已有 studio-proj-moonpie，勿改成 moonpie（会丢需求）
   "proj-c84ff6fa": "yoking-pump",
   "proj-yuanjing-pump": "yuanjing-pump",
   "proj-star-lab-os": "star-lab-os",

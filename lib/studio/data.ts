@@ -86,19 +86,16 @@ export async function getChangeSessionById(id: string) {
 }
 
 export async function getMainlineProject() {
-  const { projects } = await getScopedStudioSnapshot();
-  return projects.find((p) => p.status === "mainline") ?? null;
+  const { getSuggestedMainline } = await import("@/lib/workbench/mainline-score");
+  const suggested = await getSuggestedMainline();
+  return suggested?.project ?? null;
 }
 
 export async function getTodayFocus() {
-  const { projects, tasks } = await getScopedStudioSnapshot();
-  const mainline = projects.find((p) => p.status === "mainline");
-  if (!mainline) return null;
-  const task =
-    tasks.find((t) => t.projectId === mainline.id && t.status === "in_progress") ??
-    tasks.find((t) => t.projectId === mainline.id) ??
-    null;
-  return { project: mainline, task };
+  const { getSuggestedMainline } = await import("@/lib/workbench/mainline-score");
+  const suggested = await getSuggestedMainline();
+  if (!suggested) return null;
+  return { project: suggested.project, task: suggested.focusTask };
 }
 
 export async function getRecentIdeas(limit = 5) {

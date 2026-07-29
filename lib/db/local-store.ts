@@ -11,6 +11,7 @@ import {
   upsertRequirementRow,
   upsertRequirementAttachmentRow,
   upsertAcceptanceItemRow,
+  upsertAcceptanceRecordRow,
   deleteRequirementAttachmentRow,
   upsertActivityLogRow,
   upsertRequirementLinkRow,
@@ -630,6 +631,79 @@ export async function updateAcceptanceItem(
   return item;
 }
 
+/**
+ * PM 工作台一键验收：写验收记录 + 拧生命周期（完成 / AI开发中）
+ */
+export async function productReviewRequirement(
+  requirementId: string,
+  input: { passed: boolean; note?: string | null },
+  actor: { name: string; role?: string }
+) {
+  const db = await readDb();
+  const req = db.requirements.find((r) => r.id === requirementId);
+  if (!req) throw new Error("需求不存在");
+
+  let item = db.acceptance_items.find(
+    (a) => a.requirement_id === requirementId && a.description.startsWith("产品验收")
+  );
+  if (!item) {
+    item = {
+      id: uid("acc-"),
+      requirement_id: requirementId,
+      description: "产品验收（工作台）",
+      passed: null,
+      note: null,
+      sort_order: 0,
+    };
+    db.acceptance_items.push(item);
+  }
+  item.passed = input.passed;
+  item.note = input.note?.trim() || null;
+
+  const record: AcceptanceRecord = {
+    id: uid("arec-"),
+    requirement_id: requirementId,
+    acceptance_item_id: item.id,
+    passed: input.passed,
+    note: input.note?.trim() || null,
+    reviewer_name: actor.name,
+    created_at: nowIso(),
+  };
+  db.acceptance_records.unshift(record);
+
+  const life = input.passed ? "完成" : "AI开发中";
+  req.status_tags = applyLifecycleStatus(req.status_tags ?? [], life);
+  req.status = deriveTaskStatusFromTags(req.status_tags);
+  if (input.passed) {
+    if (!req.completed_at) req.completed_at = nowIso();
+  } else {
+    req.completed_at = null;
+  }
+  req.updated_at = nowIso();
+
+  await logActivity(db, {
+    project_id: req.project_id,
+    entity_type: "requirement",
+    entity_id: req.id,
+    field_name: "product_review",
+    old_value: null,
+    new_value: input.passed ? "passed" : "rejected",
+    actor_name: actor.name,
+    actor_role: actor.role ?? "admin",
+  });
+
+  if (isSupabaseConfigured()) {
+    await upsertAcceptanceItemRow(item);
+    await upsertAcceptanceRecordRow(record);
+    await upsertRequirementRow(req);
+    memoryDb = db;
+    return { req, record };
+  }
+
+  await saveLocalDb(db);
+  return { req, record };
+}
+
 export async function updateRequirement(
   requirementId: string,
   updates: RequirementUpdates,
@@ -645,9 +719,12 @@ export async function updateRequirement(
   // 有子需求时禁止手工标「完成」（除非强制关闭）
   if (status_tags && !updates.force_closed) {
     const hasChildren = db.requirements.some((r) => r.parent_id === req.id);
+    const nextStatus = deriveTaskStatusFromTags(
+      canonicalizeStatusTags(status_tags.map((t) => t.trim()).filter(Boolean))
+    );
     const nextDone = requirementIsDone({
       status_tags,
-      status: req.status,
+      status: nextStatus,
     });
     if (hasChildren && nextDone && !req.force_closed) {
       const kids = db.requirements.filter((r) => r.parent_id === req.id);
@@ -688,6 +765,7 @@ export async function updateRequirement(
     req.assignees = updates.assignees.map((a) => a.trim()).filter(Boolean);
   }
 
+  const activityLogs: ActivityLog[] = [];
   for (const [field, value] of Object.entries({
     ...rest,
     ...(status_tags ? { status_tags: req.status_tags } : {}),
@@ -708,23 +786,33 @@ export async function updateRequirement(
           ? JSON.stringify(value ?? [])
           : String(value ?? "");
     if (oldVal !== newVal) {
-      await logActivity(db, {
-        project_id: req.project_id,
-        entity_type: "requirement",
-        entity_id: req.id,
-        field_name: field,
-        old_value: oldVal,
-        new_value: newVal,
-        actor_name: actor.name,
-        actor_role: actor.role ?? "admin",
-      });
+      activityLogs.push(
+        await logActivity(db, {
+          project_id: req.project_id,
+          entity_type: "requirement",
+          entity_id: req.id,
+          field_name: field,
+          old_value: oldVal,
+          new_value: newVal,
+          actor_name: actor.name,
+          actor_role: actor.role ?? "admin",
+        })
+      );
     }
   }
 
   // 沿祖先链重算父状态
   await reconcileAncestorStatuses(db, req.parent_id);
 
-  await saveDb(db);
+  // 单行 upsert，避免整库 writeSupabaseDb 并发互相覆盖
+  if (isSupabaseConfigured()) {
+    await upsertRequirementRow(req);
+    for (const log of activityLogs) await persistActivityLog(log);
+    memoryDb = db;
+    return req;
+  }
+
+  await saveLocalDb(db);
   return req;
 }
 
@@ -1548,6 +1636,15 @@ export async function createPoolRequirement(
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) throw new Error("项目不存在");
 
+  // 同项目同 studio_idea_id 已存在 → 幂等返回（避免撞 requirements_project_studio_idea_uidx）
+  if (input.studio_idea_id?.trim()) {
+    const sid = input.studio_idea_id.trim();
+    const existing = db.requirements.find(
+      (r) => r.project_id === project.id && r.studio_idea_id === sid
+    );
+    if (existing) return existing;
+  }
+
   const poolIteration = await ensurePoolIteration(project.id);
   const siblings = db.requirements.filter(
     (r) =>
@@ -1655,10 +1752,18 @@ export async function createPoolRequirement(
   await reconcileAncestorStatuses(db, req.parent_id);
 
   if (isSupabaseConfigured()) {
-    await upsertRequirementRow(req);
-    await persistActivityLog(log);
-    memoryDb = db;
-    return req;
+    try {
+      await upsertRequirementRow(req);
+      await persistActivityLog(log);
+      memoryDb = db;
+      return req;
+    } catch (error) {
+      // 回滚内存，避免 upsert 失败后本地残留「假新建」导致二次同步状态错乱
+      db.requirements = db.requirements.filter((r) => r.id !== req.id);
+      db.activity_logs = db.activity_logs.filter((l) => l.id !== log.id);
+      memoryDb = db;
+      throw error;
+    }
   }
 
   await saveLocalDb(db);
@@ -1837,9 +1942,14 @@ export async function syncStudioIdeasIntoPool(
       created += 1;
       await markPooledIdeaConverted(idea.id, idea.status);
     } catch (error) {
-      errors.push(
-        `灵感「${idea.title}」: ${error instanceof Error ? error.message : String(error)}`
-      );
+      const msg = error instanceof Error ? error.message : String(error);
+      if (/duplicate key|unique constraint|studio_idea/i.test(msg)) {
+        existingIdeaIds.add(idea.id);
+        skippedExisting += 1;
+        await markPooledIdeaConverted(idea.id, idea.status);
+        continue;
+      }
+      errors.push(`灵感「${idea.title}」: ${msg}`);
     }
   }
 
@@ -1859,6 +1969,11 @@ export async function syncStudioIdeasIntoPool(
       .join("\n\n");
     try {
       const windowNote = options?.actorNote || "Studio 演进同步";
+      const idsBefore = new Set(
+        (await readDb()).requirements
+          .filter((r) => r.project_id === project.id)
+          .map((r) => r.id)
+      );
       const createdReq = await createPoolRequirement(project.id, {
         title: evo.title,
         detail_work: body || null,
@@ -1870,20 +1985,30 @@ export async function syncStudioIdeasIntoPool(
         actor_name: AGENT_ACTOR_NAME,
         actor_note: windowNote,
       });
-      await createRequirementLink({
-        project_id: project.id,
-        source_type: "requirement",
-        source_id: createdReq.id,
-        target_type: "evolution",
-        target_id: evo.id,
-        relation_type: "has_evolution",
-      });
-      existingIdeaIds.add(key);
-      created += 1;
+      if (!idsBefore.has(createdReq.id)) {
+        await createRequirementLink({
+          project_id: project.id,
+          source_type: "requirement",
+          source_id: createdReq.id,
+          target_type: "evolution",
+          target_id: evo.id,
+          relation_type: "has_evolution",
+        });
+        existingIdeaIds.add(key);
+        created += 1;
+      } else {
+        existingIdeaIds.add(key);
+        skippedExisting += 1;
+      }
     } catch (error) {
-      errors.push(
-        `演进「${evo.title}」: ${error instanceof Error ? error.message : String(error)}`
-      );
+      const msg = error instanceof Error ? error.message : String(error);
+      // 本地缓存未命中但库里已有 (project_id, studio_idea_id) → 当已存在跳过
+      if (/duplicate key|unique constraint|studio_idea/i.test(msg)) {
+        existingIdeaIds.add(key);
+        skippedExisting += 1;
+        continue;
+      }
+      errors.push(`演进「${evo.title}」: ${msg}`);
     }
   }
 

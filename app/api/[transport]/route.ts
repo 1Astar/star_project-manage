@@ -1,6 +1,7 @@
 import { createMcpHandler } from "mcp-handler";
 import { getMcpRedisUrl } from "@/lib/mcp/config";
 import { registerStarPmTools } from "@/lib/mcp/server";
+import { MCP_SERVER_NAME, MCP_SERVER_VERSION } from "@/lib/mcp/version";
 import { withBearerMcpAuth } from "@/lib/mcp/with-bearer-auth";
 
 export const maxDuration = 60;
@@ -12,8 +13,8 @@ const handler = createMcpHandler(
   },
   {
     serverInfo: {
-      name: "star-pm",
-      version: "1.3.2",
+      name: MCP_SERVER_NAME,
+      version: MCP_SERVER_VERSION,
     },
   },
   {

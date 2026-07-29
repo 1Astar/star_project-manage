@@ -25,3 +25,4 @@ next-env.d.ts
 
 # local data runtime (keep seeds)
 # data/db.json is committed as sample in this repo historically
+.vercel

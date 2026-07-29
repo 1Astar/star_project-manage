@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ProjectLibraryCard } from "@/components/project-library-card";
+import { WorkbenchCollapsibleSection } from "@/components/workbench-collapsible-section";
 import {
   applyLibraryPrefs,
   libraryEditorRows,
@@ -87,11 +88,18 @@ export function WorkbenchProjectLibrary({
     persist({ order: [], hidden: [] });
   }
 
+  const tree = ready ? visibleTree : applyLibraryPrefs(projects, { order: [], hidden: [] });
+  const visibleCount = tree.length;
+
   return (
-    <section className="mt-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-500">项目库</h2>
-        <div className="flex items-center gap-3 text-xs">
+    <WorkbenchCollapsibleSection
+      storageKey="star-pm:wb-collapse:library-v2"
+      title="项目库"
+      subtitle={`一眼扫完全部项目 · 显示 ${visibleCount} 个 · 默认收起`}
+      defaultOpen={false}
+      className="mt-6"
+      headerRight={
+        <>
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
@@ -102,11 +110,11 @@ export function WorkbenchProjectLibrary({
           <Link href="/projects" className="text-indigo-600 hover:underline">
             查看全部
           </Link>
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {editing ? (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-slate-500">
               勾选显示 · 拖拽排序 · 配置保存在本浏览器
@@ -128,7 +136,7 @@ export function WorkbenchProjectLibrary({
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => onDrop(row.project.id)}
                 className={cn(
-                  "flex cursor-grab items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 active:cursor-grabbing",
+                  "flex cursor-grab items-center gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2 active:cursor-grabbing",
                   dragId === row.project.id && "opacity-50",
                   !row.visible && "bg-slate-50 opacity-70"
                 )}
@@ -162,32 +170,26 @@ export function WorkbenchProjectLibrary({
         </div>
       ) : null}
 
-      {(() => {
-        const tree = ready ? visibleTree : applyLibraryPrefs(projects, { order: [], hidden: [] });
-        if (tree.length === 0) {
-          return (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
-              当前没有要显示的项目。点「调整显示」打开开关，或
-              <Link href="/projects" className="ml-1 text-indigo-600 hover:underline">
-                查看全部项目
-              </Link>
-            </p>
-          );
-        }
-        return (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {tree.map(({ project: p, depth, parentTitle }) => (
-              <ProjectLibraryCard
-                key={p.id}
-                project={p}
-                depth={depth}
-                parentTitle={parentTitle}
-                nextActionDraft={nextActionDrafts[p.id]}
-              />
-            ))}
-          </div>
-        );
-      })()}
-    </section>
+      {tree.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center text-sm text-slate-500">
+          当前没有要显示的项目。点「调整显示」打开开关，或
+          <Link href="/projects" className="ml-1 text-indigo-600 hover:underline">
+            查看全部项目
+          </Link>
+        </p>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {tree.map(({ project: p, depth, parentTitle }) => (
+            <ProjectLibraryCard
+              key={p.id}
+              project={p}
+              depth={depth}
+              parentTitle={parentTitle}
+              nextActionDraft={nextActionDrafts[p.id]}
+            />
+          ))}
+        </div>
+      )}
+    </WorkbenchCollapsibleSection>
   );
 }

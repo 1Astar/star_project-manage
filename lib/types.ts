@@ -93,7 +93,7 @@ export interface Iteration {
   name: string;
   sort_order: number;
   created_at: string;
-  /** YYYY-MM-DD；空则无法判「未开始/已过期」 */
+  /** YYYY-MM-DD；空则无法判「未开始/延期」 */
   start_date: string | null;
   end_date: string | null;
   /** 绑定的 GitHub Release/Tag */
@@ -266,6 +266,8 @@ export type RequirementUpdates = Partial<{
   module_l2_id: string | null;
   parent_id: string | null;
   type: RequirementType;
+  /** 挂到规划迭代（可仍留在需求池 in_pool=true） */
+  iteration_id: string;
   submitted_at: string | null;
   due_date: string | null;
   difficulty_notes: string | null;
