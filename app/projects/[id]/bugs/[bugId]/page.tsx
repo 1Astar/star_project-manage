@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
-import { fetchBugDetail, fetchProjectBoard } from "@/lib/actions";
+import { fetchBugDetail } from "@/lib/actions";
 import { BugDetailEditor } from "@/components/bug-side-form";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { getProjectMembers } from "@/lib/db/local-store";
+import {
+  getProjectMembers,
+  listProjectRequirementOptions,
+} from "@/lib/db/local-store";
 
 export default async function BugDetailPage({
   params,
@@ -14,13 +17,8 @@ export default async function BugDetailPage({
   const detail = await fetchBugDetail(bugId);
   if (!detail?.bug || !detail.project) notFound();
 
-  const pmBundle =
-    ctx.pmBundle ?? (ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : null);
   const members = await getProjectMembers(detail.project.id);
-  const requirements = (pmBundle?.requirements ?? []).map((r) => ({
-    id: r.id,
-    title: r.title,
-  }));
+  const requirements = await listProjectRequirementOptions(detail.project.id);
 
   return (
     <BugDetailEditor
@@ -30,6 +28,7 @@ export default async function BugDetailPage({
       requirementTitle={detail.requirement?.title ?? null}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
+      comments={detail.comments ?? []}
     />
   );
 }

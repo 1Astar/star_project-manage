@@ -442,6 +442,17 @@ export interface RequirementComment {
   created_at: string;
 }
 
+/** Bug 补充 / 评论 */
+export interface BugComment {
+  id: string;
+  project_id: string;
+  bug_id: string;
+  author_name: string;
+  author_role: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface ProjectMember {
   id: string;
   project_id: string;

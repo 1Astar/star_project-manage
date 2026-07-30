@@ -13,6 +13,7 @@ import type {
   Prototype,
   Requirement,
   RequirementAttachment,
+  BugComment,
   RequirementComment,
   RequirementLink,
   RoleTask,
@@ -35,6 +36,7 @@ export interface DatabaseSnapshot {
   notifications: NotificationItem[];
   activity_logs: ActivityLog[];
   comments: RequirementComment[];
+  bug_comments: BugComment[];
   git_activities: GitActivity[];
   project_members: ProjectMember[];
   pool_column_defs: PoolColumnDef[];

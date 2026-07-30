@@ -37,6 +37,7 @@ import type {
   AcceptanceRecord,
   ActivityLog,
   Bug,
+  BugComment,
   BugSeverity,
   BugType,
   GitActivity,
@@ -170,6 +171,7 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
   return {
     ...db,
     comments: db.comments ?? [],
+    bug_comments: db.bug_comments ?? [],
     git_activities: db.git_activities ?? [],
     project_members: db.project_members ?? [],
     activity_logs: db.activity_logs ?? [],
@@ -996,6 +998,24 @@ export async function getRequirementDetail(requirementId: string) {
   };
 }
 
+export async function listProjectRequirementOptions(projectId: string) {
+  const db = await readDb();
+  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  if (!project) return [];
+  return db.requirements
+    .filter((r) => r.project_id === project.id)
+    .sort((a, b) => a.title.localeCompare(b.title, "zh"))
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      inPool: Boolean(r.in_pool),
+    }));
+}
+
+function bugPathForProject(project: Project, bugId: string) {
+  return `/projects/${project.slug}/bugs/${bugId}`;
+}
+
 export async function getBugById(bugId: string) {
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === bugId);
@@ -1004,7 +1024,10 @@ export async function getBugById(bugId: string) {
   const requirement = bug.requirement_id
     ? db.requirements.find((r) => r.id === bug.requirement_id)
     : null;
-  return { bug, project, requirement };
+  const comments = (db.bug_comments ?? [])
+    .filter((c) => c.bug_id === bugId)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  return { bug, project, requirement, comments };
 }
 
 export async function createBug(input: {
@@ -1016,8 +1039,12 @@ export async function createBug(input: {
   assignee?: string;
   severity?: BugSeverity;
   bug_type?: BugType;
+  created_at?: string | null;
 }) {
   const db = await readDb();
+  const project = db.projects.find((p) => p.id === input.project_id);
+  if (!project) throw new Error("项目不存在");
+  const createdAt = input.created_at?.trim() || nowIso();
   const bug: Bug = {
     id: uid("bug-"),
     project_id: input.project_id,
@@ -1029,21 +1056,35 @@ export async function createBug(input: {
     status: "pending",
     severity: input.severity ?? 3,
     bug_type: input.bug_type ?? "code",
-    created_at: nowIso(),
-    updated_at: nowIso(),
+    created_at: createdAt,
+    updated_at: createdAt,
   };
   db.bugs.unshift(bug);
-  db.notifications.unshift({
-    id: uid("notif-"),
-    project_id: input.project_id,
-    recipient_name: input.assignee ?? null,
-    type: "bug_created",
-    title: `新 Bug：${input.title}`,
-    body: input.description ?? null,
-    link: `/projects/${input.project_id}/bugs/${bug.id}`,
-    is_read: false,
-    created_at: nowIso(),
-  });
+  if (input.assignee?.trim()) {
+    db.notifications.unshift({
+      id: uid("notif-"),
+      project_id: input.project_id,
+      recipient_name: input.assignee.trim(),
+      type: "bug_assigned",
+      title: `指派给你：${input.title}`,
+      body: input.description ?? `请查看 Bug「${input.title}」`,
+      link: bugPathForProject(project, bug.id),
+      is_read: false,
+      created_at: nowIso(),
+    });
+  } else {
+    db.notifications.unshift({
+      id: uid("notif-"),
+      project_id: input.project_id,
+      recipient_name: null,
+      type: "bug_created",
+      title: `新 Bug：${input.title}`,
+      body: input.description ?? null,
+      link: bugPathForProject(project, bug.id),
+      is_read: false,
+      created_at: nowIso(),
+    });
+  }
   await logActivity(db, {
     project_id: input.project_id,
     entity_type: "bug",
@@ -1069,13 +1110,17 @@ export async function updateBug(
     status: TaskStatus;
     severity: BugSeverity;
     bug_type: BugType;
+    created_at: string | null;
+    updated_at: string | null;
   }>
 ) {
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === bugId);
   if (!bug) throw new Error("Bug 不存在");
+  const project = db.projects.find((p) => p.id === bug.project_id);
 
   const beforeStatus = bug.status;
+  const beforeAssignee = bug.assignee;
   if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
   if (patch.description !== undefined) bug.description = patch.description;
   if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
@@ -1086,7 +1131,14 @@ export async function updateBug(
   if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
   if (bug.severity == null) bug.severity = 3;
   if (!bug.bug_type) bug.bug_type = "code";
-  bug.updated_at = nowIso();
+  if (patch.created_at !== undefined && patch.created_at?.trim()) {
+    bug.created_at = patch.created_at.trim();
+  }
+  if (patch.updated_at !== undefined && patch.updated_at?.trim()) {
+    bug.updated_at = patch.updated_at.trim();
+  } else {
+    bug.updated_at = nowIso();
+  }
 
   if (patch.status !== undefined && beforeStatus !== bug.status) {
     await logActivity(db, {
@@ -1101,12 +1153,64 @@ export async function updateBug(
     });
   }
 
+  const nextAssignee = bug.assignee?.trim() || null;
+  const prevAssignee = beforeAssignee?.trim() || null;
+  if (
+    patch.assignee !== undefined &&
+    nextAssignee &&
+    nextAssignee !== prevAssignee &&
+    project
+  ) {
+    db.notifications.unshift({
+      id: uid("notif-"),
+      project_id: bug.project_id,
+      recipient_name: nextAssignee,
+      type: "bug_assigned",
+      title: `指派给你：${bug.title}`,
+      body: `有人把 Bug 指派给你，请处理。`,
+      link: bugPathForProject(project, bug.id),
+      is_read: false,
+      created_at: nowIso(),
+    });
+  }
+
   await saveDb(db);
   return bug;
 }
 
 export async function updateBugStatus(bugId: string, status: TaskStatus) {
   return updateBug(bugId, { status });
+}
+
+export async function addBugComment(input: {
+  bug_id: string;
+  author_name: string;
+  author_role?: string | null;
+  body: string;
+}) {
+  const body = input.body.trim();
+  if (!body) throw new Error("补充内容不能为空");
+  const author = input.author_name.trim();
+  if (!author) throw new Error("请填写作者");
+
+  const db = await readDb();
+  const bug = db.bugs.find((b) => b.id === input.bug_id);
+  if (!bug) throw new Error("Bug 不存在");
+
+  const comment: BugComment = {
+    id: uid("bcmt-"),
+    project_id: bug.project_id,
+    bug_id: bug.id,
+    author_name: author,
+    author_role: input.author_role ?? null,
+    body,
+    created_at: nowIso(),
+  };
+  if (!db.bug_comments) db.bug_comments = [];
+  db.bug_comments.unshift(comment);
+  bug.updated_at = nowIso();
+  await saveDb(db);
+  return comment;
 }
 
 export async function listBugsByProject(projectId: string) {

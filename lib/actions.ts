@@ -378,6 +378,7 @@ export async function createBugAction(input: {
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${bug.id}`);
+  revalidatePath(`/notifications`);
   return bug;
 }
 
@@ -393,6 +394,8 @@ export async function updateBugAction(input: {
     status?: import("@/lib/types").TaskStatus;
     severity?: import("@/lib/types").BugSeverity;
     bugType?: import("@/lib/types").BugType;
+    createdAt?: string | null;
+    updatedAt?: string | null;
   };
 }) {
   const { updateBug } = await import("@/lib/db/local-store");
@@ -405,9 +408,34 @@ export async function updateBugAction(input: {
     status: input.updates.status,
     severity: input.updates.severity,
     bug_type: input.updates.bugType,
+    ...(input.updates.createdAt !== undefined
+      ? { created_at: input.updates.createdAt }
+      : {}),
+    ...(input.updates.updatedAt !== undefined
+      ? { updated_at: input.updates.updatedAt }
+      : {}),
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
+  revalidatePath(`/notifications`);
+}
+
+export async function addBugCommentAction(input: {
+  bugId: string;
+  projectSlug: string;
+  authorName: string;
+  authorRole?: string | null;
+  body: string;
+}) {
+  const { addBugComment } = await import("@/lib/db/local-store");
+  const comment = await addBugComment({
+    bug_id: input.bugId,
+    author_name: input.authorName,
+    author_role: input.authorRole,
+    body: input.body,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
+  return comment;
 }
 
 export async function updateBugStatusAction(input: {

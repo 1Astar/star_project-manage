@@ -585,6 +585,7 @@ export function createSeedData(): DatabaseSnapshot {
     ],
     activity_logs: [],
     comments: [],
+    bug_comments: [],
     git_activities: [],
     project_members: [],
     pool_column_defs: [],

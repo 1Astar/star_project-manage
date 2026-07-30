@@ -16,7 +16,11 @@ import {
 import { zhCN } from "date-fns/locale";
 import { saveRequirementDetailAction } from "@/lib/actions";
 import type { ModuleNode, Requirement } from "@/lib/types";
-import { REQUIREMENT_DONE_TAG, requirementIsDone } from "@/lib/types";
+import {
+  REQUIREMENT_DONE_TAG,
+  requirementIsCancelled,
+  requirementIsDone,
+} from "@/lib/types";
 import {
   childrenOf,
   displayEstimateHours,
@@ -168,6 +172,7 @@ export function RequirementGantt({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [onlyWithDates, setOnlyWithDates] = useState(true);
+  const [onlyIncomplete, setOnlyIncomplete] = useState(true);
   const [filterModuleId, setFilterModuleId] = useState("");
   const [overrides, setOverrides] = useState<Record<string, { start: Date; end: Date }>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -186,9 +191,14 @@ export function RequirementGantt({
   );
 
   const filteredRequirements = useMemo(() => {
-    if (!filterModuleId) return requirements;
+    let pool = requirements;
+    if (onlyIncomplete) {
+      pool = pool.filter((r) => !requirementIsDone(r) && !requirementIsCancelled(r));
+    }
+    if (!filterModuleId) return pool;
+
     const matched = new Set(
-      requirements
+      pool
         .filter((r) => reqMatchesModuleFilter(r, filterModuleId, modulesById))
         .map((r) => r.id)
     );
@@ -196,12 +206,20 @@ export function RequirementGantt({
     for (const id of matched) {
       let cur = requirements.find((r) => r.id === id);
       while (cur?.parent_id) {
-        keep.add(cur.parent_id);
-        cur = requirements.find((r) => r.id === cur!.parent_id);
+        const parent = requirements.find((r) => r.id === cur!.parent_id);
+        if (!parent) break;
+        // 「只显示未完成」时不把完成/放弃的祖先拉回图上
+        if (
+          !onlyIncomplete ||
+          (!requirementIsDone(parent) && !requirementIsCancelled(parent))
+        ) {
+          keep.add(parent.id);
+        }
+        cur = parent;
       }
     }
     return requirements.filter((r) => keep.has(r.id));
-  }, [requirements, filterModuleId, modulesById]);
+  }, [requirements, filterModuleId, modulesById, onlyIncomplete]);
 
   const moduleOptions = useMemo(() => {
     return modules
@@ -234,7 +252,7 @@ export function RequirementGantt({
 
   useEffect(() => {
     setCollapseReady(false);
-  }, [projectSlug, filterModuleId]);
+  }, [projectSlug, filterModuleId, onlyIncomplete]);
 
   useEffect(() => {
     function onMove(e: PointerEvent) {
@@ -456,6 +474,15 @@ export function RequirementGantt({
           <label className="flex items-center gap-1.5 text-xs text-slate-600">
             <input
               type="checkbox"
+              checked={onlyIncomplete}
+              onChange={(e) => setOnlyIncomplete(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            只显示未完成
+          </label>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
               checked={onlyWithDates}
               onChange={(e) => setOnlyWithDates(e.target.checked)}
               className="rounded border-slate-300"
@@ -467,7 +494,9 @@ export function RequirementGantt({
 
       {visibleRows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm text-slate-400">
-          暂无可排布的需求。在详情里填写提出时间 / 截止日期后再看甘特。
+          {onlyIncomplete
+            ? "当前没有未完成（且未放弃）的可排布需求。可取消「只显示未完成」，或补提出/截止日期。"
+            : "暂无可排布的需求。在详情里填写提出时间 / 截止日期后再看甘特。"}
         </p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

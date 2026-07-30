@@ -1,7 +1,7 @@
 import packageJson from "@/package.json";
 
 /** 与 CHANGELOG.md 当前条目同步 */
-export const APP_RELEASE_DATE = "2026-07-29";
+export const APP_RELEASE_DATE = "2026-07-30";
 
 export const APP_VERSION = packageJson.version;
 

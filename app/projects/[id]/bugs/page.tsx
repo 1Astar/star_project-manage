@@ -3,7 +3,10 @@ import Link from "next/link";
 import { fetchProjectBoard, fetchProjectBugs } from "@/lib/actions";
 import { ProjectBugsClient } from "@/components/project-bugs-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { getProjectMembers } from "@/lib/db/local-store";
+import {
+  getProjectMembers,
+  listProjectRequirementOptions,
+} from "@/lib/db/local-store";
 
 export default async function ProjectBugsPage({
   params,
@@ -39,10 +42,7 @@ export default async function ProjectBugsPage({
 
   const bugs = await fetchProjectBugs(pmBundle.project.id);
   const members = await getProjectMembers(pmBundle.project.id);
-  const requirements = pmBundle.requirements.map((r) => ({
-    id: r.id,
-    title: r.title,
-  }));
+  const requirements = await listProjectRequirementOptions(pmBundle.project.id);
 
   return (
     <ProjectBugsClient

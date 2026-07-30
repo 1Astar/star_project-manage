@@ -109,6 +109,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   ]);
 
   const comments = await loadComments(sb);
+  const bug_comments = await loadOptionalTable(sb, "bug_comments");
   const git_activities = await loadGitActivities(sb);
   const project_members = await loadOptionalTable(sb, "project_members");
   const pool_column_defs = await loadOptionalTable(sb, "pool_column_defs");
@@ -132,6 +133,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     notifications: throwOnError(notifications, "notifications"),
     activity_logs: throwOnError(activity_logs, "activity_logs"),
     comments,
+    bug_comments,
     git_activities,
     project_members,
     pool_column_defs,
@@ -208,6 +210,9 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   if ((snapshot.comments ?? []).length) {
     await upsertRows("requirement_comments", snapshot.comments ?? []);
   }
+  if ((snapshot.bug_comments ?? []).length) {
+    await upsertRows("bug_comments", snapshot.bug_comments ?? []);
+  }
   if ((snapshot.git_activities ?? []).length) {
     await upsertRows("git_activities", snapshot.git_activities ?? []);
   }
@@ -236,6 +241,7 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   );
   await deleteMissing("project_members", (snapshot.project_members ?? []).map((r) => r.id));
   await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));
+  await deleteMissing("bug_comments", (snapshot.bug_comments ?? []).map((r) => r.id));
   await deleteMissing("activity_logs", snapshot.activity_logs.map((r) => r.id));
   await deleteMissing("notifications", snapshot.notifications.map((r) => r.id));
   await deleteMissing("bugs", snapshot.bugs.map((r) => r.id));
