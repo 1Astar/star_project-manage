@@ -30,6 +30,7 @@ KV_REST_API_URL=
 KV_REST_API_TOKEN=
 
 # Optional: Git sync, Notion import, Vercel compare_sources, encryption
+STUDIO_IDEAS_REPO=
 GITHUB_TOKEN=
 VERCEL_TOKEN=
 VERCEL_PROJECT_ID=
