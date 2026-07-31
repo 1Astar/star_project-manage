@@ -1,4 +1,4 @@
-// @ts-nocheck — Wrangler entry; types checked via `npm run cf-typecheck` after `npm run cf-typegen`.
+// @ts-nocheck — Wrangler entry; regenerate types with `npm run cf-typegen`.
 /**
  * Custom Cloudflare Worker entry: re-uses OpenNext fetch handler and adds Cron Triggers.
  * @see https://opennext.js.org/cloudflare/howtos/custom-worker
