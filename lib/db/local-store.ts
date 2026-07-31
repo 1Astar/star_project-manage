@@ -88,7 +88,7 @@ export type { DatabaseSnapshot } from "@/lib/db/types";
 const SEED_FILE = path.join(process.cwd(), "data", "db.seed.json");
 
 function getDataDir(): string {
-  if (process.env.VERCEL === "1") {
+  if (isProductionLikeRuntime()) {
     return path.join("/tmp", "star-pm");
   }
   return path.join(process.cwd(), "data");

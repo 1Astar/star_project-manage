@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
-import {
-  prototypeObjectPath,
-  resolvePrototypeUrl,
-} from "./storage";
+import { resolvePrototypeUrl } from "./resolve-url";
+import { prototypeObjectPath } from "./storage";
 
 assert.match(prototypeObjectPath("star-pm", "upload.zip"), /^prototypes\/star-pm-\d+\/upload\.zip$/);
 assert.match(prototypeObjectPath("x", "bad name!.zip"), /^prototypes\/x-\d+\/badname.zip$/);

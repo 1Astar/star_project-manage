@@ -4,6 +4,9 @@
 
 NEXTJS_ENV=development
 
+# Runtime marker (also set in wrangler.jsonc vars for production Workers)
+NEXT_PUBLIC_CF_WORKER=1
+
 # Auth
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=

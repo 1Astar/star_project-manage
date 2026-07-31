@@ -16,5 +16,8 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "star-pm"
     }
-  ]
+  ],
+  "vars": {
+    "NEXT_PUBLIC_CF_WORKER": "1"
+  }
 }

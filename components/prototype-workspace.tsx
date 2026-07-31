@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { KanbanBoard } from "@/components/task-board";
-import { resolvePrototypeUrl } from "@/lib/prototypes/storage";
+import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type { Prototype, Requirement, RoleTask } from "@/lib/types";
 
 export function PrototypeWorkspace({
