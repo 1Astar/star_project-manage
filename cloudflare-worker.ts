@@ -16,41 +16,40 @@ const CRON_ROUTES: Record<string, string> = {
 export default {
   fetch: handler.fetch,
 
-  async scheduled(controller, env, ctx) {
+  async scheduled(controller, env) {
     const path = CRON_ROUTES[controller.cron];
     if (!path) {
-      console.error(`[cron] unknown schedule: ${controller.cron}`);
-      return;
+      const msg = `[cron] unknown schedule: ${controller.cron}`;
+      console.error(msg);
+      throw new Error(msg);
     }
 
     const secret = env.CRON_SECRET?.trim();
     if (!secret) {
-      console.error("[cron] CRON_SECRET is not configured");
-      return;
+      const msg = "[cron] CRON_SECRET is not configured";
+      console.error(msg);
+      throw new Error(msg);
     }
 
     const service = env.WORKER_SELF_REFERENCE;
     if (!service) {
-      console.error("[cron] WORKER_SELF_REFERENCE binding is missing");
-      return;
+      const msg = "[cron] WORKER_SELF_REFERENCE binding is missing";
+      console.error(msg);
+      throw new Error(msg);
     }
 
-    const run = async () => {
-      const response = await service.fetch(
-        new Request(`https://internal${path}`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${secret}` },
-        })
-      );
-      if (!response.ok) {
-        const body = await response.text();
-        console.error(
-          `[cron] ${path} failed: ${response.status} ${body.slice(0, 500)}`
-        );
-      }
-    };
-
-    ctx.waitUntil(run());
+    const response = await service.fetch(
+      new Request(`https://internal${path}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${secret}` },
+      })
+    );
+    if (!response.ok) {
+      const body = await response.text();
+      const msg = `[cron] ${path} failed: ${response.status} ${body.slice(0, 500)}`;
+      console.error(msg);
+      throw new Error(msg);
+    }
   },
 };
 

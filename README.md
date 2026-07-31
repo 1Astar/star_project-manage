@@ -73,7 +73,7 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 1. 安装依赖：`npm install`
 2. 复制 `.dev.vars.example` → `.dev.vars`，填入密钥（本地 preview 用）
 3. **生产必填**：`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`（及 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）、`ADMIN_*`、`CRON_SECRET`、MCP/OAuth 相关变量；Upstash REST（`KV_REST_API_*`）用于 OAuth token 存储
-4. 本地 Workers 预览：`npm run preview`（需 WSL/Linux/macOS 或 CI 完成 OpenNext build；Windows 上 build 可能失败）
+4. 本地 Workers 预览：`npm run preview`（Windows 上 OpenNext build 已通过；仍建议 preview/deploy 冒烟验收）
 5. 部署：`npm run deploy`（需已登录 `wrangler login` 并配置 Cloudflare 账号）
 6. 部署后访问 `/api/health/db` 确认 `storage: "supabase"`
 
@@ -98,7 +98,7 @@ curl -H "Authorization: Bearer $CRON_SECRET" https://<your-worker>/api/cron/remi
 | Excel | 项目 Excel 导入预览 + 导出 |
 | Cron | 手动 `curl` 上述 cron 路由 → `200` + `{ ok: true }` |
 
-**Excel / OpenNext build**：`exceljs` 在 Workers 上依赖 `nodejs_compat`；若 OpenNext bundle 报错，在 Linux/WSL/CI 上复现后再做最小修复。Windows 本地 OpenNext build 已知可能失败（见 Task 1 report）。
+**Excel / OpenNext build**：`exceljs` 在 Workers 上依赖 `nodejs_compat`；若 OpenNext bundle 报错，在 Linux/WSL/CI 上复现后再做最小修复。Windows 本地 OpenNext build 已通过（Task 3）；仍建议 preview/deploy 冒烟验收。
 
 ## 数据库
 
