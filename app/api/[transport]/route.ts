@@ -20,6 +20,7 @@ const handler = createMcpHandler(
   {
     basePath: "/api",
     maxDuration: 60,
+    // SSE needs TCP Redis; CF Workers default to Streamable HTTP only (no REDIS_URL).
     redisUrl: getMcpRedisUrl(),
     disableSse: !getMcpRedisUrl(),
     verboseLogs: process.env.VERCEL_ENV === "preview",

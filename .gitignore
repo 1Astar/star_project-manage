@@ -29,5 +29,6 @@ next-env.d.ts
 .vercel
 .open-next
 .wrangler
+cloudflare-env.d.ts
 
 .worktrees/
