@@ -1,0 +1,10 @@
+/** Vercel Functions, Cloudflare Workers / OpenNext, or similar serverless deploys. */
+export function isProductionLikeRuntime(): boolean {
+  return (
+    process.env.VERCEL === "1" ||
+    process.env.CF_PAGES === "1" ||
+    process.env.CLOUDFLARE === "1" ||
+    process.env.WORKERS_CI === "1" ||
+    process.env.NEXT_PUBLIC_CF_WORKER === "1"
+  );
+}

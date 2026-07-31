@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { KanbanBoard } from "@/components/task-board";
+import { resolvePrototypeUrl } from "@/lib/prototypes/storage";
 import type { Prototype, Requirement, RoleTask } from "@/lib/types";
 
 export function PrototypeWorkspace({
@@ -20,6 +21,7 @@ export function PrototypeWorkspace({
   const [selectedReqId, setSelectedReqId] = useState(requirements[0]?.id ?? "");
   const selectedReq = requirements.find((r) => r.id === selectedReqId);
   const prototype = prototypes.find((p) => p.requirement_id === selectedReqId) ?? prototypes[0];
+  const prototypeSrc = resolvePrototypeUrl(prototype?.storage_path);
 
   const sidebarTasks = useMemo(
     () => tasks.filter((t) => t.requirement_id === selectedReqId),
@@ -50,10 +52,10 @@ export function PrototypeWorkspace({
               sandbox="allow-scripts allow-same-origin"
               className="h-full w-full rounded-lg border border-slate-200 bg-white"
             />
-          ) : prototype?.storage_path ? (
+          ) : prototypeSrc ? (
             <iframe
               title="prototype"
-              src={prototype.storage_path}
+              src={prototypeSrc}
               sandbox="allow-scripts allow-same-origin"
               className="h-full w-full rounded-lg border border-slate-200 bg-white"
             />
