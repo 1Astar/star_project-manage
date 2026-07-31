@@ -66,6 +66,19 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 4. `vercel.json` 已配置每日 Cron：`/api/cron/reminders`
 5. 部署后访问 `/api/health/db` 确认 `storage: "supabase"` 且 `ok: true`
 
+## 部署（Cloudflare Workers）
+
+基于 [@opennextjs/cloudflare](https://opennext.js.org/cloudflare/get-started) + Wrangler，与 Vercel 部署并存。
+
+1. 安装依赖：`npm install`
+2. 复制 `.dev.vars.example` → `.dev.vars`，填入密钥（本地 preview 用）
+3. **生产必填**：`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`（及 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）、`ADMIN_*`、`CRON_SECRET`、MCP/OAuth 相关变量；Upstash REST（`KV_REST_API_*`）用于 OAuth token 存储
+4. 本地 Workers 预览：`npm run preview`
+5. 部署：`npm run deploy`（需已登录 `wrangler login` 并配置 Cloudflare 账号）
+6. 部署后访问 `/api/health/db` 确认 `storage: "supabase"`
+
+Cron Triggers、原型存储等 Workers 适配见后续任务；当前为 OpenNext 脚手架。
+
 ## 数据库
 
 ### Supabase 首次初始化
