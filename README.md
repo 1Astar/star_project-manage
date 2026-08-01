@@ -66,6 +66,42 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 4. `vercel.json` 已配置每日 Cron：`/api/cron/reminders`
 5. 部署后访问 `/api/health/db` 确认 `storage: "supabase"` 且 `ok: true`
 
+## 部署（腾讯云 EdgeOne Makers）
+
+当前适合「国内能打开 + 免费档」：控制台开通 [EdgeOne Makers](https://pages.edgeone.ai/) 免费版，连接本仓库部署 Next.js。
+
+1. 打开 [EdgeOne Makers 控制台](https://console.cloud.tencent.com/edgeone/pages) → 开通 Makers → **导入 Git 仓库**（`1Astar/star_project-manage`）
+2. 框架选 Next.js；根目录为仓库根（有 `package.json` / `edgeone.json`）
+3. 在项目 **环境变量** 中配置（可从本地 `.env` 批量粘贴；**单值最长 500 字节**）：
+
+| 必填 | 说明 |
+|------|------|
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | 生产数据 |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` | 登录 |
+| `CRON_SECRET` | 定时与手动验收 |
+| `NEXT_PUBLIC_EDGEONE=1`（或 `EDGEONE=1`） | 标记生产运行时，走 Supabase 强校验 |
+| `STAR_PM_MCP_SECRET` | MCP Bearer（若用 MCP） |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | MCP OAuth（若用） |
+| `GITHUB_TOKEN` 等 | Git 同步（若用） |
+
+4. 部署成功后打开站点，访问 `/api/health/db` → `ok: true` 且 `storage: "supabase"`
+5. **Cron**：根目录 `edgeone.json` 已配置 UTC `09/10/11:00` 三条 `GET /api/cron/*`（与 Vercel 对齐）。若平台调度未带 `Authorization` 导致 401，任选其一：
+   - 用外部定时（推荐）对上述 URL 发 `Authorization: Bearer $CRON_SECRET`
+   - 或临时设 `CRON_ALLOW_EDGEONE_SCHEDULE=1`（确认仅调度会打这些路径后再开）
+6. 函数超时：`edgeone.json` 里 `cloudFunctions.nodejs.maxDuration: 60`（MCP/同步用）
+
+### EdgeOne 验收清单
+
+| 项 | 验收 |
+|----|------|
+| 健康检查 | `GET /api/health/db` → supabase |
+| 国内打开 | 手机流量打开站点首页/登录 |
+| Studio / 看板 | 基本读写 |
+| MCP | Bearer + `list_projects`（可选） |
+| Cron | 手动 `curl -H "Authorization: Bearer $CRON_SECRET" https://<域名>/api/cron/reminders` |
+
+官方参考：[Next.js 指南](https://pages.edgeone.ai/zh/document/framework-nextjs) · [edgeone.json](https://pages.edgeone.ai/zh/document/edgeone-json) · [从 Vercel 迁移](https://pages.edgeone.ai/zh/document/migrating-from-vercel-to-edgeone-pages)
+
 ## 部署（Cloudflare Workers）
 
 基于 [@opennextjs/cloudflare](https://opennext.js.org/cloudflare/get-started) + Wrangler，与 Vercel 部署并存。

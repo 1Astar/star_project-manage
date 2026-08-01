@@ -1,0 +1,43 @@
+{
+  "name": "star-pm",
+  "installCommand": "npm install",
+  "buildCommand": "next build",
+  "nodeVersion": "22.11.0",
+  "cloudFunctions": {
+    "mainlandRegions": ["ap-guangzhou"],
+    "overseasRegions": ["ap-singapore"],
+    "nodejs": {
+      "maxDuration": 60,
+      "includeFiles": [
+        "docs/ai/**",
+        "CHANGELOG.md"
+      ],
+      "externalNodeModules": [
+        "exceljs"
+      ]
+    }
+  },
+  "schedules": [
+    {
+      "name": "cron-reminders",
+      "cron": "0 9 * * *",
+      "path": "/api/cron/reminders",
+      "method": "GET",
+      "timezone": "UTC"
+    },
+    {
+      "name": "cron-sync-ideas",
+      "cron": "0 10 * * *",
+      "path": "/api/cron/sync-ideas",
+      "method": "GET",
+      "timezone": "UTC"
+    },
+    {
+      "name": "cron-sync-git",
+      "cron": "0 11 * * *",
+      "path": "/api/cron/sync-git",
+      "method": "GET",
+      "timezone": "UTC"
+    }
+  ]
+}

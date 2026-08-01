@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
+import { authorizeCronRequest } from "@/lib/cron/authorize";
 import { syncAllBoundProjectsGit } from "@/lib/github/sync";
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET ?? "dev-cron-secret";
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authorizeCronRequest(request)) {
     return NextResponse.json({ error: "未授权" }, { status: 401 });
   }
 
