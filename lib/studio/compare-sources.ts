@@ -1,5 +1,4 @@
-import { readFile } from "fs/promises";
-import path from "path";
+import { getBundledCanonicalRules } from "@/lib/studio/bundled-docs";
 import { parseRepoFullName } from "@/lib/github/client";
 import { getProjectById } from "@/lib/studio/data";
 
@@ -128,12 +127,12 @@ function pickNewest(
   return dated[0].key;
 }
 
-/** 读取仓库内 canonical 规则正文 */
+/** 读取仓库内 canonical 规则正文（构建时 bundled，Workers 无 FS） */
 export async function loadCanonicalAiRules(): Promise<{ path: string; content: string }> {
-  const rel = "docs/ai/CANONICAL_RULES.md";
-  const abs = path.join(process.cwd(), rel);
-  const content = await readFile(abs, "utf8");
-  return { path: rel, content };
+  return {
+    path: "docs/ai/CANONICAL_RULES.md",
+    content: getBundledCanonicalRules(),
+  };
 }
 
 export async function compareProjectSources(projectId: string): Promise<CompareSourcesResult> {

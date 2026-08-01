@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
 import { addPrototype, getProjectById } from "@/lib/db/local-store";
-
-const UPLOAD_DIR = path.join(process.cwd(), "public", "prototypes");
+import { uploadPrototypeZip } from "@/lib/prototypes/storage";
 
 export async function POST(
   request: Request,
@@ -34,21 +31,13 @@ export async function POST(
     return new NextResponse("请上传 ZIP 或填写外链", { status: 400 });
   }
 
-  await fs.mkdir(UPLOAD_DIR, { recursive: true });
-  const dirName = `${project.slug}-${Date.now()}`;
-  const dirPath = path.join(UPLOAD_DIR, dirName);
-  await fs.mkdir(dirPath, { recursive: true });
-
   const buffer = Buffer.from(await file.arrayBuffer());
-  const zipPath = path.join(dirPath, "upload.zip");
-  await fs.writeFile(zipPath, buffer);
-
-  const publicPath = `/prototypes/${dirName}/upload.zip`;
+  const uploaded = await uploadPrototypeZip(project, buffer, "upload.zip");
   const proto = await addPrototype({
     project_id: project.id,
     name,
-    type: "html_zip",
-    storage_path: publicPath,
+    type: uploaded.type,
+    storage_path: uploaded.storage_path,
     requirement_id: typeof requirementId === "string" ? requirementId : null,
   });
 

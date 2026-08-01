@@ -1,0 +1,45 @@
+# Copy to .dev.vars for local `npm run preview` (Wrangler dev).
+# Production: set these as Cloudflare Worker secrets / dashboard env vars.
+# Cloudflare production REQUIRES Supabase (URL + service role key).
+
+NEXTJS_ENV=development
+
+# Runtime marker (also set in wrangler.jsonc vars for production Workers)
+NEXT_PUBLIC_CF_WORKER=1
+
+# Auth
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=
+VIEWER_USERNAME=viewer
+VIEWER_PASSWORD=
+ADMIN_SESSION_SECRET=
+REQUIRE_AUTH=true
+
+# Cron (Cloudflare Cron Triggers in Task 3; manual Bearer auth on routes)
+CRON_SECRET=
+
+# Supabase (production required)
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# MCP HTTP + OAuth
+STAR_PM_MCP_SECRET=
+STAR_PM_OAUTH_CLIENT_ID=star-pm-gpt
+IDEAS_CAPTURE_SECRET=
+
+# Upstash REST (OAuth token store; omit REDIS_URL / UPSTASH_REDIS_URL on CF — no TCP SSE)
+KV_REST_API_URL=
+KV_REST_API_TOKEN=
+
+# Optional: Git sync, Notion import, Vercel compare_sources, encryption
+STUDIO_IDEAS_REPO=
+GITHUB_TOKEN=
+VERCEL_TOKEN=
+VERCEL_PROJECT_ID=
+VERCEL_TEAM_ID=
+NOTION_TOKEN=
+NOTION_IDEA_DATABASE_ID=
+NOTION_PROJECT_PAGE_IDS=
+NOTION_EVOLUTION_DATABASE_ID=
+SECRETS_ENCRYPTION_KEY=

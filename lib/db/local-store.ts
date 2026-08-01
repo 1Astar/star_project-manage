@@ -19,7 +19,8 @@ import {
   deleteRequirementRows,
 } from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { assertDurableStorage, isSupabaseConfigured } from "@/lib/supabase/config";
+import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import {
   AGENT_ACTOR_NAME,
@@ -87,7 +88,7 @@ export type { DatabaseSnapshot } from "@/lib/db/types";
 const SEED_FILE = path.join(process.cwd(), "data", "db.seed.json");
 
 function getDataDir(): string {
-  if (process.env.VERCEL === "1") {
+  if (isProductionLikeRuntime()) {
     return path.join("/tmp", "star-pm");
   }
   return path.join(process.cwd(), "data");
@@ -223,10 +224,8 @@ function normalizeProject(project: Project): Project {
 async function readLocalDb(): Promise<DatabaseSnapshot> {
   if (isValidDb(memoryDb)) return memoryDb;
 
-  if (process.env.VERCEL === "1" && !isSupabaseConfigured()) {
-    const seeded = normalizeDb((await readSeedFile()) ?? createSeedData());
-    memoryDb = seeded;
-    return seeded;
+  if (isProductionLikeRuntime() && !isSupabaseConfigured()) {
+    assertDurableStorage();
   }
 
   const dbFile = getDbFile();
@@ -266,6 +265,7 @@ async function saveLocalDb(db: DatabaseSnapshot): Promise<void> {
 }
 
 async function ensureDb(): Promise<DatabaseSnapshot> {
+  assertDurableStorage();
   if (isSupabaseConfigured()) {
     const db = normalizeDb(await readSupabaseDb());
     // Supabase 已有项目即视为真实数据，不再用 seed 覆盖

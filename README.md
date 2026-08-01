@@ -66,6 +66,41 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 4. `vercel.json` 已配置每日 Cron：`/api/cron/reminders`
 5. 部署后访问 `/api/health/db` 确认 `storage: "supabase"` 且 `ok: true`
 
+## 部署（Cloudflare Workers）
+
+基于 [@opennextjs/cloudflare](https://opennext.js.org/cloudflare/get-started) + Wrangler，与 Vercel 部署并存。
+
+1. 安装依赖：`npm install`
+2. **Build 环境变量**：OpenNext/Next 在 `build` 阶段内联 `NEXT_PUBLIC_*`，需通过 `.env.local` / `.env*`（或 CI 环境变量）提供；`.dev.vars` 仅用于 Wrangler **运行时** secrets / `preview`，不参与 Next build。本地 preview 请保持两者值一致。
+3. 复制 `.dev.vars.example` → `.dev.vars`，填入运行时密钥（本地 preview 用）
+4. **生产必填**：`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`（及 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）、`ADMIN_*`、`CRON_SECRET`、MCP/OAuth 相关变量；Upstash REST（`KV_REST_API_*`）用于 OAuth token 存储
+5. 本地 Workers 预览：`npm run preview`（Windows 上 OpenNext build 已通过；仍建议 preview/deploy 冒烟验收）
+6. 部署：`npm run deploy`（需已登录 `wrangler login`；脚本带 `--keep-vars`，避免覆盖 Cloudflare 控制台已配置的 plaintext 环境变量）
+7. 部署后访问 `/api/health/db` 确认 `storage: "supabase"`
+
+**Cron（Cloudflare Cron Triggers）**：`wrangler.jsonc` 配置 UTC `0 9/10/11 * * *`，`cloudflare-worker.ts` 的 `scheduled` 处理器经 `WORKER_SELF_REFERENCE` 自调用现有 `/api/cron/*` 路由，携带 `Authorization: Bearer ${CRON_SECRET}`。手动验收：
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<your-worker>/api/cron/reminders
+```
+
+**MCP on Workers**：默认不配置 TCP Redis（`REDIS_URL` / `UPSTASH_REDIS_URL`）；SSE 关闭，仅 Streamable HTTP + Bearer/OAuth。OAuth token 仍用 Upstash REST（`KV_REST_API_*`）。`mcp:stdio` 仅本地。
+
+### Cloudflare 验收清单
+
+| 项 | 验收方式 |
+|----|----------|
+| 健康检查 | `GET /api/health/db` → `ok: true`, `storage: "supabase"` |
+| 登录 | admin 登录成功 |
+| Studio | `/studio` CRUD（灵感/演进） |
+| 看板 | 项目需求看板拖拽改状态 |
+| MCP Bearer | `POST /api/mcp` + `Authorization: Bearer $STAR_PM_MCP_SECRET`，`list_projects` / `get_ai_rules` |
+| 原型 ZIP | 项目原型页上传 ZIP → Supabase Storage URL |
+| Excel | 项目 Excel 导入预览 + 导出 |
+| Cron | 手动 `curl` 上述 cron 路由 → `200` + `{ ok: true }` |
+
+**Excel / OpenNext build**：`exceljs` 在 Workers 上依赖 `nodejs_compat`；若 OpenNext bundle 报错，在 Linux/WSL/CI 上复现后再做最小修复。Windows 本地 OpenNext build 已通过（Task 3）；仍建议 preview/deploy 冒烟验收。
+
 ## 数据库
 
 ### Supabase 首次初始化

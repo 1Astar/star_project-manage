@@ -11,6 +11,7 @@ out
 .env
 .env.local
 .env.*.local
+.dev.vars
 
 # debug / os
 npm-debug.log*
@@ -26,3 +27,9 @@ next-env.d.ts
 # local data runtime (keep seeds)
 # data/db.json is committed as sample in this repo historically
 .vercel
+.open-next
+.wrangler
+cloudflare-env.d.ts
+
+.worktrees/
+.superpowers/

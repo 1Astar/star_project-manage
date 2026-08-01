@@ -1,8 +1,8 @@
 /**
  * 将 CHANGELOG 各版本条目导入为 Star PM 演进（带 releaseTag + 推断板块）
  */
-import fs from "fs";
-import path from "path";
+import { getBundledChangelog } from "@/lib/studio/bundled-docs";
+import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { inferModuleFromText } from "@/lib/studio/infer-modules";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
 import type { EvolutionLog, EvolutionLogType } from "@/lib/studio/types";
@@ -88,8 +88,23 @@ export function buildChangelogEvolutionItems(
   return items;
 }
 
+/** Bundled CHANGELOG for server / MCP / Workers (no runtime FS). */
+export function loadRepoChangelog(): string {
+  return getBundledChangelog();
+}
+
+/** Prefer repo file locally; bundled on serverless / when file missing. */
 export function readRepoChangelog(root = process.cwd()): string {
-  return fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
+  if (isProductionLikeRuntime()) return getBundledChangelog();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require("node:fs") as typeof import("fs");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const path = require("node:path") as typeof import("path");
+    return fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
+  } catch {
+    return getBundledChangelog();
+  }
 }
 
 /** 去重键：同项目同版本同标题视为已导入 */

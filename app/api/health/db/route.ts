@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { pingSupabase } from "@/lib/db/supabase-store";
+import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { getSupabasePublicConfig, isSupabaseConfigured } from "@/lib/supabase/config";
 
 export async function GET() {
   const supabaseConfig = getSupabasePublicConfig();
 
   if (!isSupabaseConfigured()) {
+    const serverless = isProductionLikeRuntime();
     return NextResponse.json({
-      ok: true,
-      storage: process.env.VERCEL === "1" ? "vercel-memory" : "local-file",
+      ok: !serverless,
+      storage: serverless ? "misconfigured-serverless" : "local-file",
       supabase: {
         urlConfigured: Boolean(supabaseConfig.url),
         anonKeyConfigured: Boolean(supabaseConfig.anonKey),
