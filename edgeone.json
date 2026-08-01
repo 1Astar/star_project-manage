@@ -1,7 +1,7 @@
 {
   "name": "star-pm",
   "installCommand": "npm install",
-  "buildCommand": "next build",
+  "buildCommand": "npm run build",
   "nodeVersion": "22.11.0",
   "cloudFunctions": {
     "mainlandRegions": ["ap-guangzhou"],
