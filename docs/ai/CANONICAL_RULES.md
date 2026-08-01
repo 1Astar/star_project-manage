@@ -36,7 +36,12 @@
 
 MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标记 **「待补齐·板块」** 仍可入库。
 
-发版：用 **`publish_release`**，按板块汇总后创建 GitHub Release（Tag 名可用英文 `vX.Y.Z`，正文用中文）。
+发版：用 **`publish_release`**，按板块汇总后创建 GitHub Release（Tag 名可用英文 `vX.Y.Z`，正文用中文）。  
+发版后会附带 **`shippedSuggestions`**（按 CHANGELOG/tag 模糊匹配未完成需求）；**不自动改状态**。核对后用 **`confirm_shipped_requirements`** 批量标完成。也可单独调 **`suggest_shipped_from_release`**。
+
+每日 **`sync-git`**（cron）在写入新 commit 后，会用 commit message 模糊匹配未完成需求，写入待确认建议；**不自动改状态**。用 **`list_git_sync_suggestions`** 查看，**`confirm_git_sync_suggestions`**（`accept` / `dismiss`）确认。
+
+**人工验收（A+B+C）**：`finish_change_session` 默认进工作台「待你验收」并 PushPlus/浏览器提醒，**不代点通过**。仅当用户明确免验（`user_waived`）或小修/bug（`auto_pass_small` / 启发式）才标 `passed`。打回/补充的 bug·优化必须记入 PM。环境变量：`PUSHPLUS_TOKEN`。
 
 ---
 

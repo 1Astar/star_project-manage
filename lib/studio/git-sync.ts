@@ -131,6 +131,28 @@ export async function syncStudioProjectGit(projectId: string) {
     if (insertError) throw new Error(insertError.message);
   }
 
+  let suggestionCreated = 0;
+  if (newRows.length > 0) {
+    try {
+      const { suggestAndPersistFromCommits } = await import(
+        "@/lib/mcp/suggest-from-commits"
+      );
+      const suggest = await suggestAndPersistFromCommits({
+        studioProjectId: projectId,
+        commits: newRows.map((r) => ({
+          sha: r.commit_sha,
+          shortSha: r.short_sha,
+          message: r.message,
+          url: r.url,
+          committedAt: r.committed_at,
+        })),
+      });
+      suggestionCreated = suggest.created;
+    } catch {
+      // matching must not break git sync
+    }
+  }
+
   const latest = commits[0] ?? null;
   const projectPatch: Partial<Project> & Record<string, unknown> = {
     lastGitSyncedAt: syncedAt,
@@ -163,6 +185,7 @@ export async function syncStudioProjectGit(projectId: string) {
     ok: true as const,
     projectId,
     newCount,
+    suggestionCreated,
     fetchedCount: commits.length,
     pathFilterIgnored,
     warning,
@@ -197,12 +220,25 @@ export async function syncAllStudioBoundProjectsGit() {
     (p) => p.github_repo?.trim()
   );
 
-  const results: Array<{ projectId: string; name: string; ok: boolean; newCount?: number; error?: string }> = [];
+  const results: Array<{
+    projectId: string;
+    name: string;
+    ok: boolean;
+    newCount?: number;
+    suggestionCreated?: number;
+    error?: string;
+  }> = [];
 
   for (const project of bound) {
     try {
       const result = await syncStudioProjectGit(project.id);
-      results.push({ projectId: project.id, name: project.title, ok: true, newCount: result.newCount });
+      results.push({
+        projectId: project.id,
+        name: project.title,
+        ok: true,
+        newCount: result.newCount,
+        suggestionCreated: result.suggestionCreated,
+      });
     } catch (err) {
       results.push({
         projectId: project.id,

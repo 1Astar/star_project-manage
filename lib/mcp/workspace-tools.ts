@@ -727,20 +727,189 @@ export function registerWorkspaceTools(server: McpServer) {
           draft: input.draft,
           prerelease: input.prerelease,
         });
+        let shippedSuggestions: unknown = null;
+        try {
+          const { suggestShippedFromRelease } = await import(
+            "@/lib/mcp/suggest-shipped-from-release"
+          );
+          shippedSuggestions = await suggestShippedFromRelease({
+            projectId: input.projectId,
+            tag: input.tag,
+          });
+        } catch (suggestErr) {
+          shippedSuggestions = {
+            error:
+              suggestErr instanceof Error
+                ? suggestErr.message
+                : "suggest_shipped_from_release 失败",
+          };
+        }
         await logAiAction({
           action: "publish_release",
           payload: {
             projectId: input.projectId,
             tag: input.tag,
             modules: result.modules,
+            shippedCandidateCount:
+              shippedSuggestions &&
+              typeof shippedSuggestions === "object" &&
+              "candidates" in shippedSuggestions
+                ? (shippedSuggestions as { candidates: unknown[] }).candidates.length
+                : 0,
           },
         });
         return mcpJson({
           ok: true,
           ...result,
+          shippedSuggestions,
+          nextStep:
+            "若 shippedSuggestions.candidates 非空：核对后调用 confirm_shipped_requirements（传入 requirementIds + completedAtHint），不会自动改状态。",
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "publish_release 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "suggest_shipped_from_release",
+    {
+      title: "Suggest shipped requirements from release",
+      description:
+        "根据 CHANGELOG 某 tag 条目 + 已挂该 tag 的演进，模糊匹配未完成需求，返回候选列表（不改状态）。发版后可单独调用；publish_release 也会附带同结构 shippedSuggestions。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        tag: z.string().min(1).describe("版本号，如 v1.10.62"),
+      },
+    },
+    async (input) => {
+      try {
+        const { suggestShippedFromRelease } = await import(
+          "@/lib/mcp/suggest-shipped-from-release"
+        );
+        const result = await suggestShippedFromRelease({
+          projectId: input.projectId,
+          tag: input.tag,
+        });
+        return mcpJson({ ok: true, ...result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "suggest_shipped_from_release 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "confirm_shipped_requirements",
+    {
+      title: "Confirm shipped requirements",
+      description:
+        "将选定需求标为完成并写入 completed_at。用于确认 suggest_shipped_from_release / publish_release.shippedSuggestions 的候选，禁止静默全量应用。",
+      inputSchema: {
+        requirementIds: z.array(z.string().min(1)).min(1),
+        completedAt: z
+          .string()
+          .optional()
+          .describe("完成时间 ISO；默认用建议的 completedAtHint 或现在"),
+      },
+    },
+    async (input) => {
+      try {
+        const { confirmShippedRequirements } = await import(
+          "@/lib/mcp/suggest-shipped-from-release"
+        );
+        const result = await confirmShippedRequirements({
+          requirementIds: input.requirementIds,
+          completedAt: input.completedAt,
+        });
+        await logAiAction({
+          action: "confirm_shipped_requirements",
+          payload: {
+            marked: result.marked,
+            failed: result.failed.length,
+            completedAt: result.completedAt,
+          },
+        });
+        return mcpJson({ ok: true, ...result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "confirm_shipped_requirements 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_git_sync_suggestions",
+    {
+      title: "List git sync suggestions",
+      description:
+        "列出 sync-git 后由 commit message 模糊匹配产生的待确认建议（不改状态）。每日 cron / 手动同步后可查。",
+      inputSchema: {
+        pmProjectId: z.string().optional().describe("PM 项目 id，可选过滤"),
+        studioProjectId: z.string().optional().describe("Studio 项目 id，可选过滤"),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { listPendingGitSyncSuggestions } = await import(
+          "@/lib/mcp/suggest-from-commits"
+        );
+        const result = await listPendingGitSyncSuggestions({
+          pmProjectId: input.pmProjectId,
+          studioProjectId: input.studioProjectId,
+          limit: input.limit,
+        });
+        return mcpJson({ ok: true, ...result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "list_git_sync_suggestions 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "confirm_git_sync_suggestions",
+    {
+      title: "Confirm git sync suggestions",
+      description:
+        "确认或忽略 list_git_sync_suggestions 的候选。accept=标完成并写入 completed_at；dismiss=仅关闭建议。禁止静默全量应用。",
+      inputSchema: {
+        suggestionIds: z.array(z.string().min(1)).min(1),
+        action: z.enum(["accept", "dismiss"]),
+        completedAt: z
+          .string()
+          .optional()
+          .describe("accept 时的完成时间 ISO；默认现在"),
+      },
+    },
+    async (input) => {
+      try {
+        const { confirmGitSyncSuggestions } = await import(
+          "@/lib/mcp/suggest-from-commits"
+        );
+        const result = await confirmGitSyncSuggestions({
+          suggestionIds: input.suggestionIds,
+          action: input.action,
+          completedAt: input.completedAt,
+        });
+        await logAiAction({
+          action: "confirm_git_sync_suggestions",
+          payload: {
+            action: result.action,
+            resolved: result.resolved,
+            marked: result.marked ?? 0,
+            missing: result.missing.length,
+          },
+        });
+        return mcpJson({ ok: true, ...result });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "confirm_git_sync_suggestions 失败"
+        );
       }
     }
   );
@@ -1028,7 +1197,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Finish Change Session",
       description:
-        "改完后收尾变更会话：写入 ✅/❌ 执行项、AI 操作摘要、结果；状态变为 finished，人工验收默认未验收。",
+        "改完后收尾变更会话：写入 ✅/❌、aiOps、result。默认进入待验清单并 PushPlus/站内提醒（不自动标已验收）。acceptancePolicy：remind=只提醒；user_waived=用户明确免验则 passed；auto_pass_small=小修/bug 自动 passed。省略时：像小修/bug 且无 pending → 自动过，否则提醒。",
       inputSchema: {
         sessionId: z.string().min(1),
         doneItems: stringList.describe("已完成项"),
@@ -1039,11 +1208,17 @@ export function registerWorkspaceTools(server: McpServer) {
           .string()
           .optional()
           .describe("聊天结束时间 ISO；缺省为现在"),
+        acceptancePolicy: z
+          .enum(["remind", "auto_pass_small", "user_waived"])
+          .optional()
+          .describe(
+            "验收策略：remind | auto_pass_small | user_waived（用户说这次不用验/直接过）"
+          ),
       },
     },
     async (input) => {
       try {
-        const session = await updateChangeSession(input.sessionId, {
+        let session = await updateChangeSession(input.sessionId, {
           action: "finish",
           doneItems: input.doneItems,
           pendingItems: input.pendingItems,
@@ -1051,11 +1226,37 @@ export function registerWorkspaceTools(server: McpServer) {
           result: input.result,
           finishedAt: input.finishedAt,
         });
+        const { applyAcceptanceAfterFinish } = await import(
+          "@/lib/notify/acceptance-flow"
+        );
+        const acceptance = await applyAcceptanceAfterFinish({
+          session,
+          policy: input.acceptancePolicy,
+        });
+        session = acceptance.session;
         await logAiAction({
           action: "finish_change_session",
-          payload: { sessionId: session.id },
+          payload: {
+            sessionId: session.id,
+            acceptancePolicy: acceptance.policy,
+            autoPass: acceptance.autoPass,
+            pushOk: acceptance.push.ok,
+          },
         });
-        return mcpJson({ ok: true, session });
+        return mcpJson({
+          ok: true,
+          session,
+          acceptance: {
+            policy: acceptance.policy,
+            autoPass: acceptance.autoPass,
+            reason: acceptance.reason,
+            humanAcceptance: session.humanAcceptance,
+            push: acceptance.push,
+            nextStep: acceptance.autoPass
+              ? "已自动标 passed（小修或用户免验）。大功能若误过，可 update_change_session 改回 unreviewed。"
+              : "已进工作台待验收清单并尝试 PushPlus。请用户在工作台点通过/退回；退回时记 Bug/优化到 PM。",
+          },
+        });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "finish_change_session 失败");
       }
@@ -1095,6 +1296,39 @@ export function registerWorkspaceTools(server: McpServer) {
         return mcpJson({ ok: true, session });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "update_change_session 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "send_test_push",
+    {
+      title: "Send test PushPlus",
+      description:
+        "用 PUSHPLUS_TOKEN 发一条测试微信推送，确认 PushPlus 配置是否可用。",
+      inputSchema: {
+        title: z.string().optional().describe("默认：Star PM · 测试推送"),
+        content: z.string().optional().describe("默认说明文字"),
+      },
+    },
+    async (input) => {
+      try {
+        const { sendPushPlus, getPushPlusToken } = await import(
+          "@/lib/notify/pushplus"
+        );
+        if (!getPushPlusToken()) {
+          return mcpError("未配置 PUSHPLUS_TOKEN（.env.local / 部署环境变量）");
+        }
+        const push = await sendPushPlus({
+          title: input.title?.trim() || "Star PM · 测试推送",
+          content:
+            input.content?.trim() ||
+            "若你收到这条微信消息，说明 PushPlus 已接通。",
+        });
+        if (!push.ok) return mcpError(push.error);
+        return mcpJson({ ok: true, push });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "send_test_push 失败");
       }
     }
   );

@@ -7,6 +7,8 @@ export interface GitSyncResult {
   ok: true;
   projectId: string;
   newCount: number;
+  /** Pending commit↔requirement suggestions created (human confirm only). */
+  suggestionCreated: number;
   latest: {
     sha: string;
     shortSha: string;
@@ -88,6 +90,28 @@ export async function syncProjectGit(projectId: string): Promise<GitSyncResult> 
 
   await persistGitSyncResult(project.id, projectFields, newActivities);
 
+  let suggestionCreated = 0;
+  if (newActivities.length > 0) {
+    try {
+      const { suggestAndPersistFromCommits } = await import(
+        "@/lib/mcp/suggest-from-commits"
+      );
+      const suggest = await suggestAndPersistFromCommits({
+        pmProjectId: project.id,
+        commits: newActivities.map((a) => ({
+          sha: a.commit_sha,
+          shortSha: a.short_sha,
+          message: a.message,
+          url: a.url,
+          committedAt: a.committed_at,
+        })),
+      });
+      suggestionCreated = suggest.created;
+    } catch {
+      // matching must not break git sync
+    }
+  }
+
   const dbAfter = await readDb();
   const activities = [...(dbAfter.git_activities ?? [])]
     .filter((a) => a.project_id === project.id)
@@ -98,6 +122,7 @@ export async function syncProjectGit(projectId: string): Promise<GitSyncResult> 
     ok: true,
     projectId: project.id,
     newCount,
+    suggestionCreated,
     latest: latestCommit
       ? {
           sha: latestCommit.sha,
@@ -131,6 +156,7 @@ export interface ProjectGitSyncItem {
   name: string;
   ok: boolean;
   newCount?: number;
+  suggestionCreated?: number;
   error?: string;
 }
 
@@ -139,6 +165,7 @@ export interface SyncAllProjectsGitResult {
   succeeded: number;
   failed: number;
   skipped: number;
+  suggestionCreated: number;
   results: ProjectGitSyncItem[];
 }
 
@@ -159,6 +186,7 @@ export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResul
         name: project.name,
         ok: true,
         newCount: result.newCount,
+        suggestionCreated: result.suggestionCreated,
       });
     } catch (error) {
       results.push({
@@ -179,6 +207,10 @@ export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResul
       name: String(item.name),
       ok: Boolean(item.ok),
       newCount: typeof item.newCount === "number" ? item.newCount : undefined,
+      suggestionCreated:
+        typeof item.suggestionCreated === "number"
+          ? item.suggestionCreated
+          : undefined,
       error: typeof item.error === "string" ? item.error : undefined,
     });
   }
@@ -186,12 +218,17 @@ export async function syncAllBoundProjectsGit(): Promise<SyncAllProjectsGitResul
   const total = bound.length + studioResult.total;
   const succeeded = results.filter((r) => r.ok).length;
   const failed = results.filter((r) => !r.ok).length;
+  const suggestionCreated = results.reduce(
+    (sum, r) => sum + (r.suggestionCreated ?? 0),
+    0
+  );
 
   return {
     total,
     succeeded,
     failed,
     skipped: 0,
+    suggestionCreated,
     results,
   };
 }

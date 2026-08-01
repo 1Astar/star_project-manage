@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchAcceptancePeek } from "@/components/workbench-acceptance-peek";
+import { WorkbenchAcceptanceBrowserNudge } from "@/components/workbench-acceptance-browser-nudge";
 import {
   productReviewChangeSessionAction,
   productReviewRequirementAction,
@@ -153,6 +154,10 @@ export function WorkbenchPmToday({
 
   return (
     <div id="pm-today" className="scroll-mt-20 space-y-4">
+      <WorkbenchAcceptanceBrowserNudge
+        count={visibleAcceptance.length}
+        todayDay={todayDay}
+      />
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-slate-900">今日清单</h2>

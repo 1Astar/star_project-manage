@@ -91,8 +91,26 @@ description: >-
 | `aiOps` | 改了哪些文件/做了啥（可扫） |
 | `result` | 一句话结果 |
 | `finishedAt` | **本轮对话最后相关消息**时间戳 ISO |
+| `acceptancePolicy` | 见下节「人工验收」 |
 
 工时：不叫「AI 工时」产品名；就是开始–结束。条目有时段，板块表可 Σ。
+
+### 1.3.1 人工验收（A+B+C，硬规则）
+
+工作台已有 **「待你验收」**（正式待验需求 + 未收口变更会话）。收工后默认**不**代用户点通过。
+
+| 策略 | 何时 | `acceptancePolicy` | 结果 |
+|------|------|-------------------|------|
+| **A 默认提醒** | 大功能 / 不确定 | `remind` 或省略（非小修） | `unreviewed` → 进待验清单 + PushPlus + 浏览器提醒；**必须用户点通过** |
+| **B 用户免验** | 用户明确说「这次不用我验 / 直接过 / 免验」 | **`user_waived`** | 标 `passed` |
+| **C 小修/bug** | 纯修复、hotfix、文案/样式微调，且 `pendingItems` 空 | **`auto_pass_small`**（或 goal/result 含修复类词时启发式） | 标 `passed`，并推送「已自动验收」 |
+
+补充闭环：
+
+1. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug` / 需求或灵感），挂上相关 `requirementId` / 会话。  
+2. AI 做完该补充 → 再 `finish_change_session`（小修用 C；大改用 A）。  
+3. **禁止**在用户未表态时，对大功能静默 `humanAcceptance=passed`。  
+4. 推送依赖环境变量 **`PUSHPLUS_TOKEN`**；未配置则只站内通知 + 工作台清单。
 
 ### 1.4 Evolution 写入标准
 
@@ -240,14 +258,20 @@ Release:
 - 汇总**带 module** 的演进写入 GitHub Release body（中文）  
 - 默认把未挂版本且有板块的演进挂到本 tag  
 - Star PM：`projectId=proj-star-pm`，`tag=vX.Y.Z`  
-- 其它挂了 `githubRepo` 的项目同理
+- 其它挂了 `githubRepo` 的项目同理  
+- 返回 **`shippedSuggestions`**：按本版 CHANGELOG 条目 + 已挂 tag 的演进，模糊匹配未完成需求（**仅建议，不改状态**）  
+- 确认后调用 **`confirm_shipped_requirements`**（`requirementIds` + 建议的 `completedAt`）  
+- 每日 **`sync-git`** 后另有 commit→需求建议：用 **`list_git_sync_suggestions`** / **`confirm_git_sync_suggestions`**（同样不自动改状态）  
+- 每日 **`sync-git`** 后另有 commit→需求建议：用 **`list_git_sync_suggestions`** / **`confirm_git_sync_suggestions`**（同样不自动改状态）  
+- 也可单独调 **`suggest_shipped_from_release`**
 
 ### 2.6 发版后检查
 
 - [ ] GitHub Release 页面打开正常  
 - [ ] CHANGELOG 与 Release 要点一致  
 - [ ] 新 SQL migration 已提醒用户在 Supabase 跑  
-- [ ] 相关演进 `releaseTag` 已挂上（或由 publish 挂上）
+- [ ] 相关演进 `releaseTag` 已挂上（或由 publish 挂上）  
+- [ ] 查看 `shippedSuggestions.candidates`；该标完成的用 `confirm_shipped_requirements` 确认  
 
 ---
 
