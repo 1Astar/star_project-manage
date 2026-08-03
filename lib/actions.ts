@@ -448,6 +448,115 @@ export async function updateBugStatusAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
 }
 
+export async function createInterviewAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  interviewee?: string | null;
+  interviewedAt?: string | null;
+  recordNotes?: string;
+  productJudgment?: string;
+  requirementId?: string | null;
+}) {
+  assertNotViewerWrite();
+  const { createProjectInterview } = await import("@/lib/interviews/store");
+  const row = await createProjectInterview({
+    project_id: input.projectId,
+    title: input.title,
+    interviewee: input.interviewee,
+    interviewed_at: input.interviewedAt,
+    record_notes: input.recordNotes,
+    product_judgment: input.productJudgment,
+    requirement_ids: input.requirementId ? [input.requirementId] : undefined,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/interviews`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return row;
+}
+
+export async function updateInterviewAction(input: {
+  interviewId: string;
+  projectSlug: string;
+  title?: string;
+  interviewee?: string | null;
+  interviewedAt?: string | null;
+  recordNotes?: string;
+  productJudgment?: string;
+  hypotheses?: import("@/lib/types").InterviewHypothesis[];
+}) {
+  assertNotViewerWrite();
+  const { updateProjectInterview } = await import("@/lib/interviews/store");
+  const row = await updateProjectInterview(input.interviewId, {
+    title: input.title,
+    interviewee: input.interviewee,
+    interviewed_at: input.interviewedAt,
+    record_notes: input.recordNotes,
+    product_judgment: input.productJudgment,
+    hypotheses: input.hypotheses,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/interviews`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return row;
+}
+
+export async function deleteInterviewAction(input: {
+  interviewId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deleteProjectInterview } = await import("@/lib/interviews/store");
+  await deleteProjectInterview(input.interviewId);
+  revalidatePath(`/projects/${input.projectSlug}/interviews`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+}
+
+export async function linkInterviewRequirementAction(input: {
+  projectId: string;
+  interviewId: string;
+  requirementId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { linkInterviewRequirement } = await import("@/lib/interviews/store");
+  await linkInterviewRequirement({
+    project_id: input.projectId,
+    interview_id: input.interviewId,
+    requirement_id: input.requirementId,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/interviews`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+}
+
+export async function unlinkInterviewRequirementAction(input: {
+  interviewId: string;
+  requirementId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { unlinkInterviewRequirement } = await import("@/lib/interviews/store");
+  await unlinkInterviewRequirement({
+    interview_id: input.interviewId,
+    requirement_id: input.requirementId,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/interviews`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+}
+
+export async function listInterviewsForRequirementAction(requirementId: string) {
+  const { listInterviewsForRequirement } = await import("@/lib/interviews/store");
+  return listInterviewsForRequirement(requirementId);
+}
+
+export async function listProjectInterviewsAction(projectId: string) {
+  const { listProjectInterviews } = await import("@/lib/interviews/store");
+  return listProjectInterviews(projectId);
+}
+
 export async function fetchProjectBugs(projectId: string) {
   return listBugsByProject(projectId);
 }

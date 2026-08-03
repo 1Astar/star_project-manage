@@ -182,6 +182,8 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     })),
     requirement_attachments: db.requirement_attachments ?? [],
     requirement_links: db.requirement_links ?? [],
+    project_interviews: db.project_interviews ?? [],
+    interview_requirement_links: db.interview_requirement_links ?? [],
     projects: db.projects.map(normalizeProject),
     requirements: db.requirements.map(normalizeRequirement),
     iterations: (db.iterations ?? []).map(normalizeIteration),

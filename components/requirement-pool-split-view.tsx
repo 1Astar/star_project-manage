@@ -14,6 +14,7 @@ import {
   saveRequirementDetailAction,
 } from "@/lib/actions";
 import { RequirementMemoryTimeline, type TimelineEntity } from "@/components/requirement-memory-timeline";
+import { RequirementInterviewsPanel } from "@/components/requirement-interviews-panel";
 import { RequirementPoolTable } from "@/components/requirement-pool-table";
 import { RequirementStatusSelect } from "@/components/requirement-status-select";
 import { StudioBadge } from "@/components/studio/shell";
@@ -427,6 +428,7 @@ export function RequirementPoolSplitView({
               });
             }}
             onAddChild={() => addRow(drawerReq.id)}
+            projectId={projectId}
           />
         ) : null}
       </div>
@@ -533,6 +535,7 @@ function RequirementSidePeek({
   onUpload,
   onRemoveAttachment,
   onOpenLightbox,
+  projectId,
 }: {
   requirement: Requirement;
   attachments: RequirementAttachment[];
@@ -540,6 +543,7 @@ function RequirementSidePeek({
   activeIterations: Iteration[];
   members: ProjectMember[];
   projectSlug: string;
+  projectId: string;
   links: RequirementLink[];
   timelineEntities: TimelineEntity[];
   onClose: () => void;
@@ -903,6 +907,12 @@ function RequirementSidePeek({
             </div>
           )}
         </section>
+
+        <RequirementInterviewsPanel
+          projectId={projectId}
+          projectSlug={projectSlug}
+          requirementId={requirement.id}
+        />
 
         <section className="space-y-2 border-t border-slate-100 pt-3">
           <h3 className="text-xs font-medium text-slate-500">Memory Timeline</h3>

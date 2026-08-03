@@ -386,6 +386,51 @@ export interface RequirementAttachment {
   created_at: string;
 }
 
+/** 待验证假设状态 */
+export type InterviewHypothesisStatus =
+  | "open"
+  | "validating"
+  | "confirmed"
+  | "rejected";
+
+export const INTERVIEW_HYPOTHESIS_STATUS_LABELS: Record<
+  InterviewHypothesisStatus,
+  string
+> = {
+  open: "待验证",
+  validating: "验证中",
+  confirmed: "已证实",
+  rejected: "已证伪",
+};
+
+export interface InterviewHypothesis {
+  id: string;
+  statement: string;
+  status: InterviewHypothesisStatus;
+}
+
+/** 项目访谈：记录 + 产品判断 + 假设；经 link 挂需求 */
+export interface ProjectInterview {
+  id: string;
+  project_id: string;
+  title: string;
+  interviewee: string | null;
+  interviewed_at: string | null;
+  record_notes: string;
+  product_judgment: string;
+  hypotheses: InterviewHypothesis[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterviewRequirementLink {
+  id: string;
+  project_id: string;
+  interview_id: string;
+  requirement_id: string;
+  created_at: string;
+}
+
 export interface ShareLink {
   id: string;
   project_id: string;

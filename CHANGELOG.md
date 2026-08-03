@@ -10,6 +10,13 @@
 
 ---
 
+## v1.11.0 · 2026-08-03
+
+- **访谈库**：项目导航新增独立访谈实体——访谈记录、产品判断、待验证假设（状态可标）
+- **需求侧栏关联**：需求 Side Peek 可查看/新建/关联/取消关联访谈
+- **MCP**：`list_interviews` / `create_interview` / `update_interview` / `link_interview_requirement`
+- **Migration**：`036_project_interviews.sql`（`project_interviews` + `interview_requirement_links`）
+
 ## v1.10.62 · 2026-08-01
 
 - **发版后建议标完成**：`publish_release` 附带 CHANGELOG/tag 模糊匹配未完成需求；确认后才标完成

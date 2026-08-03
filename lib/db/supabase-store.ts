@@ -5,8 +5,10 @@ import type {
   BugSeverity,
   BugType,
   GitActivity,
+  InterviewRequirementLink,
   Iteration,
   Project,
+  ProjectInterview,
   Requirement,
   RequirementAttachment,
   RequirementLink,
@@ -115,6 +117,11 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   const pool_column_defs = await loadOptionalTable(sb, "pool_column_defs");
   const requirement_attachments = await loadOptionalTable(sb, "requirement_attachments");
   const requirement_links = await loadOptionalTable(sb, "requirement_links");
+  const project_interviews = await loadOptionalTable(sb, "project_interviews");
+  const interview_requirement_links = await loadOptionalTable(
+    sb,
+    "interview_requirement_links"
+  );
 
   return {
     projects: throwOnError(projects, "projects"),
@@ -139,6 +146,22 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     pool_column_defs,
     requirement_attachments,
     requirement_links,
+    project_interviews: ((project_interviews ?? []) as Record<string, unknown>[]).map(
+      (row) => ({
+        id: String(row.id),
+        project_id: String(row.project_id),
+        title: String(row.title ?? ""),
+        interviewee: row.interviewee != null ? String(row.interviewee) : null,
+        interviewed_at: row.interviewed_at != null ? String(row.interviewed_at) : null,
+        record_notes: String(row.record_notes ?? ""),
+        product_judgment: String(row.product_judgment ?? ""),
+        hypotheses: Array.isArray(row.hypotheses) ? (row.hypotheses as ProjectInterview["hypotheses"]) : [],
+        created_at: String(row.created_at ?? new Date().toISOString()),
+        updated_at: String(row.updated_at ?? new Date().toISOString()),
+      })
+    ),
+    interview_requirement_links: (interview_requirement_links ??
+      []) as InterviewRequirementLink[],
   };
 }
 
@@ -177,7 +200,9 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "project_members" ||
       table === "pool_column_defs" ||
       table === "requirement_attachments" ||
-      table === "requirement_links"
+      table === "requirement_links" ||
+      table === "project_interviews" ||
+      table === "interview_requirement_links"
     ) {
       return;
     }
@@ -228,6 +253,27 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   if ((snapshot.requirement_links ?? []).length) {
     await upsertRows("requirement_links", snapshot.requirement_links ?? []);
   }
+  if ((snapshot.project_interviews ?? []).length) {
+    try {
+      await upsertRows("project_interviews", snapshot.project_interviews ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/project_interviews|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
+  if ((snapshot.interview_requirement_links ?? []).length) {
+    try {
+      await upsertRows(
+        "interview_requirement_links",
+        snapshot.interview_requirement_links ?? []
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/interview_requirement_links|schema cache|does not exist/i.test(msg)) {
+        throw e;
+      }
+    }
+  }
 
   await deleteMissing("git_activities", (snapshot.git_activities ?? []).map((r) => r.id));
   await deleteMissing("pool_column_defs", (snapshot.pool_column_defs ?? []).map((r) => r.id));
@@ -238,6 +284,14 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await deleteMissing(
     "requirement_links",
     (snapshot.requirement_links ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "interview_requirement_links",
+    (snapshot.interview_requirement_links ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "project_interviews",
+    (snapshot.project_interviews ?? []).map((r) => r.id)
   );
   await deleteMissing("project_members", (snapshot.project_members ?? []).map((r) => r.id));
   await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));

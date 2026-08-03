@@ -5,10 +5,12 @@ import type {
   Bug,
   GitActivity,
   Iteration,
+  InterviewRequirementLink,
   ModuleNode,
   NotificationItem,
   PoolColumnDef,
   Project,
+  ProjectInterview,
   ProjectMember,
   Prototype,
   Requirement,
@@ -42,4 +44,6 @@ export interface DatabaseSnapshot {
   pool_column_defs: PoolColumnDef[];
   requirement_attachments: RequirementAttachment[];
   requirement_links: RequirementLink[];
+  project_interviews: ProjectInterview[];
+  interview_requirement_links: InterviewRequirementLink[];
 }

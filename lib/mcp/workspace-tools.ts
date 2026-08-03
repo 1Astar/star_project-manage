@@ -1712,6 +1712,235 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "list_interviews",
+    {
+      title: "List Interviews",
+      description:
+        "列出项目访谈（记录/判断/假设）。projectId 可为 Studio id 或 PM slug；可传 requirementId 只看关联访谈。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        requirementId: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects } = await import("@/lib/db/local-store");
+        const {
+          listProjectInterviews,
+          listInterviewsForRequirement,
+        } = await import("@/lib/interviews/store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+
+        const rows = input.requirementId
+          ? await listInterviewsForRequirement(input.requirementId)
+          : await listProjectInterviews(pm.id);
+        const limit = input.limit ?? 40;
+        const slim = rows.slice(0, limit).map((iv) => ({
+          id: iv.id,
+          title: iv.title,
+          interviewee: iv.interviewee,
+          interviewedAt: iv.interviewed_at,
+          recordNotes: iv.record_notes,
+          productJudgment: iv.product_judgment,
+          hypotheses: iv.hypotheses,
+          updatedAt: iv.updated_at,
+        }));
+        return mcpJson({
+          ok: true,
+          pmSlug: pm.slug,
+          count: rows.length,
+          returned: slim.length,
+          interviews: slim,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_interviews 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "create_interview",
+    {
+      title: "Create Interview",
+      description:
+        "创建访谈：含访谈记录、产品判断、待验证假设；可可选挂到 requirementId。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        title: z.string().min(1),
+        interviewee: z.string().optional(),
+        interviewedAt: z.string().optional(),
+        recordNotes: z.string().optional(),
+        productJudgment: z.string().optional(),
+        hypotheses: z
+          .array(
+            z.object({
+              statement: z.string().min(1),
+              status: z
+                .enum(["open", "validating", "confirmed", "rejected"])
+                .optional(),
+            })
+          )
+          .optional(),
+        requirementId: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects } = await import("@/lib/db/local-store");
+        const { createProjectInterview } = await import("@/lib/interviews/store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+
+        const interview = await createProjectInterview({
+          project_id: pm.id,
+          title: input.title,
+          interviewee: input.interviewee,
+          interviewed_at: input.interviewedAt,
+          record_notes: input.recordNotes,
+          product_judgment: input.productJudgment,
+          hypotheses: (input.hypotheses ?? []).map((h) => ({
+            id: `ih-${crypto.randomUUID().slice(0, 10)}`,
+            statement: h.statement,
+            status: h.status ?? "open",
+          })),
+          requirement_ids: input.requirementId ? [input.requirementId] : undefined,
+        });
+        await logAiAction({
+          action: "create_interview",
+          payload: {
+            interviewId: interview.id,
+            projectId: pm.id,
+            requirementId: input.requirementId ?? null,
+          },
+        });
+        return mcpJson({ ok: true, pmSlug: pm.slug, interview });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "create_interview 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_interview",
+    {
+      title: "Update Interview",
+      description: "更新访谈三块内容：记录 / 产品判断 / 假设状态。",
+      inputSchema: {
+        interviewId: z.string().min(1),
+        title: z.string().optional(),
+        interviewee: z.string().nullable().optional(),
+        interviewedAt: z.string().nullable().optional(),
+        recordNotes: z.string().optional(),
+        productJudgment: z.string().optional(),
+        hypotheses: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              statement: z.string().min(1),
+              status: z.enum(["open", "validating", "confirmed", "rejected"]),
+            })
+          )
+          .optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { updateProjectInterview } = await import("@/lib/interviews/store");
+        const interview = await updateProjectInterview(input.interviewId, {
+          title: input.title,
+          interviewee: input.interviewee,
+          interviewed_at: input.interviewedAt,
+          record_notes: input.recordNotes,
+          product_judgment: input.productJudgment,
+          hypotheses: input.hypotheses?.map((h) => ({
+            id: h.id ?? `ih-${crypto.randomUUID().slice(0, 10)}`,
+            statement: h.statement,
+            status: h.status,
+          })),
+        });
+        await logAiAction({
+          action: "update_interview",
+          payload: { interviewId: interview.id },
+        });
+        return mcpJson({ ok: true, interview });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_interview 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "link_interview_requirement",
+    {
+      title: "Link Interview Requirement",
+      description: "把访谈挂到需求，或取消关联（unlink=true）。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        interviewId: z.string().min(1),
+        requirementId: z.string().min(1),
+        unlink: z.boolean().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects } = await import("@/lib/db/local-store");
+        const {
+          linkInterviewRequirement,
+          unlinkInterviewRequirement,
+        } = await import("@/lib/interviews/store");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+
+        if (input.unlink) {
+          await unlinkInterviewRequirement({
+            interview_id: input.interviewId,
+            requirement_id: input.requirementId,
+          });
+        } else {
+          await linkInterviewRequirement({
+            project_id: pm.id,
+            interview_id: input.interviewId,
+            requirement_id: input.requirementId,
+          });
+        }
+        await logAiAction({
+          action: "link_interview_requirement",
+          payload: {
+            interviewId: input.interviewId,
+            requirementId: input.requirementId,
+            unlink: !!input.unlink,
+          },
+        });
+        return mcpJson({ ok: true, unlink: !!input.unlink });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "link_interview_requirement 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
     "organize_star_pm_req_tree",
     {
       title: "Organize Star PM Req Tree",
