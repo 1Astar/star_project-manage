@@ -41,22 +41,19 @@ export async function resolveProjectRoute(id: string) {
     studioById ??
     (studioIdFromSlug ? await getStudioProjectById(studioIdFromSlug) : null);
 
-  // 访客 / 观看者只能进演示项目
+  // 访客 / 观看者只能进演示项目（与 REQUIRE_AUTH 解耦）
   try {
-    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
-    const { isDemoShowcaseId, isViewerRole } = await import("@/lib/demo/showcase");
-    if (isAuthRequired()) {
-      const session = await getAdminSession();
-      if (!session || isViewerRole(session?.role)) {
-        const candidate = studio?.id ?? id;
-        if (!isDemoShowcaseId(candidate) && !isDemoShowcaseId(id)) {
-          return {
-            studio: null,
-            routeId: id,
-            pmSlug: null,
-            pmBundle: null,
-          };
-        }
+    const { isDemoPublicScope } = await import("@/lib/demo/scope");
+    const { isDemoShowcaseId } = await import("@/lib/demo/showcase");
+    if (await isDemoPublicScope()) {
+      const candidate = studio?.id ?? id;
+      if (!isDemoShowcaseId(candidate) && !isDemoShowcaseId(id)) {
+        return {
+          studio: null,
+          routeId: id,
+          pmSlug: null,
+          pmBundle: null,
+        };
       }
     }
   } catch {

@@ -60,13 +60,36 @@ export async function getAdminSession(): Promise<AuthSession | null> {
   const { getMcpAdminSession } = await import("@/lib/auth/request-scope");
   const mcp = getMcpAdminSession();
   if (mcp) return mcp;
-  if (!isAuthRequired()) {
+
+  // Always prefer a real signed cookie when present
+  try {
+    const jar = await cookies();
+    const token = jar.get(SESSION_COOKIE_NAME)?.value;
+    if (token) {
+      const session = verifySession(token);
+      if (session) return session;
+    }
+  } catch {
+    /* cookies() unavailable outside request (scripts) */
+  }
+
+  // Local open mode only: no cookie → treat as admin for DX.
+  // Hosted (Vercel/EdgeOne/CF) never auto-admin — guests see demo sandbox only.
+  if (!isAuthRequired() && allowOpenAdminWithoutLogin()) {
     return { email: "dev", role: "admin" };
   }
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE_NAME)?.value;
-  if (!token) return null;
-  return verifySession(token);
+  return null;
+}
+
+/** Hosted platforms: never invent an admin session for anonymous browsers. */
+export function allowOpenAdminWithoutLogin(): boolean {
+  if (process.env.VERCEL === "1") return false;
+  if (process.env.NEXT_PUBLIC_EDGEONE === "1" || process.env.EDGEONE === "1") {
+    return false;
+  }
+  if (process.env.CF_PAGES === "1") return false;
+  if (process.env.NEXT_PUBLIC_CF_WORKER === "1") return false;
+  return true;
 }
 
 export async function setAdminSession(email: string, role: AuthRole = "admin"): Promise<void> {

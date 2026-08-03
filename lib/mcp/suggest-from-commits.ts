@@ -11,7 +11,6 @@ import {
   type GitSyncSuggestion,
 } from "@/lib/mcp/git-sync-suggestions-store";
 import { getPmSlugForStudioProject } from "@/lib/project-bridge";
-import { confirmShippedRequirements } from "@/lib/mcp/suggest-shipped-from-release";
 import { getProjectById } from "@/lib/studio/data";
 import { requirementIsDone, type Requirement } from "@/lib/types";
 
@@ -221,6 +220,9 @@ export async function confirmGitSyncSuggestions(input: {
   }
 
   const requirementIds = [...new Set(selected.map((s) => s.requirement_id))];
+  const { confirmShippedRequirements } = await import(
+    "@/lib/mcp/suggest-shipped-from-release"
+  );
   const ship = await confirmShippedRequirements({
     requirementIds,
     completedAt: input.completedAt,

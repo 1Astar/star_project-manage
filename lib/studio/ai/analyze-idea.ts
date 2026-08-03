@@ -97,7 +97,7 @@ function buildContextBlock(context: AnalyzeIdeaContext): string {
 
 function buildPrompt(context: AnalyzeIdeaContext): string {
   return [
-    "你是 Starry Product Lab 的产品经理助手，帮助整理突发灵感。",
+    "你是 Starry Studio 的产品经理助手，帮助整理突发灵感。",
     "团队同时推进 AI 宠物、AI 控制器、Star PM / Idea Studio 等多条产品线，资源有限。",
     "",
     buildContextBlock(context),

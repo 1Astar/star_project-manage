@@ -1,9 +1,14 @@
-import { getAdminSession, isAuthRequired } from "@/lib/auth/session";
+import { getAdminSession } from "@/lib/auth/session";
 import { isViewerRole } from "@/lib/demo/showcase";
 
-/** 生产开启鉴权时：未登录访客 或 观看者 → 只读演示沙盘 */
+/**
+ * 未登录访客 / 观看者 → 只读演示沙盘（绝不读真实 Bug/私域项目）。
+ * 已登录管理员 → 全量。
+ *
+ * 与 REQUIRE_AUTH 解耦：即便托管环境误配 REQUIRE_AUTH=false，
+ * 只要没有真实 admin session，仍走演示范围。
+ */
 export async function isDemoPublicScope(): Promise<boolean> {
-  if (!isAuthRequired()) return false;
   try {
     const session = await getAdminSession();
     if (!session) return true;

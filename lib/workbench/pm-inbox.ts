@@ -3,6 +3,8 @@
  */
 import { readDb } from "@/lib/db/local-store";
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { isDemoPublicScope } from "@/lib/demo/scope";
+import { isDemoShowcaseId } from "@/lib/demo/showcase";
 import {
   requirementIsCancelled,
   TASK_STATUS_LABELS,
@@ -30,6 +32,17 @@ const PM_SLUG_TO_STUDIO: Record<string, string> = Object.fromEntries(
 
 function routeIdForPmSlug(slug: string): string {
   return PM_SLUG_TO_STUDIO[slug] ?? slug;
+}
+
+/** 演示沙盘下只允许 demo-showcase 的 PM 项目 id */
+function demoPmProjectIds(
+  projects: Array<{ id: string; slug: string }>
+): Set<string> {
+  return new Set(
+    projects
+      .filter((p) => isDemoShowcaseId(p.slug) || isDemoShowcaseId(p.id))
+      .map((p) => p.id)
+  );
 }
 
 function shanghaiDay(iso?: string | null): string {
@@ -130,12 +143,19 @@ export async function getPmAcceptanceQueue(opts?: {
   const db = await readDb();
   const studio = await getScopedStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
-  const pmById = new Map(db.projects.map((p) => [p.id, p]));
+  const demoOnly = await isDemoPublicScope();
+  const allowedPmIds = demoOnly ? demoPmProjectIds(db.projects) : null;
+  const pmById = new Map(
+    db.projects
+      .filter((p) => !allowedPmIds || allowedPmIds.has(p.id))
+      .map((p) => [p.id, p])
+  );
 
   const items: PmAcceptanceItem[] = [];
   const seenReq = new Set<string>();
 
   for (const req of db.requirements) {
+    if (allowedPmIds && !allowedPmIds.has(req.project_id)) continue;
     if (requirementIsCancelled(req)) continue;
     const life = requirementLifecycleStatus(req);
     if (life !== "待验收" && req.status !== "acceptance") continue;
@@ -259,15 +279,18 @@ export async function getPmFollowUps(opts?: {
   return { todayDay, items };
 }
 
-/** 全项目未关闭 Bug（工作台露出） */
+/** 全项目未关闭 Bug（工作台露出）；演示范围仅 demo-showcase */
 export async function getOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
   const db = await readDb();
   const studio = await getScopedStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
+  const demoOnly = await isDemoPublicScope();
+  const allowedPmIds = demoOnly ? demoPmProjectIds(db.projects) : null;
   const items: PmOpenBugItem[] = [];
 
   for (const bug of db.bugs) {
     if (bug.status === "done") continue;
+    if (allowedPmIds && !allowedPmIds.has(bug.project_id)) continue;
     const pmProject = db.projects.find((p) => p.id === bug.project_id);
     if (!pmProject) continue;
     const routeId = routeIdForPmSlug(pmProject.slug);

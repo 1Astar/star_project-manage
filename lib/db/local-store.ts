@@ -424,15 +424,10 @@ export async function getProjects(): Promise<Project[]> {
   const db = await readDb();
   let list = db.projects;
   try {
-    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
-    const { filterPmProjectsForDemo, isViewerRole } = await import("@/lib/demo/showcase");
-    if (!isAuthRequired()) {
-      /* local open */
-    } else {
-      const session = await getAdminSession();
-      if (!session || isViewerRole(session?.role)) {
-        list = filterPmProjectsForDemo(list);
-      }
+    const { isDemoPublicScope } = await import("@/lib/demo/scope");
+    const { filterPmProjectsForDemo } = await import("@/lib/demo/showcase");
+    if (await isDemoPublicScope()) {
+      list = filterPmProjectsForDemo(list);
     }
   } catch {
     /* ignore auth in scripts */
@@ -445,15 +440,10 @@ export async function getProjectById(id: string): Promise<Project | null> {
   const project = db.projects.find((p) => p.id === id || p.slug === id) ?? null;
   if (!project) return null;
   try {
-    const { getAdminSession, isAuthRequired } = await import("@/lib/auth/session");
-    const { isDemoShowcaseId, isViewerRole } = await import("@/lib/demo/showcase");
-    if (isAuthRequired()) {
-      const session = await getAdminSession();
-      if (
-        (!session || isViewerRole(session?.role)) &&
-        !isDemoShowcaseId(project.slug) &&
-        !isDemoShowcaseId(project.id)
-      ) {
+    const { isDemoPublicScope } = await import("@/lib/demo/scope");
+    const { isDemoShowcaseId } = await import("@/lib/demo/showcase");
+    if (await isDemoPublicScope()) {
+      if (!isDemoShowcaseId(project.slug) && !isDemoShowcaseId(project.id)) {
         return null;
       }
     }
@@ -1021,6 +1011,18 @@ export async function getBugById(bugId: string) {
   const bug = db.bugs.find((b) => b.id === bugId);
   if (!bug) return null;
   const project = db.projects.find((p) => p.id === bug.project_id);
+  if (!project) return null;
+  try {
+    const { isDemoPublicScope } = await import("@/lib/demo/scope");
+    const { isDemoShowcaseId } = await import("@/lib/demo/showcase");
+    if (await isDemoPublicScope()) {
+      if (!isDemoShowcaseId(project.slug) && !isDemoShowcaseId(project.id)) {
+        return null;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   const requirement = bug.requirement_id
     ? db.requirements.find((r) => r.id === bug.requirement_id)
     : null;
@@ -1214,9 +1216,9 @@ export async function addBugComment(input: {
 }
 
 export async function listBugsByProject(projectId: string) {
-  const db = await readDb();
-  const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
+  const project = await getProjectById(projectId);
   if (!project) return [];
+  const db = await readDb();
   return db.bugs
     .filter((b) => b.project_id === project.id)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
