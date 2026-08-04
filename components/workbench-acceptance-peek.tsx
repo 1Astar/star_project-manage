@@ -201,6 +201,16 @@ export function WorkbenchAcceptancePeek({
           >
             打回·提 Bug
           </button>
+          {item.liveSiteUrl ? (
+            <a
+              href={item.liveSiteUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              进入站点
+            </a>
+          ) : null}
           {data?.href ? (
             <Link
               href={data.href}

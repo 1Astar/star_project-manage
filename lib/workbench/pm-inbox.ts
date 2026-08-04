@@ -12,6 +12,7 @@ import {
 } from "@/lib/types";
 import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
+import { projectLiveSiteUrl } from "@/lib/project-live-url";
 
 /** 变更会话回看（天） */
 const SESSION_LOOKBACK_DAYS = 14;
@@ -83,6 +84,8 @@ export type PmAcceptanceItem = {
   pmProjectId: string;
   projectTitle: string;
   href: string;
+  /** 项目对外站点（demoUrl / vercelUrl） */
+  liveSiteUrl?: string | null;
   source: PmAcceptanceSource;
   sourceLabel: string;
   requirementId?: string;
@@ -168,6 +171,7 @@ export async function getPmAcceptanceQueue(opts?: {
     const routeId = routeIdForPmSlug(pmProject.slug);
     const projectTitle =
       studioById.get(routeId)?.title ?? pmProject.name ?? "未知项目";
+    const studioProject = studioById.get(routeId);
     items.push({
       id: `req:${req.id}`,
       title: req.title,
@@ -175,6 +179,7 @@ export async function getPmAcceptanceQueue(opts?: {
       pmProjectId: pmProject.id,
       projectTitle,
       href: `/projects/${routeId}/requirements/${req.id}`,
+      liveSiteUrl: studioProject ? projectLiveSiteUrl(studioProject) : null,
       source: "formal",
       sourceLabel: SOURCE_LABEL.formal,
       requirementId: req.id,
@@ -210,6 +215,7 @@ export async function getPmAcceptanceQueue(opts?: {
       pmProjectId: pmProject.id,
       projectTitle: project.title,
       href: `/projects/${project.id}/evolution`,
+      liveSiteUrl: projectLiveSiteUrl(project),
       source: "change_session",
       sourceLabel: SOURCE_LABEL.change_session,
       changeSessionId: session.id,

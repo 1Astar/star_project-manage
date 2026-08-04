@@ -22,7 +22,7 @@ export const GENERIC_FEATURE_MODULES = [
   "交付",
 ] as const;
 
-/** Chris Phone / 小手机：按产品功能面，不是「产品/技术」标签 */
+/** AI Companion（原 Chris Phone / 小手机）：按产品功能面，不是「产品/技术」标签 */
 export const CHRIS_PHONE_FEATURE_MODULES = [
   "对话聊天",
   "相册图库",
