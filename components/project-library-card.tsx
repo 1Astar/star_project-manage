@@ -1,8 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { StudioBadge } from "@/components/studio/shell";
 import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 import type { Project } from "@/lib/studio/types";
-import { liveSiteHostLabel, projectLiveSiteUrl } from "@/lib/project-live-url";
+import { openLiveSite, projectLiveSiteUrl } from "@/lib/project-live-url";
 import { cn } from "@/lib/utils";
 
 export function ProjectLibraryCard({
@@ -38,7 +40,7 @@ export function ProjectLibraryCard({
       <Link
         href={`/projects/${project.id}`}
         className="absolute inset-0 z-0 rounded-xl"
-        aria-label={project.title}
+        aria-label={`打开项目 ${project.title}`}
       />
       <div className="relative z-10 pointer-events-none">
         <div className="flex flex-wrap items-center gap-2">
@@ -62,7 +64,22 @@ export function ProjectLibraryCard({
           <p className="mt-2 text-xs font-medium text-slate-400">↳ {parentTitle}</p>
         ) : null}
         <h2 className="mt-3 text-lg font-bold text-slate-900 group-hover:text-indigo-700">
-          {project.title}
+          {liveUrl ? (
+            <button
+              type="button"
+              title={`打开站点（同站复用标签）· ${liveUrl}`}
+              className="pointer-events-auto text-left text-indigo-700 underline underline-offset-2 hover:text-indigo-900"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openLiveSite(liveUrl);
+              }}
+            >
+              {project.title}
+            </button>
+          ) : (
+            project.title
+          )}
         </h2>
         <p className="mt-2 line-clamp-2 text-sm text-slate-600">{project.positioning}</p>
         <div className="mt-4 space-y-1.5 text-xs text-slate-500">
@@ -91,16 +108,6 @@ export function ProjectLibraryCard({
           </div>
         </div>
       </div>
-      {liveUrl ? (
-        <a
-          href={liveUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="relative z-10 mt-4 inline-flex pointer-events-auto items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
-        >
-          打开站点 · {liveSiteHostLabel(liveUrl)}
-        </a>
-      ) : null}
     </div>
   );
 }

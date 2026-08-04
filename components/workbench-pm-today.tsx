@@ -18,6 +18,7 @@ import type {
 import type { TomorrowAgendaItem } from "@/lib/workbench/tomorrow-agenda";
 import type { BugSeverity } from "@/lib/types";
 import { BUG_SEVERITY_LABELS } from "@/lib/types";
+import { openLiveSite } from "@/lib/project-live-url";
 
 type Props = {
   acceptance: PmAcceptanceItem[];
@@ -246,21 +247,22 @@ export function WorkbenchPmToday({
                         </button>
                       </div>
                       <p className="mt-0.5 text-xs text-slate-500">
-                        {item.projectTitle}
+                        {item.liveSiteUrl ? (
+                          <button
+                            type="button"
+                            title="打开站点（同站复用标签）"
+                            className="text-indigo-600 underline underline-offset-2 hover:text-indigo-800"
+                            onClick={() => openLiveSite(item.liveSiteUrl!)}
+                          >
+                            {item.projectTitle}
+                          </button>
+                        ) : (
+                          item.projectTitle
+                        )}
                         {item.note ? ` · ${item.note}` : ""}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {item.liveSiteUrl ? (
-                        <a
-                          href={item.liveSiteUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
-                        >
-                          进入站点
-                        </a>
-                      ) : null}
                       <button
                         type="button"
                         disabled={pending}
