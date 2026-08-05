@@ -1479,6 +1479,93 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "create_requirement",
+    {
+      title: "Create Requirement",
+      description:
+        "在项目需求池新建一条需求（口头需求入库）。projectId 可为 Studio id 或 PM slug；默认进需求池、状态想法。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        title: z.string().min(1),
+        priority: z.string().nullable().optional().describe("如 P0/P1/P2"),
+        lifecycle: z
+          .string()
+          .optional()
+          .describe("规范生命周期：想法/已规划/AI开发中/开发中/待验收/完成/放弃；默认想法"),
+        parentId: z.string().nullable().optional(),
+        type: z.enum(["epic", "feature", "task"]).optional(),
+        detail: z.string().optional().describe("写入 detail_work"),
+        acceptance: z.string().optional().describe("验收标准"),
+        nextStep: z.string().optional(),
+        chatTopic: z.string().optional().describe("对话窗口/话题，写入灵感来源小字"),
+        studioIdeaId: z.string().nullable().optional(),
+        productEstimateHours: z.number().nullable().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { createPoolRequirement, getProjects } = await import("@/lib/db/local-store");
+        const { applyLifecycleStatus, requirementLifecycleStatus } = await import(
+          "@/lib/requirement-status"
+        );
+        const { AGENT_ACTOR_NAME } = await import("@/lib/cursor-actor");
+        const { requirementIsDone } = await import("@/lib/types");
+
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+
+        const status_tags = applyLifecycleStatus([], input.lifecycle?.trim() || "想法");
+        const req = await createPoolRequirement(pm.id, {
+          title: input.title.trim(),
+          priority: input.priority ?? null,
+          status_tags,
+          parent_id: input.parentId ?? null,
+          type: input.type,
+          detail_work: input.detail ?? null,
+          acceptance_criteria: input.acceptance ?? null,
+          next_step: input.nextStep ?? null,
+          actor_name: AGENT_ACTOR_NAME,
+          actor_note: input.chatTopic ?? undefined,
+          studio_idea_id: input.studioIdeaId ?? null,
+          product_estimate_hours: input.productEstimateHours ?? null,
+        });
+
+        await logAiAction({
+          action: "create_requirement",
+          payload: { requirementId: req.id, projectId: pm.id, title: req.title },
+        });
+
+        return mcpJson({
+          ok: true,
+          requirement: {
+            id: req.id,
+            title: req.title,
+            projectId: req.project_id,
+            pmSlug: pm.slug,
+            priority: req.priority,
+            statusTags: req.status_tags,
+            lifecycle: requirementLifecycleStatus(req),
+            done: requirementIsDone(req),
+            inPool: req.in_pool,
+            parentId: req.parent_id,
+            type: req.type,
+            submittedAt: req.submitted_at,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "create_requirement 失败");
+      }
+    }
+  );
+
+  server.registerTool(
     "update_requirement",
     {
       title: "Update Requirement",
@@ -1852,6 +1939,129 @@ export function registerWorkspaceTools(server: McpServer) {
         return mcpJson({ ok: true, deleted: removed });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "delete_bug 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "add_bug_comment",
+    {
+      title: "Add Bug Comment",
+      description: "给 Bug 追加评论（验收打回、补充复现、跟进说明）。",
+      inputSchema: {
+        bugId: z.string().min(1),
+        body: z.string().min(1),
+        authorName: z.string().optional().describe("默认 Auto/Cursor 代理名"),
+        authorRole: z.string().nullable().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { addBugComment } = await import("@/lib/db/local-store");
+        const { AGENT_ACTOR_NAME } = await import("@/lib/cursor-actor");
+        const comment = await addBugComment({
+          bug_id: input.bugId,
+          author_name: (input.authorName?.trim() || AGENT_ACTOR_NAME).trim(),
+          author_role: input.authorRole ?? "ai",
+          body: input.body,
+        });
+        await logAiAction({
+          action: "add_bug_comment",
+          payload: { bugId: input.bugId, commentId: comment.id },
+        });
+        return mcpJson({
+          ok: true,
+          comment: {
+            id: comment.id,
+            bugId: comment.bug_id,
+            authorName: comment.author_name,
+            authorRole: comment.author_role,
+            body: comment.body,
+            createdAt: comment.created_at,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "add_bug_comment 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_bugs",
+    {
+      title: "Update Bugs (batch)",
+      description:
+        "批量更新 Bug（常用：一次标多条 done）。共享字段与 update_bug 相同；部分失败不中断，返回 succeeded/failed。",
+      inputSchema: {
+        bugIds: z.array(z.string().min(1)).min(1).max(100),
+        title: z.string().min(1).optional(),
+        description: z.string().nullable().optional(),
+        reproSteps: z.string().nullable().optional(),
+        assignee: z.string().nullable().optional(),
+        requirementId: z.string().nullable().optional(),
+        severity: z.number().int().min(1).max(4).optional(),
+        bugType: z
+          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
+          .optional(),
+        status: z
+          .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
+          .optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { updateBug } = await import("@/lib/db/local-store");
+        type BugStatus = import("@/lib/types").TaskStatus;
+        type BugType = import("@/lib/types").BugType;
+
+        const patch: Parameters<typeof updateBug>[1] = {};
+        if (input.title !== undefined) patch.title = input.title.trim();
+        if (input.description !== undefined) patch.description = input.description;
+        if (input.reproSteps !== undefined) patch.repro_steps = input.reproSteps;
+        if (input.assignee !== undefined) patch.assignee = input.assignee;
+        if (input.requirementId !== undefined) patch.requirement_id = input.requirementId;
+        if (input.severity !== undefined) {
+          patch.severity = input.severity as 1 | 2 | 3 | 4;
+        }
+        if (input.bugType !== undefined) patch.bug_type = input.bugType as BugType;
+        if (input.status !== undefined) patch.status = input.status as BugStatus;
+
+        if (Object.keys(patch).length === 0) {
+          return mcpError("update_bugs：至少传一个要改的字段");
+        }
+
+        const succeeded: { id: string; status: string; title: string }[] = [];
+        const failed: { id: string; error: string }[] = [];
+        for (const bugId of input.bugIds) {
+          try {
+            const bug = await updateBug(bugId, patch);
+            succeeded.push({ id: bug.id, status: bug.status, title: bug.title });
+          } catch (err) {
+            failed.push({
+              id: bugId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+
+        await logAiAction({
+          action: "update_bugs",
+          payload: {
+            keys: Object.keys(patch),
+            ok: succeeded.length,
+            fail: failed.length,
+          },
+        });
+
+        return mcpJson({
+          ok: failed.length === 0,
+          succeededCount: succeeded.length,
+          failedCount: failed.length,
+          succeeded,
+          failed,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_bugs 失败");
       }
     }
   );

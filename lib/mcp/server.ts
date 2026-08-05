@@ -5,6 +5,7 @@ import { CaptureDuplicateError } from "@/lib/studio/capture-relation";
 import {
   convertIdeaToProject,
   createStudioTask,
+  deleteStudioTask,
   updateStudioIdea,
   updateStudioTask,
   type CreateProjectInput,
@@ -586,6 +587,33 @@ export function registerStarPmTools(server: McpServer) {
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "update_task 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "delete_task",
+    {
+      title: "Delete Task",
+      description: "硬删除 Studio 任务。用于清误建；日常闭环优先 update_task status:done。",
+      inputSchema: {
+        taskId: z.string().min(1),
+        confirm: z.boolean().describe("必须传 true 才删除，防止误触"),
+      },
+    },
+    async (input) => {
+      try {
+        if (input.confirm !== true) {
+          return mcpError("delete_task：请传 confirm:true 确认硬删除");
+        }
+        await deleteStudioTask(input.taskId);
+        await logAiAction({
+          action: "delete_task",
+          payload: { taskId: input.taskId },
+        });
+        return mcpJson({ ok: true, deleted: { id: input.taskId } });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "delete_task 失败");
       }
     }
   );

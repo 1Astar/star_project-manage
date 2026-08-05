@@ -350,9 +350,9 @@ ChatGPT 网页 Custom GPT：走 OAuth 路径 `/api/mcp-oauth/mcp`（与 Cursor B
 | 演进 / 决策 | `add_evolution` / `add_decision` |
 | 灵感 | `capture_idea` / `update_idea` / `get_idea` / `list_ideas` |
 | 项目 | `list_projects` / `get_project` / `update_project` |
-| 需求 | `list_requirements` / `update_requirement` / `create_task` / `list_tasks` / `update_task` |
+| 需求 | `list_requirements` / `create_requirement` / `update_requirement` / `create_task` / `list_tasks` / `update_task` / `delete_task` |
 | 迭代期 | `list_iterations` / `create_planning_iteration` / `align_project_periods` |
-| Bug | `create_bug` / `list_bugs` / `get_bug` / `update_bug` / `delete_bug` |
+| Bug | `create_bug` / `list_bugs` / `get_bug` / `update_bug` / `update_bugs` / `add_bug_comment` / `delete_bug` |
 | 发版 | `publish_release` |
 | CHANGELOG→演进 | `import_changelog_evolution` |
 

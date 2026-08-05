@@ -10,6 +10,10 @@
 
 ---
 
+## v1.11.5 · 2026-08-05
+
+- **MCP**：`create_requirement`（口头需求进池）、`add_bug_comment`、`update_bugs`（批量改状态等）、`delete_task`
+
 ## v1.11.4 · 2026-08-05
 
 - **MCP Bug 闭环**：`get_bug` / `delete_bug`（confirm:true 硬删探针/重复）
