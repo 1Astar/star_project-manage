@@ -1043,6 +1043,7 @@ export async function createBug(input: {
   assignee?: string;
   severity?: BugSeverity;
   bug_type?: BugType;
+  status?: TaskStatus;
   created_at?: string | null;
 }) {
   const db = await readDb();
@@ -1057,7 +1058,7 @@ export async function createBug(input: {
     description: input.description ?? null,
     repro_steps: input.repro_steps ?? null,
     assignee: input.assignee ?? null,
-    status: "pending",
+    status: input.status ?? "pending",
     severity: input.severity ?? 3,
     bug_type: input.bug_type ?? "code",
     created_at: createdAt,

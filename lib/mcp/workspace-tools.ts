@@ -1609,7 +1609,7 @@ export function registerWorkspaceTools(server: McpServer) {
     async (input) => {
       try {
         const { resolveProjectRoute } = await import("@/lib/project-bridge");
-        const { createBug, getProjects, updateBug } = await import("@/lib/db/local-store");
+        const { createBug, getProjects } = await import("@/lib/db/local-store");
         type BugStatus = import("@/lib/types").TaskStatus;
         const ctx = await resolveProjectRoute(input.projectId);
         const pmAll = await getProjects();
@@ -1622,7 +1622,8 @@ export function registerWorkspaceTools(server: McpServer) {
           return mcpError(`找不到 PM 项目：${input.projectId}`);
         }
 
-        let bug = await createBug({
+        // 状态写进一次 create，避免 create 后再 update 时 Supabase 快照读不到新行（报「Bug 不存在」）
+        const bug = await createBug({
           project_id: pm.id,
           requirement_id: input.requirementId ?? null,
           title: input.title.trim(),
@@ -1631,11 +1632,8 @@ export function registerWorkspaceTools(server: McpServer) {
           assignee: input.assignee,
           severity: (input.severity as 1 | 2 | 3 | 4 | undefined) ?? 3,
           bug_type: input.bugType ?? "other",
+          status: (input.status as BugStatus | undefined) ?? "pending",
         });
-
-        if (input.status && input.status !== "pending") {
-          bug = await updateBug(bug.id, { status: input.status as BugStatus });
-        }
 
         await logAiAction({
           action: "create_bug",
@@ -1707,6 +1705,81 @@ export function registerWorkspaceTools(server: McpServer) {
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "list_bugs 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_bug",
+    {
+      title: "Update Bug",
+      description:
+        "更新 Bug 标题/描述/复现/指派/关联需求/严重级别/类型/状态。标完成传 status:\"done\"。",
+      inputSchema: {
+        bugId: z.string().min(1),
+        title: z.string().min(1).optional(),
+        description: z.string().nullable().optional(),
+        reproSteps: z.string().nullable().optional(),
+        assignee: z.string().nullable().optional(),
+        requirementId: z.string().nullable().optional(),
+        severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微"),
+        bugType: z
+          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
+          .optional(),
+        status: z
+          .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
+          .optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { updateBug, getBugById } = await import("@/lib/db/local-store");
+        type BugStatus = import("@/lib/types").TaskStatus;
+        type BugType = import("@/lib/types").BugType;
+
+        const patch: Parameters<typeof updateBug>[1] = {};
+        if (input.title !== undefined) patch.title = input.title.trim();
+        if (input.description !== undefined) patch.description = input.description;
+        if (input.reproSteps !== undefined) patch.repro_steps = input.reproSteps;
+        if (input.assignee !== undefined) patch.assignee = input.assignee;
+        if (input.requirementId !== undefined) patch.requirement_id = input.requirementId;
+        if (input.severity !== undefined) {
+          patch.severity = input.severity as 1 | 2 | 3 | 4;
+        }
+        if (input.bugType !== undefined) patch.bug_type = input.bugType as BugType;
+        if (input.status !== undefined) patch.status = input.status as BugStatus;
+
+        if (Object.keys(patch).length === 0) {
+          return mcpError("update_bug：至少传一个要改的字段");
+        }
+
+        const bug = await updateBug(input.bugId, patch);
+        const linked = await getBugById(bug.id);
+
+        await logAiAction({
+          action: "update_bug",
+          payload: { bugId: bug.id, status: bug.status, keys: Object.keys(patch) },
+        });
+
+        return mcpJson({
+          ok: true,
+          bug: {
+            id: bug.id,
+            title: bug.title,
+            projectId: bug.project_id,
+            pmSlug: linked?.project.slug ?? null,
+            status: bug.status,
+            severity: bug.severity,
+            bugType: bug.bug_type,
+            description: bug.description,
+            reproSteps: bug.repro_steps,
+            assignee: bug.assignee,
+            requirementId: bug.requirement_id,
+            updatedAt: bug.updated_at,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_bug 失败");
       }
     }
   );
