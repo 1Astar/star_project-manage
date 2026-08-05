@@ -2,13 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { captureIdea } from "@/lib/studio/capture-idea";
 import { CaptureDuplicateError } from "@/lib/studio/capture-relation";
-import { getAllIdeas, getAllProjects, getProjectById } from "@/lib/studio/data";
 import {
   convertIdeaToProject,
   createStudioTask,
   updateStudioIdea,
+  updateStudioTask,
   type CreateProjectInput,
 } from "@/lib/studio/mutations";
+import { getAllIdeas, getAllProjects, getProjectById, getProjectTasks } from "@/lib/studio/data";
 import type { IdeaStatus, IdeaType, TaskPriority, TaskStatus } from "@/lib/studio/types";
 import { formatIdeaMemory, searchIdeas } from "@/lib/mcp/idea-memory";
 import { mcpError, mcpJson } from "@/lib/mcp/response";
@@ -492,6 +493,99 @@ export function registerStarPmTools(server: McpServer) {
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "create_task 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_tasks",
+    {
+      title: "List Tasks",
+      description: "列出 Studio 项目任务；可按 status 过滤。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        status: taskStatusSchema.optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        let tasks = await getProjectTasks(input.projectId);
+        if (input.status) tasks = tasks.filter((t) => t.status === input.status);
+        const limit = input.limit ?? 50;
+        const slim = tasks.slice(0, limit).map((t) => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          progressNote: t.progressNote,
+          sourceIdeaId: t.sourceIdeaId,
+          completedAt: t.completedAt,
+        }));
+        return mcpJson({
+          ok: true,
+          count: tasks.length,
+          returned: slim.length,
+          tasks: slim,
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "list_tasks 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_task",
+    {
+      title: "Update Task",
+      description: "更新 Studio 任务状态/优先级/进度备注/截止日期等。标完成传 status:\"done\"。",
+      inputSchema: {
+        taskId: z.string().min(1),
+        title: z.string().min(1).optional(),
+        status: taskStatusSchema.optional(),
+        priority: taskPrioritySchema.optional(),
+        dueDate: z.string().nullable().optional(),
+        progressNote: z.string().optional(),
+        sourceIdeaId: z.string().nullable().optional(),
+        completedAt: z.string().nullable().optional().describe("ISO；标完成时可指定"),
+      },
+    },
+    async (input) => {
+      try {
+        const patch: Parameters<typeof updateStudioTask>[1] = {};
+        if (input.title !== undefined) patch.title = input.title.trim();
+        if (input.status !== undefined) patch.status = input.status as TaskStatus;
+        if (input.priority !== undefined) patch.priority = input.priority as TaskPriority;
+        if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
+        if (input.progressNote !== undefined) patch.progressNote = input.progressNote;
+        if (input.sourceIdeaId !== undefined) patch.sourceIdeaId = input.sourceIdeaId;
+        if (input.completedAt !== undefined) patch.completedAt = input.completedAt;
+
+        if (Object.keys(patch).length === 0) {
+          return mcpError("update_task：至少传一个要改的字段");
+        }
+
+        const task = await updateStudioTask(input.taskId, patch);
+        await logAiAction({
+          action: "update_task",
+          payload: { taskId: task.id, status: task.status, keys: Object.keys(patch) },
+        });
+        return mcpJson({
+          ok: true,
+          task: {
+            id: task.id,
+            title: task.title,
+            projectId: task.projectId,
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.dueDate,
+            progressNote: task.progressNote,
+            completedAt: task.completedAt,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "update_task 失败");
       }
     }
   );

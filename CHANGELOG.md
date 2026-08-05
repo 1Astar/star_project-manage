@@ -10,6 +10,11 @@
 
 ---
 
+## v1.11.4 · 2026-08-05
+
+- **MCP Bug 闭环**：`get_bug` / `delete_bug`（confirm:true 硬删探针/重复）
+- **MCP 任务**：`list_tasks` / `update_task`（补齐 create_task 读写）
+
 ## v1.11.3 · 2026-08-05
 
 - **MCP `update_bug`**：可改 Bug 标题/描述/复现/指派/关联需求/严重级别/类型/状态（含 `done`）

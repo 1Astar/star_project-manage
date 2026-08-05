@@ -1187,6 +1187,29 @@ export async function updateBugStatus(bugId: string, status: TaskStatus) {
   return updateBug(bugId, { status });
 }
 
+/** 硬删除 Bug 及其评论（用于探针/重复条目清理） */
+export async function deleteBug(bugId: string) {
+  const db = await readDb();
+  const idx = db.bugs.findIndex((b) => b.id === bugId);
+  if (idx < 0) throw new Error("Bug 不存在");
+  const [removed] = db.bugs.splice(idx, 1);
+  if (db.bug_comments?.length) {
+    db.bug_comments = db.bug_comments.filter((c) => c.bug_id !== bugId);
+  }
+  await logActivity(db, {
+    project_id: removed.project_id,
+    entity_type: "bug",
+    entity_id: removed.id,
+    field_name: "delete",
+    old_value: removed.title,
+    new_value: null,
+    actor_name: "产品",
+    actor_role: "admin",
+  });
+  await saveDb(db);
+  return { id: removed.id, title: removed.title, projectId: removed.project_id };
+}
+
 export async function addBugComment(input: {
   bug_id: string;
   author_name: string;

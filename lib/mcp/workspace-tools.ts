@@ -1785,6 +1785,78 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "get_bug",
+    {
+      title: "Get Bug",
+      description: "按 bugId 取单条 Bug 详情（含复现步骤、指派、关联需求）。",
+      inputSchema: {
+        bugId: z.string().min(1),
+      },
+    },
+    async (input) => {
+      try {
+        const { getBugById } = await import("@/lib/db/local-store");
+        const linked = await getBugById(input.bugId);
+        if (!linked) return mcpError("Bug 不存在");
+        const { bug, project, requirement, comments } = linked;
+        return mcpJson({
+          ok: true,
+          bug: {
+            id: bug.id,
+            title: bug.title,
+            projectId: bug.project_id,
+            pmSlug: project.slug,
+            status: bug.status,
+            severity: bug.severity,
+            bugType: bug.bug_type,
+            description: bug.description,
+            reproSteps: bug.repro_steps,
+            assignee: bug.assignee,
+            requirementId: bug.requirement_id,
+            requirementTitle: requirement?.title ?? null,
+            createdAt: bug.created_at,
+            updatedAt: bug.updated_at,
+            commentCount: comments.length,
+          },
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "get_bug 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "delete_bug",
+    {
+      title: "Delete Bug",
+      description:
+        "硬删除 Bug 及其评论。用于清探针/重复条目；日常闭环优先 update_bug status:done。",
+      inputSchema: {
+        bugId: z.string().min(1),
+        confirm: z
+          .boolean()
+          .describe("必须传 true 才删除，防止误触"),
+      },
+    },
+    async (input) => {
+      try {
+        if (input.confirm !== true) {
+          return mcpError("delete_bug：请传 confirm:true 确认硬删除");
+        }
+        const { deleteBug } = await import("@/lib/db/local-store");
+        const removed = await deleteBug(input.bugId);
+        await logAiAction({
+          action: "delete_bug",
+          payload: { bugId: removed.id, title: removed.title },
+        });
+        return mcpJson({ ok: true, deleted: removed });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "delete_bug 失败");
+      }
+    }
+  );
+
+  server.registerTool(
     "list_interviews",
     {
       title: "List Interviews",
