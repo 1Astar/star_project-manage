@@ -137,6 +137,7 @@ export function ResourceCenter({ project, assets, releases }: Props) {
             <h2 className="text-sm font-semibold text-slate-800">项目资源中心</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               体验 / 代码 / 部署从项目配置带出；选择版本后代码链接指向对应 Tag。
+              Skill / MCP 说明可上传 .md 或粘贴备注，点「预览」渲染（归档≠Agent 自动加载）。
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

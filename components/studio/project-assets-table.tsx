@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { StudioBadge } from "@/components/studio/shell";
+import {
+  MarkdownPreview,
+  looksLikeMarkdownAsset,
+} from "@/components/studio/markdown-preview";
 import { publicStudioAssetUrl } from "@/lib/studio/asset-url";
 import { assetTypeLabel } from "@/lib/studio/asset-categories";
 import type { Asset } from "@/lib/studio/types";
@@ -18,10 +22,44 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const [previewSource, setPreviewSource] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     setAssets(initialAssets);
   }, [initialAssets]);
+
+  async function openMarkdownPreview(asset: Asset) {
+    setPreviewAsset(asset);
+    setPreviewContent(null);
+    setPreviewSource(null);
+    setPreviewError(null);
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`/api/studio/assets/${asset.id}/markdown`);
+      const data = await res.json();
+      if (!res.ok) {
+        setPreviewError(data.error ?? "预览失败");
+        return;
+      }
+      setPreviewContent(data.content ?? "");
+      setPreviewSource(data.source ?? null);
+    } catch {
+      setPreviewError("网络错误");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closePreview() {
+    setPreviewAsset(null);
+    setPreviewContent(null);
+    setPreviewSource(null);
+    setPreviewError(null);
+  }
 
   async function handleDelete(asset: Asset) {
     const ok = window.confirm(`删除「${asset.title}」？`);
@@ -40,6 +78,7 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
       }
       setAssets((prev) => prev.filter((a) => a.id !== asset.id));
       setMessage("已删除");
+      if (previewAsset?.id === asset.id) closePreview();
       router.refresh();
     } catch {
       setError("网络错误");
@@ -52,7 +91,7 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
     return (
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <p className="px-4 py-8 text-center text-sm text-slate-500">
-          暂无资料，点击上方「+ 新增链接」添加。
+          暂无资料，点击上方「+ 新增链接」或「+ 上传文件」添加。Skill / MCP 说明可归到「文档」或「Prompt」。
         </p>
       </div>
     );
@@ -71,81 +110,135 @@ export function ProjectAssetsTable({ assets: initialAssets }: ProjectAssetsTable
               <th className="px-3 py-2.5 font-medium">类型</th>
               <th className="px-3 py-2.5 font-medium">链接</th>
               <th className="px-3 py-2.5 font-medium">可借鉴</th>
-              <th className="px-3 py-2.5 font-medium w-24">操作</th>
+              <th className="px-3 py-2.5 font-medium w-36">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {assets.map((asset) => (
-              <tr key={asset.id} className="hover:bg-slate-50/80">
-                <td className="px-3 py-2 font-medium text-slate-800">{asset.title}</td>
-                <td className="px-3 py-2">
-                  <StudioBadge>{assetTypeLabel(asset.assetType)}</StudioBadge>
-                </td>
-                <td className="px-3 py-2">
-                  {asset.storagePath ? (
-                    <a
-                      href={asset.url || publicStudioAssetUrl(asset.storagePath)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 text-indigo-600 hover:underline"
-                    >
-                      {asset.mimeType?.startsWith("image/") ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={asset.url || publicStudioAssetUrl(asset.storagePath)}
-                          alt={asset.title}
-                          className="h-10 w-16 rounded border border-slate-200 object-cover"
-                        />
+            {assets.map((asset) => {
+              const canPreview = looksLikeMarkdownAsset(asset);
+              return (
+                <tr key={asset.id} className="hover:bg-slate-50/80">
+                  <td className="px-3 py-2 font-medium text-slate-800">{asset.title}</td>
+                  <td className="px-3 py-2">
+                    <StudioBadge>{assetTypeLabel(asset.assetType)}</StudioBadge>
+                  </td>
+                  <td className="px-3 py-2">
+                    {asset.storagePath ? (
+                      <a
+                        href={asset.url || publicStudioAssetUrl(asset.storagePath)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-indigo-600 hover:underline"
+                      >
+                        {asset.mimeType?.startsWith("image/") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={asset.url || publicStudioAssetUrl(asset.storagePath)}
+                            alt={asset.title}
+                            className="h-10 w-16 rounded border border-slate-200 object-cover"
+                          />
+                        ) : null}
+                        查看 →
+                      </a>
+                    ) : asset.url ? (
+                      <a
+                        href={asset.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-indigo-600 hover:underline"
+                      >
+                        打开 →
+                      </a>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="max-w-xs px-3 py-2 text-slate-600" title={asset.takeaway}>
+                    {(() => {
+                      const parsed = parseAgentSourceLabel(asset.takeaway);
+                      if (parsed.label) {
+                        return (
+                          <span className="block truncate">
+                            <span className="font-medium text-slate-700">{parsed.label}</span>
+                            {parsed.note ? (
+                              <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                                {parsed.note}
+                              </span>
+                            ) : null}
+                          </span>
+                        );
+                      }
+                      if (!parsed.note) return <span className="text-slate-400">—</span>;
+                      return <span className="block truncate">{parsed.note}</span>;
+                    })()}
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {canPreview ? (
+                        <button
+                          type="button"
+                          onClick={() => openMarkdownPreview(asset)}
+                          className="text-xs text-indigo-600 hover:underline"
+                        >
+                          预览
+                        </button>
                       ) : null}
-                      查看 →
-                    </a>
-                  ) : asset.url ? (
-                    <a
-                      href={asset.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-indigo-600 hover:underline"
-                    >
-                      打开 →
-                    </a>
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
-                </td>
-                <td className="max-w-xs px-3 py-2 text-slate-600" title={asset.takeaway}>
-                  {(() => {
-                    const parsed = parseAgentSourceLabel(asset.takeaway);
-                    if (parsed.label) {
-                      return (
-                        <span className="block truncate">
-                          <span className="font-medium text-slate-700">{parsed.label}</span>
-                          {parsed.note ? (
-                            <span className="mt-0.5 block truncate text-[11px] text-slate-400">
-                              {parsed.note}
-                            </span>
-                          ) : null}
-                        </span>
-                      );
-                    }
-                    if (!parsed.note) return <span className="text-slate-400">—</span>;
-                    return <span className="block truncate">{parsed.note}</span>;
-                  })()}
-                </td>
-                <td className="px-3 py-2">
-                  <button
-                    type="button"
-                    disabled={deletingId === asset.id}
-                    onClick={() => handleDelete(asset)}
-                    className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                  >
-                    {deletingId === asset.id ? "删除中…" : "删除"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+                      <button
+                        type="button"
+                        disabled={deletingId === asset.id}
+                        onClick={() => handleDelete(asset)}
+                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        {deletingId === asset.id ? "删除中…" : "删除"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {previewAsset ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-3 sm:items-center">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`预览 ${previewAsset.title}`}
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-sm font-semibold text-slate-900">
+                  {previewAsset.title}
+                </h3>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Markdown 预览
+                  {previewSource ? ` · 来源 ${previewSource}` : ""}
+                  {" · "}归档给人看，不等于 Cursor 自动加载 Skill
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closePreview}
+                className="rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {previewLoading ? (
+                <p className="text-sm text-slate-500">加载中…</p>
+              ) : previewError ? (
+                <p className="text-sm text-red-600">{previewError}</p>
+              ) : previewContent != null ? (
+                <MarkdownPreview content={previewContent} />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

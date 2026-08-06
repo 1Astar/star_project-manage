@@ -322,7 +322,7 @@ export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   design: "设计稿",
   doc: "文档",
   material: "素材",
-  prompt: "Prompt",
+  prompt: "Prompt / Skill",
   api: "API",
   deploy: "部署",
   video: "视频",

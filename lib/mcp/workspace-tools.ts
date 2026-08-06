@@ -69,6 +69,7 @@ function slimProject(project: NonNullable<Awaited<ReturnType<typeof getProjectBy
     targetUser: project.targetUser,
     currentStage: project.currentStage,
     nextAction: project.nextAction,
+    parentId: project.parentId ?? null,
     featureModules: project.featureModules ?? [],
     githubRepo: project.githubRepo ?? null,
     updatedAt: project.updatedAt,
@@ -210,6 +211,11 @@ export function registerWorkspaceTools(server: McpServer) {
         priority: projectPrioritySchema.optional(),
         currentStage: z.string().optional(),
         nextAction: z.string().optional(),
+        parentId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("父项目 Studio id；仅支持一层，子项目不能再挂子"),
         sourceIdeaId: z.string().optional().describe("初始 Idea ID"),
         initialThought: z.string().optional(),
         force: z
@@ -228,6 +234,7 @@ export function registerWorkspaceTools(server: McpServer) {
           priority: input.priority as ProjectPriority | undefined,
           currentStage: input.currentStage ?? "起步",
           nextAction: input.nextAction,
+          parentId: input.parentId,
           force: input.force,
           body: input.initialThought
             ? { initialThought: input.initialThought }
@@ -286,6 +293,11 @@ export function registerWorkspaceTools(server: McpServer) {
         priority: projectPrioritySchema.optional(),
         currentStage: z.string().optional().describe("如 V0.5 / 进行中阶段描述"),
         nextAction: z.string().optional().describe("最近进展或下一步"),
+        parentId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("挂到父项目 id；null 取消挂父；仅一层"),
         portfolioValue: z.string().optional(),
         demoUrl: z.string().nullable().optional(),
         githubRepo: z.string().nullable().optional(),
@@ -312,6 +324,7 @@ export function registerWorkspaceTools(server: McpServer) {
             ...patch,
             status: patch.status as ProjectStatus | undefined,
             priority: patch.priority as ProjectPriority | undefined,
+            parentId: patch.parentId,
             ...(featureModules !== undefined
               ? {
                   featureModules: featureModules

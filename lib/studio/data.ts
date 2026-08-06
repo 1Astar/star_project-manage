@@ -56,6 +56,11 @@ export async function getProjectAssets(projectId: string) {
   return assets.filter((a) => a.projectId === projectId);
 }
 
+export async function getAssetById(id: string) {
+  const { assets } = await getScopedStudioSnapshot();
+  return assets.find((a) => a.id === id) ?? null;
+}
+
 export async function getProjectReleases(projectId: string) {
   const { releases } = await getScopedStudioSnapshot();
   return (releases ?? [])

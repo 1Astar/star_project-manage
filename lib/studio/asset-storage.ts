@@ -4,7 +4,7 @@ import { publicStudioAssetUrl } from "@/lib/studio/asset-url";
 
 export async function uploadStudioAssetFile(projectId: string, file: File) {
   if (!isSupabaseConfigured()) {
-    throw new Error("Supabase 未配置，无法上传图片");
+    throw new Error("Supabase 未配置，无法上传文件");
   }
 
   const client = createServiceClient();

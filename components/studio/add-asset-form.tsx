@@ -19,10 +19,12 @@ export function AddAssetForm({
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"link" | "upload">("link");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [url, setUrl] = useState("");
+  const [note, setNote] = useState("");
   const [assetType, setAssetType] = useState<AssetType>(defaultAssetType);
   const [takeaway, setTakeaway] = useState("");
 
@@ -46,6 +48,7 @@ export function AddAssetForm({
         form.set("title", title.trim());
         form.set("assetType", assetType);
         form.set("takeaway", takeaway.trim());
+        form.set("note", note.trim());
         form.set("file", file);
         res = await fetch("/api/studio/assets/upload", { method: "POST", body: form });
       } else {
@@ -58,6 +61,7 @@ export function AddAssetForm({
             url: url.trim(),
             assetType,
             takeaway: takeaway.trim(),
+            note: note.trim(),
           }),
         });
       }
@@ -70,6 +74,7 @@ export function AddAssetForm({
 
       setTitle("");
       setUrl("");
+      setNote("");
       setAssetType(defaultAssetType);
       setTakeaway("");
       if (fileRef.current) fileRef.current.value = "";
@@ -88,6 +93,7 @@ export function AddAssetForm({
         <button
           type="button"
           onClick={() => {
+            setMode("link");
             setAssetType(defaultAssetType);
             setOpen(true);
           }}
@@ -98,12 +104,13 @@ export function AddAssetForm({
         <button
           type="button"
           onClick={() => {
+            setMode("upload");
             setOpen(true);
-            setAssetType("material");
+            setAssetType(defaultAssetType === "material" ? "doc" : defaultAssetType);
           }}
           className="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
         >
-          + 上传图片
+          + 上传文件
         </button>
       </div>
     );
@@ -114,33 +121,49 @@ export function AddAssetForm({
       onSubmit={handleSubmit}
       className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm"
     >
+      <p className="mb-3 text-[11px] leading-relaxed text-slate-500">
+        Skill / MCP 说明可归档为「文档」或「Prompt / Skill」。此处仅给人查阅；Cursor Agent 仍读本机
+        skill 路径。支持上传图片或 .md，也可把 Markdown 贴进备注后预览。
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs text-slate-600 sm:col-span-2">
           标题 <span className="text-red-500">*</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="资料名称"
+            placeholder="资料名称，如 SKILL.md / MCP 说明"
             className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-indigo-300"
           />
         </label>
+        {mode === "link" ? (
+          <label className="block text-xs text-slate-600 sm:col-span-2">
+            链接（可选；.md 公开链接可预览）
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              type="url"
+              placeholder="https://"
+              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-indigo-300"
+            />
+          </label>
+        ) : null}
         <label className="block text-xs text-slate-600 sm:col-span-2">
-          链接（可选；上传图片时可留空）
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            type="url"
-            placeholder="https://"
-            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-indigo-300"
-          />
-        </label>
-        <label className="block text-xs text-slate-600 sm:col-span-2">
-          图片文件（上传到 Supabase，跨设备可还原）
+          {mode === "upload" ? "上传文件（图片或 .md）" : "附件（可选）"}
           <input
             ref={fileRef}
             type="file"
-            accept="image/*"
+            accept="image/*,.md,.markdown,text/markdown,text/plain"
             className="mt-1 block w-full text-xs text-slate-600"
+          />
+        </label>
+        <label className="block text-xs text-slate-600 sm:col-span-2">
+          Markdown 备注（可选，无文件时也可预览）
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            placeholder="可粘贴 SKILL.md / MCP 说明正文…"
+            className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 font-mono text-xs outline-none focus:border-indigo-300"
           />
         </label>
         <label className="block text-xs text-slate-600">

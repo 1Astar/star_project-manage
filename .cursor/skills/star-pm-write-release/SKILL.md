@@ -3,9 +3,10 @@ name: star-pm-write-release
 description: >-
   Star PM AI 写入标准与发版规范：灵感/需求记忆字段写全（标题类型项目产生时间聊天主题
   原始想法 AI补充 为什么 状态 优先级 下一步）、新需求写产生时间、续作写 timeline、
-  完成写完成时间；ChangeSession/演进/板块；CHANGELOG+git tag+publish_release。
-  Use when writing to Star PM, 记需求, 捕捉灵感, 更新灵感字段, 发版, release,
-  or finishing work that must be logged to the planet.
+  完成写完成时间；做完勾完成并把「下一步」推进到下一级 P；ChangeSession/演进/板块；
+  CHANGELOG+git tag+publish_release。
+  Use when writing to Star PM, 记需求, 捕捉灵感, 更新灵感字段, 下一步, 优先级 P0/P1/P2,
+  发版, release, or finishing work that must be logged to the planet.
 ---
 
 # Star PM · AI 写入标准与发版规范
@@ -55,7 +56,8 @@ description: >-
 1. **不写** `docs/superpowers/specs` / 长篇设计文档 / 单独 plan 文件（除非用户明确要）。  
 2. **计划与项目需求直接写进 PM**（有则写之，无则跳过）。  
 3. 改代码前：MCP **`compare_sources`**。  
-4. 用户与方案对齐后 → **写进 PM → 开做**。
+4. 用户与方案对齐后 → **写进 PM → 开做**。  
+5. **改任何文件前**：检查用户是否已修改；**用户改过则必须在其保存版上再改**，禁止用旧稿整份覆盖（细则见 `version-management`）。
 
 ### 1.2 通用字段标准
 
@@ -144,10 +146,22 @@ description: >-
 | **AI补充分析** | `aiSupplement` | 有补充则写，无则跳过 |
 | **为什么值得做** | `why` → `whyItMatters` | 有则写，无则跳过 |
 | **当前状态** | `status` | 有明确状态则写 |
-| **优先级** | `priority` | 有则写，无则跳过（勿默认瞎标 P1） |
-| **下一步建议** | `suggestedNextStep` | 有则写，无则跳过 |
+| **优先级** | `priority` | 有则写，无则跳过（勿默认瞎标 P1）。P0/P1/P2… 表示**当前该啃的工作级**，不是 git 版本号 |
+| **下一步建议** | `suggestedNextStep` | 有则写，无则跳过。**迷茫时先读这条**——不知道做什么就看 Idea 的「下一步」 |
 
 板块 `relatedModule`：有则写 / 可推断则推断；推断不出可标待补齐。其余同 **有则写之，无则跳过**。
+
+#### 工作节奏：做完 → 勾完成 → 下一步改下一级 P（硬规则）
+
+适用于灵感 / 需求记忆（Idea）及已同步的需求池条目：
+
+1. **做完**当前「下一步」对应的事项（可验收）。  
+2. **勾完成**：状态推进到完成（或看板规范中的下一合法态）；该勾的完成项写上 **完成时间** `completedAt`。  
+3. **改「下一步」**：把 `suggestedNextStep`（及必要时 `priority`）改成**下一级 P** 要做的事——不要停在已做完的描述上。  
+4. **不知道做什么时**：打开相关 Idea，只看 **下一步建议**；**当前约定以 P2 为准**（若卡片上已写明当前 P，以卡片为准）。  
+5. **勿混淆**：`priority` / 下一步的 P0·P1·P2 ≠ `version-management` 里的软件 vX.Y.Z，也 ≠ CHANGELOG 发版号。
+
+收工写 PM 时：ChangeSession 的 `doneItems` 勾清；同步 Idea 的状态与下一步（本条）。
 
 #### 时间与时间线（硬规则）
 
@@ -175,7 +189,7 @@ Write:
 - [ ] 实现 + 验证
 - [ ] finish_change_session（done/pending/aiOps + finishedAt）
 - [ ] add_evolution（module + 可选工时）
-- [ ] 灵感/需求状态若需同步则 update
+- [ ] 灵感/需求：勾完成 + 把「下一步」改成下一级 P（见 §1.5 工作节奏）
 ```
 
 ---

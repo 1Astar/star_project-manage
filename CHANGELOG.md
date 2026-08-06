@@ -10,6 +10,13 @@
 
 ---
 
+## v1.12.0 · 2026-08-06
+
+- **Markdown 预览**：资源中心对 `.md` 上传 / 公开链接 / 备注正文可点「预览」，类钉钉渲染（标题、列表、表格、代码块）
+- **Skill / MCP 资料归档**：类型「Prompt / Skill」「文档」可存说明；上传支持图片与 `.md`；文案标明归档≠Agent 自动加载
+- **MCP 项目父子**：`create_project` / `update_project` 支持 `parentId`（一层）
+- **写入规范**：`star-pm-write-release` 补充「做完勾完成 → 下一步改下一级 P」与改文件前检查用户已改版本
+
 ## v1.11.5 · 2026-08-05
 
 - **MCP**：`create_requirement`（口头需求进池）、`add_bug_comment`、`update_bugs`（批量改状态等）、`delete_task`
