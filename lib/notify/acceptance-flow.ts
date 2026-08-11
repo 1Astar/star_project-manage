@@ -1,8 +1,9 @@
 import { sendPushPlus } from "@/lib/notify/pushplus";
+import { absoluteAppUrl, resolveSiteBaseUrl } from "@/lib/notify/site-url";
+import { pushDailyWorkbenchDigest } from "@/lib/notify/daily-digest";
 import { updateChangeSession } from "@/lib/studio/mutations";
 import type { ChangeSession } from "@/lib/studio/types";
 import { readDb, writeDb } from "@/lib/db/local-store";
-import { getPmAcceptanceQueue } from "@/lib/workbench/pm-inbox";
 
 /** A=提醒 · B=用户明确免验 · C=小修/bug 可自动过 */
 export type AcceptancePolicy = "remind" | "auto_pass_small" | "user_waived";
@@ -121,16 +122,8 @@ export async function applyAcceptanceAfterFinish(input: {
 
   await addAcceptanceNotification(session, resolved.autoPass);
 
-  const rawBase =
-    input.siteBaseUrl?.trim() ||
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL.replace(/^https?:\/\//, "")}`
-      : "");
-  const base = rawBase.replace(/\/$/, "");
-  const link = base
-    ? `${base}/projects/${session.projectId}/evolution`
-    : `/projects/${session.projectId}/evolution`;
+  const base = resolveSiteBaseUrl(input.siteBaseUrl);
+  const link = absoluteAppUrl(base, `/projects/${session.projectId}/evolution`);
 
   const title = resolved.autoPass
     ? `Star PM · 已自动验收`
@@ -155,27 +148,16 @@ export async function applyAcceptanceAfterFinish(input: {
   };
 }
 
-/** Daily digest of pending acceptance queue via PushPlus. */
+/** @deprecated 使用 pushDailyWorkbenchDigest；保留别名给旧 cron */
 export async function pushAcceptanceDigest(): Promise<{
   sent: boolean;
   count: number;
   push: Awaited<ReturnType<typeof sendPushPlus>>;
 }> {
-  const { items } = await getPmAcceptanceQueue();
-  if (!items.length) {
-    return {
-      sent: false,
-      count: 0,
-      push: { ok: true, skipped: true, reason: "待验收为空" },
-    };
-  }
-  const lines = items
-    .slice(0, 12)
-    .map((i, idx) => `${idx + 1}. [${i.sourceLabel}] ${i.title}`)
-    .join("\n");
-  const push = await sendPushPlus({
-    title: `Star PM · 待验收 ${items.length} 项`,
-    content: `${lines}${items.length > 12 ? `\n…共 ${items.length} 项` : ""}\n请打开工作台「待你验收」处理。`,
-  });
-  return { sent: push.ok && !("skipped" in push && push.skipped), count: items.length, push };
+  const result = await pushDailyWorkbenchDigest({ pushEmpty: false });
+  return {
+    sent: result.sent,
+    count: result.total,
+    push: result.push,
+  };
 }

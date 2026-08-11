@@ -55,9 +55,10 @@ description: >-
 
 1. **不写** `docs/superpowers/specs` / 长篇设计文档 / 单独 plan 文件（除非用户明确要）。  
 2. **计划与项目需求直接写进 PM**（有则写之，无则跳过）。  
-3. 改代码前：MCP **`compare_sources`**。  
-4. 用户与方案对齐后 → **写进 PM → 开做**。  
-5. **改任何文件前**：检查用户是否已修改；**用户改过则必须在其保存版上再改**，禁止用旧稿整份覆盖（细则见 `version-management`）。
+3. **开新项目 / 新能力前**：先看一下 GitHub 上有没有能直接复用的项目，或者能部分拿来用的；向用户交代候选与取舍后再从零搭（细则见 `using-star-skills`「GitHub 复用检索」）。用户明确跳过检索时可省略。  
+4. 改代码前：MCP **`compare_sources`**。  
+5. 用户与方案对齐后 → **写进 PM → 开做**。  
+6. **改任何文件前**：检查用户是否已修改；**用户改过则必须在其保存版上再改**，禁止用旧稿整份覆盖（细则见 `version-management`）。
 
 ### 1.2 通用字段标准
 
@@ -112,7 +113,7 @@ description: >-
 1. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug` / 需求或灵感），挂上相关 `requirementId` / 会话。  
 2. AI 做完该补充 → 再 `finish_change_session`（小修用 C；大改用 A）。  
 3. **禁止**在用户未表态时，对大功能静默 `humanAcceptance=passed`。  
-4. 推送依赖环境变量 **`PUSHPLUS_TOKEN`**；未配置则只站内通知 + 工作台清单。
+4. 推送依赖环境变量 **`PUSHPLUS_TOKEN`**；未配置则只站内通知 + 工作台清单。每日 cron（`/api/cron/reminders`）会推综合日报：待验收、Git 同步建议、今日待办、昨天未完成，正文含可点页面链接（根地址 `NEXT_PUBLIC_APP_URL`，缺省 `https://pm.starry-studio.cn`）。
 
 ### 1.4 Evolution 写入标准
 
@@ -162,6 +163,17 @@ description: >-
 5. **勿混淆**：`priority` / 下一步的 P0·P1·P2 ≠ `version-management` 里的软件 vX.Y.Z，也 ≠ CHANGELOG 发版号。
 
 收工写 PM 时：ChangeSession 的 `doneItems` 勾清；同步 Idea 的状态与下一步（本条）。
+
+#### 本期不做 / 后期再做（硬规则）
+
+用户或定稿出现 **不做、后期、先做 X 再补、延期、停车场** 时：
+
+1. **必须**加载并遵守 skill **`defer-scope-record`**（延期卡；**挂父下子节点**；**同批提出的子项平等记账、勿厚此薄彼**）。  
+2. 每项「不做/后期」落 **子** Idea（`parked`）+ 尽量落 **子** 需求（`parentId`）；同批条目同规格写满，禁止只留聊天或只写其中一条。  
+3. **禁止**把仍含未做后期子项的整包标 `done`；切片完成写清「已完成子项」。  
+4. 用户确认「有没有记过后期」时：先搜**父需求树**，补齐**同批全部子节点**，勿当成现在开做、也勿只补被点名的一条。
+
+造命「流月 Buff」释义见 `defer-scope-record`。
 
 #### 时间与时间线（硬规则）
 

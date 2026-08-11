@@ -41,7 +41,7 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 
 每日 **`sync-git`**（cron）在写入新 commit 后，会用 commit message 模糊匹配未完成需求，写入待确认建议；**不自动改状态**。用 **`list_git_sync_suggestions`** 查看，**`confirm_git_sync_suggestions`**（`accept` / `dismiss`）确认。
 
-**人工验收（A+B+C）**：`finish_change_session` 默认进工作台「待你验收」并 PushPlus/浏览器提醒，**不代点通过**。仅当用户明确免验（`user_waived`）或小修/bug（`auto_pass_small` / 启发式）才标 `passed`。打回/补充的 bug·优化必须记入 PM。环境变量：`PUSHPLUS_TOKEN`。
+**人工验收（A+B+C）**：`finish_change_session` 默认进工作台「待你验收」并 PushPlus/浏览器提醒，**不代点通过**。仅当用户明确免验（`user_waived`）或小修/bug（`auto_pass_small` / 启发式）才标 `passed`。打回/补充的 bug·优化必须记入 PM。环境变量：`PUSHPLUS_TOKEN`。每日 cron 推综合日报（待验收 / Git 同步建议 / 今日待办 / 昨天未完成，含页面绝对链接；根地址 `NEXT_PUBLIC_APP_URL`）。
 
 ---
 
@@ -69,9 +69,10 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 1. 动机 / 目标 / 成功标准 **不清晰 → 停下来讨论**（先细问再做；不必写 spec）  
 2. 发现 **逻辑漏洞或不明确** → **必须提醒用户**，不可默默用猜测填平  
 3. 方案须 **逻辑正确**，并做 **全链路逻辑验证**（问题 → 方案假设 → 数据/状态 → 验收 → 发版影响）  
-4. **计划 / 项目需求直接写进 Star PM**（有则写之，无则跳过）  
-5. 对齐后 **开做**；默认不写 `docs/superpowers/specs/*`（除非用户明确要设计文档）  
-6. **验收 / 发版前**：对照初始要求 + 全链路核对，再跑技术检查  
+4. **开新项目 / 从零搭能力前**：先看一下 GitHub 上有没有能直接复用的项目，或者能部分拿来用的；简要交代候选与取舍后再动手（Agent Skill：`using-star-skills`）。用户明确说不必检索时可跳过。  
+5. **计划 / 项目需求直接写进 Star PM**（有则写之，无则跳过）  
+6. 对齐后 **开做**；默认不写 `docs/superpowers/specs/*`（除非用户明确要设计文档）  
+7. **验收 / 发版前**：对照初始要求 + 全链路核对，再跑技术检查  
 
 口头对齐可以；长篇设计文档默认跳过。
 
