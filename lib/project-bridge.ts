@@ -8,7 +8,8 @@ const STUDIO_TO_PM_SLUG: Record<string, string> = {
   "proj-ai-pet": "ai-pet",
   "proj-ai-controller": "ai-controller",
   "proj-star-pm": "star-pm",
-  // 随心而行：库内已有 studio-proj-moonpie，勿改成 moonpie（会丢需求）
+  // 随心而行：库内 slug 是 studio-proj-moonpie；勿改成 moonpie（会丢需求）
+  "proj-moonpie": "studio-proj-moonpie",
   "proj-c84ff6fa": "yoking-pump",
   "proj-yuanjing-pump": "yuanjing-pump",
   "proj-star-lab-os": "star-lab-os",
@@ -20,18 +21,40 @@ const PM_TO_STUDIO_ID: Record<string, string> = Object.fromEntries(
   Object.entries(STUDIO_TO_PM_SLUG).map(([studioId, slug]) => [slug, studioId])
 );
 
+/** 历史错误 slug（工作台曾写成 moonpie）→ Studio id */
+const LEGACY_PM_SLUG_TO_STUDIO: Record<string, string> = {
+  moonpie: "proj-moonpie",
+};
+
 /** 任意 Studio 项目都有稳定 PM slug；未硬编码时用 studio-{id} */
-export function getPmSlugForStudioProject(studioProject: StudioProject): string {
+export function getPmSlugForStudioProject(
+  studioProject: Pick<StudioProject, "id">
+): string {
   return STUDIO_TO_PM_SLUG[studioProject.id] ?? `studio-${studioProject.id}`;
 }
 
 export function getStudioIdFromPmSlug(slug: string): string | null {
   if (PM_TO_STUDIO_ID[slug]) return PM_TO_STUDIO_ID[slug];
+  if (LEGACY_PM_SLUG_TO_STUDIO[slug]) return LEGACY_PM_SLUG_TO_STUDIO[slug];
   if (slug.startsWith("studio-")) {
     const rest = slug.slice("studio-".length);
     return rest || null;
   }
   return null;
+}
+
+/** 按 Studio 项目找对应 PM 行（兼容历史 moonpie slug） */
+export function findPmProjectForStudio<T extends { id: string; slug: string }>(
+  studioId: string,
+  pmProjects: T[]
+): T | undefined {
+  const primary = getPmSlugForStudioProject({ id: studioId });
+  const hit = pmProjects.find((p) => p.slug === primary);
+  if (hit) return hit;
+  if (studioId === "proj-moonpie") {
+    return pmProjects.find((p) => p.slug === "moonpie");
+  }
+  return undefined;
 }
 
 export async function resolveProjectRoute(id: string) {

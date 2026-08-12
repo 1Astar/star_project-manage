@@ -122,13 +122,21 @@ export async function collectDailyDigestSections(opts?: {
   const day = acceptanceQ.todayDay;
   const hubHref = abs(base, "/?focus=pm-today") || "/?focus=pm-today";
 
-  const acceptance: DigestLine[] = acceptanceQ.items
+  const acceptance: DigestLine[] = acceptanceQ.bundles
     .slice(0, MAX_PER_SECTION)
-    .map((i) => ({
-      title: i.title,
-      meta: `${i.projectTitle} · ${i.sourceLabel}${i.note ? ` · ${i.note}` : ""}`,
-      href: abs(base, i.href),
-    }));
+    .map((b) => {
+      const how = b.howToVerify.slice(0, 2).join("；");
+      const metaParts = [
+        `${b.itemCount} 项`,
+        b.why.slice(0, 36) + (b.why.length > 36 ? "…" : ""),
+        how ? `验：${how}` : null,
+      ].filter(Boolean);
+      return {
+        title: `${b.projectTitle} / ${b.module}`,
+        meta: metaParts.join(" · "),
+        href: abs(base, "/?focus=pm-today"),
+      };
+    });
 
   const gitSync: DigestLine[] = git.suggestions.slice(0, MAX_PER_SECTION).map((s) => {
     const reqHref =

@@ -6,6 +6,8 @@ import {
 
 assert.ok(looksLikeSmallFix("修复登录按钮文案"));
 assert.ok(looksLikeSmallFix("hotfix: typo"));
+assert.ok(looksLikeSmallFix("更新 star-pm-write-release skill"));
+assert.ok(looksLikeSmallFix("补 CHANGELOG 条目"));
 assert.ok(!looksLikeSmallFix("工作台月历待办表大功能"));
 
 {

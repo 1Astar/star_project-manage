@@ -30,8 +30,8 @@ export function WorkbenchAcceptanceBrowserNudge({ count, todayDay }: Props) {
       }
       if (perm !== "granted") return;
       try {
-        new Notification(`Star PM · 待验收 ${count} 项`, {
-          body: "打开工作台「待你验收」点通过或退回。",
+        new Notification(`Star PM · 待验收 ${count} 个板块`, {
+          body: "打开工作台「待你验收」，按板块看为何/结果/怎么验后通过或打回。",
           tag: `acceptance-${todayDay}`,
         });
         localStorage.setItem(key, "1");

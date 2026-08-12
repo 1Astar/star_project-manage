@@ -7,10 +7,12 @@ import { StudioBadge } from "@/components/studio/shell";
 import { WorkbenchAcceptancePeek } from "@/components/workbench-acceptance-peek";
 import { WorkbenchAcceptanceBrowserNudge } from "@/components/workbench-acceptance-browser-nudge";
 import {
+  productReviewAcceptanceBundleAction,
   productReviewChangeSessionAction,
   productReviewRequirementAction,
 } from "@/lib/actions";
 import type {
+  PmAcceptanceBundle,
   PmAcceptanceItem,
   PmFollowUpItem,
   PmOpenBugItem,
@@ -22,6 +24,7 @@ import { openLiveSite } from "@/lib/project-live-url";
 
 type Props = {
   acceptance: PmAcceptanceItem[];
+  acceptanceBundles: PmAcceptanceBundle[];
   followUps: PmFollowUpItem[];
   openBugs: PmOpenBugItem[];
   lookbackDays: number;
@@ -30,13 +33,9 @@ type Props = {
   tomorrowItems: TomorrowAgendaItem[];
 };
 
-function sourceTone(source: PmAcceptanceItem["source"]) {
-  if (source === "formal") return "p0" as const;
-  return "p1" as const;
-}
-
 export function WorkbenchPmToday({
   acceptance,
+  acceptanceBundles,
   followUps,
   openBugs,
   lookbackDays,
@@ -46,42 +45,84 @@ export function WorkbenchPmToday({
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectBundleId, setRejectBundleId] = useState<string | null>(null);
+  const [rejectItemId, setRejectItemId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [bugTitle, setBugTitle] = useState("");
   const [bugSeverity, setBugSeverity] = useState<BugSeverity>(3);
   const [createBug, setCreateBug] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [hiddenBundles, setHiddenBundles] = useState<Set<string>>(new Set());
+  const [hiddenItems, setHiddenItems] = useState<Set<string>>(new Set());
   const [filterProject, setFilterProject] = useState("");
-  const [filterSource, setFilterSource] = useState<"" | "formal" | "change_session">(
-    ""
-  );
+  const [filterModule, setFilterModule] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [peekItem, setPeekItem] = useState<PmAcceptanceItem | null>(null);
 
   const projects = useMemo(() => {
     const map = new Map<string, string>();
-    for (const i of acceptance) map.set(i.projectId, i.projectTitle);
+    for (const b of acceptanceBundles) map.set(b.projectId, b.projectTitle);
     return [...map.entries()]
       .map(([id, title]) => ({ id, title }))
       .sort((a, b) => a.title.localeCompare(b.title, "zh-CN"));
-  }, [acceptance]);
+  }, [acceptanceBundles]);
 
-  const visibleAcceptance = useMemo(() => {
-    return acceptance.filter((i) => {
-      if (hidden.has(i.id)) return false;
-      if (filterProject && i.projectId !== filterProject) return false;
-      if (filterSource && i.source !== filterSource) return false;
-      return true;
-    });
-  }, [acceptance, hidden, filterProject, filterSource]);
+  const modules = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of acceptanceBundles) {
+      if (!filterProject || b.projectId === filterProject) set.add(b.module);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "zh-CN"));
+  }, [acceptanceBundles, filterProject]);
 
-  function hide(id: string) {
-    setHidden((prev) => new Set(prev).add(id));
+  const visibleBundles = useMemo(() => {
+    return acceptanceBundles
+      .filter((b) => {
+        if (hiddenBundles.has(b.id)) return false;
+        if (filterProject && b.projectId !== filterProject) return false;
+        if (filterModule && b.module !== filterModule) return false;
+        const left = b.items.filter((i) => !hiddenItems.has(i.id));
+        return left.length > 0;
+      })
+      .map((b) => ({
+        ...b,
+        items: b.items.filter((i) => !hiddenItems.has(i.id)),
+        itemCount: b.items.filter((i) => !hiddenItems.has(i.id)).length,
+      }));
+  }, [acceptanceBundles, hiddenBundles, hiddenItems, filterProject, filterModule]);
+
+  const visibleItemCount = visibleBundles.reduce((n, b) => n + b.itemCount, 0);
+
+  function hideBundle(id: string) {
+    setHiddenBundles((prev) => new Set(prev).add(id));
   }
 
-  function openReject(item: PmAcceptanceItem) {
-    setRejectId(item.id);
+  function hideItem(id: string) {
+    setHiddenItems((prev) => new Set(prev).add(id));
+  }
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openRejectBundle(bundle: PmAcceptanceBundle) {
+    setRejectBundleId(bundle.id);
+    setRejectItemId(null);
+    setRejectNote("");
+    setBugTitle(`验收打回：${bundle.projectTitle} / ${bundle.module}`);
+    setBugSeverity(3);
+    setCreateBug(true);
+    setError(null);
+  }
+
+  function openRejectItem(item: PmAcceptanceItem) {
+    setRejectItemId(item.id);
+    setRejectBundleId(null);
     setRejectNote("");
     setBugTitle(`验收打回：${item.title}`);
     setBugSeverity(3);
@@ -89,7 +130,81 @@ export function WorkbenchPmToday({
     setError(null);
   }
 
-  function runPass(item: PmAcceptanceItem) {
+  function runPassBundle(bundle: PmAcceptanceBundle) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await productReviewAcceptanceBundleAction({
+          items: bundle.items.map((i) => ({
+            requirementId: i.requirementId,
+            changeSessionId: i.changeSessionId,
+            pmProjectId: i.pmProjectId,
+          })),
+          passed: true,
+        });
+        hideBundle(bundle.id);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "操作失败");
+      }
+    });
+  }
+
+  function runWaiveBundle(bundle: PmAcceptanceBundle) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await productReviewAcceptanceBundleAction({
+          items: bundle.items.map((i) => ({
+            requirementId: i.requirementId,
+            changeSessionId: i.changeSessionId,
+            pmProjectId: i.pmProjectId,
+          })),
+          passed: true,
+          note: "用户免验本包",
+        });
+        hideBundle(bundle.id);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "操作失败");
+      }
+    });
+  }
+
+  function runRejectBundle(bundle: PmAcceptanceBundle) {
+    const note = rejectNote.trim();
+    if (!note) {
+      setError("请填写打回补充（会记为 Bug）");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        await productReviewAcceptanceBundleAction({
+          items: bundle.items.map((i) => ({
+            requirementId: i.requirementId,
+            changeSessionId: i.changeSessionId,
+            pmProjectId: i.pmProjectId,
+            title: i.title,
+          })),
+          passed: false,
+          note,
+          createBug,
+          bugTitle: bugTitle.trim() || undefined,
+          bugSeverity,
+          bugType: "other",
+        });
+        setRejectBundleId(null);
+        setRejectNote("");
+        hideBundle(bundle.id);
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "操作失败");
+      }
+    });
+  }
+
+  function runPassItem(item: PmAcceptanceItem) {
     setError(null);
     startTransition(async () => {
       try {
@@ -104,7 +219,7 @@ export function WorkbenchPmToday({
             passed: true,
           });
         }
-        hide(item.id);
+        hideItem(item.id);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "操作失败");
@@ -112,7 +227,7 @@ export function WorkbenchPmToday({
     });
   }
 
-  function runReject(item: PmAcceptanceItem) {
+  function runRejectItem(item: PmAcceptanceItem) {
     const note = rejectNote.trim();
     if (!note) {
       setError("请填写打回补充（会记为 Bug）");
@@ -143,9 +258,9 @@ export function WorkbenchPmToday({
             bugType: "other",
           });
         }
-        setRejectId(null);
+        setRejectItemId(null);
         setRejectNote("");
-        hide(item.id);
+        hideItem(item.id);
         router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "操作失败");
@@ -153,17 +268,81 @@ export function WorkbenchPmToday({
     });
   }
 
+  const rejectForm = (onConfirm: () => void, onCancel: () => void) => (
+    <div className="mt-3 space-y-2 rounded-lg border border-rose-100 bg-white p-3">
+      <label className="block text-xs text-slate-600">
+        Bug 标题
+        <input
+          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+          value={bugTitle}
+          onChange={(e) => setBugTitle(e.target.value)}
+        />
+      </label>
+      <label className="block text-xs text-slate-600">
+        补充 / 修改意见（必填，写入 Bug 描述）
+        <textarea
+          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+          rows={3}
+          placeholder="哪里不对、期望怎样、复现步骤…"
+          value={rejectNote}
+          onChange={(e) => setRejectNote(e.target.value)}
+        />
+      </label>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <label className="flex items-center gap-1 text-slate-600">
+          严重度
+          <select
+            className="rounded-lg border border-slate-200 bg-white px-2 py-1"
+            value={bugSeverity}
+            onChange={(e) => setBugSeverity(Number(e.target.value) as BugSeverity)}
+          >
+            {([1, 2, 3, 4] as BugSeverity[]).map((s) => (
+              <option key={s} value={s}>
+                {BUG_SEVERITY_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 text-slate-700">
+          <input
+            type="checkbox"
+            checked={createBug}
+            onChange={(e) => setCreateBug(e.target.checked)}
+          />
+          同时记为 Bug
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onConfirm}
+          className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          确认打回
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-slate-500 hover:underline"
+        >
+          取消
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div id="pm-today" className="scroll-mt-20 space-y-4">
       <WorkbenchAcceptanceBrowserNudge
-        count={visibleAcceptance.length}
+        count={visibleBundles.length}
         todayDay={todayDay}
       />
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-base font-semibold text-slate-900">今日清单</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            验收∥跟进 · Bug∥明日 · 打回可记 Bug · 会话回看 {lookbackDays} 天
+            按板块汇总验收 · Bug∥明日 · 会话回看 {lookbackDays} 天
           </p>
         </div>
       </div>
@@ -174,7 +353,6 @@ export function WorkbenchPmToday({
         </p>
       ) : null}
 
-      {/* 验收 ∥ 跟进 */}
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <section className="rounded-xl border border-orange-200 bg-orange-50/30">
           <div className="flex flex-wrap items-end justify-between gap-2 border-b border-orange-100 px-4 py-3">
@@ -182,14 +360,17 @@ export function WorkbenchPmToday({
               <h3 className="text-sm font-semibold text-slate-900">
                 待你验收
                 <span className="ml-2 text-xs font-normal text-slate-500">
-                  {visibleAcceptance.length}
-                  {acceptance.length !== visibleAcceptance.length
-                    ? ` / ${acceptance.length}`
+                  {visibleBundles.length} 板块
+                  {visibleItemCount !== visibleBundles.length
+                    ? ` · ${visibleItemCount} 项`
+                    : ""}
+                  {acceptance.length !== visibleItemCount && acceptance.length > 0
+                    ? ` / 原 ${acceptance.length} 项`
                     : ""}
                 </span>
               </h3>
               <p className="mt-0.5 text-xs text-slate-500">
-                正式待验 + 未收口会话 · 打回默认建 Bug
+                为何 · 结果 · 怎么验 · 可整板块通过/打回
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">
@@ -198,7 +379,10 @@ export function WorkbenchPmToday({
                 <select
                   className="rounded-lg border border-slate-200 bg-white px-2 py-1"
                   value={filterProject}
-                  onChange={(e) => setFilterProject(e.target.value)}
+                  onChange={(e) => {
+                    setFilterProject(e.target.value);
+                    setFilterModule("");
+                  }}
                 >
                   <option value="">全部</option>
                   {projects.map((p) => (
@@ -209,145 +393,170 @@ export function WorkbenchPmToday({
                 </select>
               </label>
               <label className="flex items-center gap-1 text-slate-600">
-                来源
+                板块
                 <select
                   className="rounded-lg border border-slate-200 bg-white px-2 py-1"
-                  value={filterSource}
-                  onChange={(e) =>
-                    setFilterSource(e.target.value as "" | "formal" | "change_session")
-                  }
+                  value={filterModule}
+                  onChange={(e) => setFilterModule(e.target.value)}
                 >
                   <option value="">全部</option>
-                  <option value="formal">正式待验</option>
-                  <option value="change_session">变更会话</option>
+                  {modules.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
           </div>
-          {visibleAcceptance.length === 0 ? (
+          {visibleBundles.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-slate-400">
-              {acceptance.length === 0 ? "暂无待你过目的验收" : "当前筛选无结果"}
+              {acceptanceBundles.length === 0
+                ? "暂无待你过目的验收"
+                : "当前筛选无结果"}
             </p>
           ) : (
-            <ul className="max-h-[28rem] divide-y divide-orange-100/80 overflow-y-auto">
-              {visibleAcceptance.map((item) => (
-                <li key={item.id} className="px-4 py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StudioBadge tone={sourceTone(item.source)}>
-                          {item.sourceLabel}
-                        </StudioBadge>
-                        <button
-                          type="button"
-                          onClick={() => setPeekItem(item)}
-                          className="text-left font-medium text-slate-900 hover:text-indigo-700"
-                        >
-                          {item.title}
-                        </button>
-                      </div>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {item.liveSiteUrl ? (
+            <ul className="max-h-[32rem] divide-y divide-orange-100/80 overflow-y-auto">
+              {visibleBundles.map((bundle) => {
+                const open = expanded.has(bundle.id);
+                return (
+                  <li key={bundle.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StudioBadge tone="p0">{bundle.module}</StudioBadge>
                           <button
                             type="button"
-                            title="打开站点（同站复用标签）"
-                            className="text-indigo-600 underline underline-offset-2 hover:text-indigo-800"
-                            onClick={() => openLiveSite(item.liveSiteUrl!)}
+                            onClick={() => toggleExpand(bundle.id)}
+                            className="text-left font-medium text-slate-900 hover:text-indigo-700"
                           >
-                            {item.projectTitle}
+                            {bundle.liveSiteUrl ? (
+                              <span
+                                className="text-indigo-600 underline underline-offset-2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openLiveSite(bundle.liveSiteUrl!);
+                                }}
+                              >
+                                {bundle.projectTitle}
+                              </span>
+                            ) : (
+                              bundle.projectTitle
+                            )}
+                            <span className="ml-1 font-normal text-slate-500">
+                              · {bundle.itemCount} 项
+                              {open ? " ▾" : " ▸"}
+                            </span>
                           </button>
-                        ) : (
-                          item.projectTitle
-                        )}
-                        {item.note ? ` · ${item.note}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => runPass(item)}
-                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        通过
-                      </button>
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => openReject(item)}
-                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 disabled:opacity-50"
-                      >
-                        打回·提 Bug
-                      </button>
-                    </div>
-                  </div>
-                  {rejectId === item.id ? (
-                    <div className="mt-3 space-y-2 rounded-lg border border-rose-100 bg-white p-3">
-                      <label className="block text-xs text-slate-600">
-                        Bug 标题
-                        <input
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                          value={bugTitle}
-                          onChange={(e) => setBugTitle(e.target.value)}
-                        />
-                      </label>
-                      <label className="block text-xs text-slate-600">
-                        补充 / 修改意见（必填，写入 Bug 描述）
-                        <textarea
-                          className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                          rows={3}
-                          placeholder="哪里不对、期望怎样、复现步骤…"
-                          value={rejectNote}
-                          onChange={(e) => setRejectNote(e.target.value)}
-                        />
-                      </label>
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <label className="flex items-center gap-1 text-slate-600">
-                          严重度
-                          <select
-                            className="rounded-lg border border-slate-200 bg-white px-2 py-1"
-                            value={bugSeverity}
-                            onChange={(e) =>
-                              setBugSeverity(Number(e.target.value) as BugSeverity)
-                            }
-                          >
-                            {([1, 2, 3, 4] as BugSeverity[]).map((s) => (
-                              <option key={s} value={s}>
-                                {BUG_SEVERITY_LABELS[s]}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="flex items-center gap-1.5 text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={createBug}
-                            onChange={(e) => setCreateBug(e.target.checked)}
-                          />
-                          同时记为 Bug
-                        </label>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-700">
+                          <span className="font-medium text-slate-500">为何 </span>
+                          {bundle.why}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-700">
+                          <span className="font-medium text-slate-500">结果 </span>
+                          {bundle.result}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-700">
+                          <span className="font-medium text-slate-500">怎么验 </span>
+                          {bundle.howToVerify.length
+                            ? bundle.howToVerify.join(" · ")
+                            : "（未写，展开看明细）"}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           disabled={pending}
-                          onClick={() => runReject(item)}
-                          className="rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
+                          onClick={() => runPassBundle(bundle)}
+                          className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                         >
-                          确认打回
+                          整板块通过
                         </button>
                         <button
                           type="button"
-                          onClick={() => setRejectId(null)}
-                          className="text-xs text-slate-500 hover:underline"
+                          disabled={pending}
+                          onClick={() => openRejectBundle(bundle)}
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:border-rose-300 hover:text-rose-700 disabled:opacity-50"
                         >
-                          取消
+                          整板块打回
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => runWaiveBundle(bundle)}
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500 hover:border-slate-400 disabled:opacity-50"
+                        >
+                          免验
                         </button>
                       </div>
                     </div>
-                  ) : null}
-                </li>
-              ))}
+
+                    {rejectBundleId === bundle.id
+                      ? rejectForm(
+                          () => runRejectBundle(bundle),
+                          () => setRejectBundleId(null)
+                        )
+                      : null}
+
+                    {open ? (
+                      <ul className="mt-3 space-y-2 border-l-2 border-orange-100 pl-3">
+                        {bundle.items.map((item) => (
+                          <li key={item.id} className="text-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <StudioBadge
+                                    tone={item.source === "formal" ? "p0" : "p1"}
+                                  >
+                                    {item.sourceLabel}
+                                  </StudioBadge>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPeekItem(item)}
+                                    className="text-left font-medium text-slate-800 hover:text-indigo-700"
+                                  >
+                                    {item.title}
+                                  </button>
+                                </div>
+                                {item.note ? (
+                                  <p className="mt-0.5 text-xs text-slate-500">
+                                    {item.note}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() => runPassItem(item)}
+                                  className="rounded-md bg-emerald-600/90 px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50"
+                                >
+                                  通过
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() => openRejectItem(item)}
+                                  className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-50"
+                                >
+                                  退回
+                                </button>
+                              </div>
+                            </div>
+                            {rejectItemId === item.id
+                              ? rejectForm(
+                                  () => runRejectItem(item),
+                                  () => setRejectItemId(null)
+                                )
+                              : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -387,7 +596,6 @@ export function WorkbenchPmToday({
         </section>
       </div>
 
-      {/* Bug ∥ 明日待办 */}
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <section className="rounded-xl border border-rose-200 bg-rose-50/20">
           <div className="border-b border-rose-100 px-4 py-3">
@@ -473,11 +681,11 @@ export function WorkbenchPmToday({
           onClose={() => setPeekItem(null)}
           onPass={() => {
             const item = peekItem;
-            runPass(item);
+            runPassItem(item);
             setPeekItem(null);
           }}
           onReject={() => {
-            openReject(peekItem);
+            openRejectItem(peekItem);
             setPeekItem(null);
           }}
         />

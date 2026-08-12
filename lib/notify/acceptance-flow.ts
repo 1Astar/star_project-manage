@@ -4,12 +4,18 @@ import { pushDailyWorkbenchDigest } from "@/lib/notify/daily-digest";
 import { updateChangeSession } from "@/lib/studio/mutations";
 import type { ChangeSession } from "@/lib/studio/types";
 import { readDb, writeDb } from "@/lib/db/local-store";
+import {
+  normalizeModulePath,
+  UNCATEGORIZED_MODULE,
+  type PmAcceptanceBundle,
+} from "@/lib/workbench/acceptance-bundles";
+import type { PmAcceptanceItem } from "@/lib/workbench/pm-inbox";
 
-/** A=提醒 · B=用户明确免验 · C=小修/bug 可自动过 */
+/** A=提醒 · B=用户明确免验 · C=小修/bug/文档/skill 可自动过 */
 export type AcceptancePolicy = "remind" | "auto_pass_small" | "user_waived";
 
 const SMALL_FIX_RE =
-  /bug|修复|修了|小修|hotfix|typo|错别字|文案微调|样式微调|拼写|热修|小优化|polish/i;
+  /bug|修复|修了|小修|hotfix|typo|错别字|文案微调|样式微调|拼写|热修|小优化|polish|changelog|文档|readme|skill|SKILL\.md|规则微调|注释|格式化|lint/i;
 
 export function looksLikeSmallFix(text: string): boolean {
   return SMALL_FIX_RE.test(text);
@@ -33,7 +39,7 @@ export function resolveAcceptancePolicy(input: {
     return {
       policy: "auto_pass_small",
       autoPass: true,
-      reason: "声明为小修/bug 自动验收",
+      reason: "声明为小修/bug/文档/skill 自动验收",
     };
   }
   if (input.policy === "remind") {
@@ -46,7 +52,7 @@ export function resolveAcceptancePolicy(input: {
     return {
       policy: "auto_pass_small",
       autoPass: true,
-      reason: "启发式：小修/bug 且无未完成项 → 自动验收",
+      reason: "启发式：小修/文档/skill 且无未完成项 → 自动验收",
     };
   }
 
@@ -57,7 +63,12 @@ export function resolveAcceptancePolicy(input: {
   };
 }
 
-async function addAcceptanceNotification(session: ChangeSession, autoPass: boolean) {
+async function addAcceptanceNotification(
+  session: ChangeSession,
+  autoPass: boolean,
+  module: string,
+  projectTitle: string
+) {
   try {
     const db = await readDb();
     const { getPmSlugForStudioProject } = await import("@/lib/project-bridge");
@@ -68,7 +79,10 @@ async function addAcceptanceNotification(session: ChangeSession, autoPass: boole
       : `studio-${session.projectId}`;
     const pm =
       db.projects.find((p) => p.slug === slug) ||
-      db.projects.find((p) => p.id === session.projectId);
+      db.projects.find((p) => p.id === session.projectId) ||
+      (await import("@/lib/project-bridge").then(({ findPmProjectForStudio }) =>
+        findPmProjectForStudio(session.projectId, db.projects)
+      ));
     const projectId = pm?.id ?? db.projects[0]?.id;
     if (!projectId) return;
 
@@ -78,10 +92,10 @@ async function addAcceptanceNotification(session: ChangeSession, autoPass: boole
       recipient_name: null,
       type: autoPass ? "acceptance_auto_passed" : "acceptance_pending",
       title: autoPass
-        ? `已自动验收：${session.goal.slice(0, 40)}`
-        : `待你验收：${session.goal.slice(0, 40)}`,
+        ? `已自动验收：${projectTitle} / ${module}`
+        : `待你验收：${projectTitle} / ${module}`,
       body: `chg:${session.id}`,
-      link: `/projects/${session.projectId}/evolution`,
+      link: `/?focus=pm-today`,
       is_read: false,
       created_at: new Date().toISOString(),
     });
@@ -91,8 +105,91 @@ async function addAcceptanceNotification(session: ChangeSession, autoPass: boole
   }
 }
 
+/** 单会话兜底明细（尚无汇总包时） */
+export function formatSessionAcceptanceLines(session: ChangeSession): string[] {
+  const why = [session.goal, session.reason].filter(Boolean).join(" — ");
+  const expected = (session.expected ?? []).filter(Boolean);
+  return [
+    `为何：${why || session.goal || "（未写）"}`,
+    `结果：${session.result?.trim() || "（未写 result）"}`,
+    expected.length
+      ? ["怎么验：", ...expected.slice(0, 5).map((e, i) => `${i + 1}. ${e}`)].join("\n")
+      : "怎么验：（未写 expected）",
+  ];
+}
+
+function formatItemLine(item: PmAcceptanceItem, index: number): string {
+  const tag = item.source === "formal" ? "正式" : "会话";
+  const note = item.note ? ` · ${item.note}` : "";
+  return `${index + 1}. [${tag}] ${item.title}${note}`;
+}
+
+/**
+ * 按板块汇总推送正文：为何 / 结果 / 怎么验 + 明细列表。
+ * 每个板块一条内容（可含多条会话/需求）。
+ */
+export function formatModuleAcceptancePush(input: {
+  projectTitle: string;
+  module: string;
+  bundle?: PmAcceptanceBundle | null;
+  /** 刚收工的会话，用于兜底或标「本轮」 */
+  session?: ChangeSession | null;
+  workbenchUrl: string;
+  evolutionUrl?: string;
+  policyReason?: string;
+  autoPass?: boolean;
+}): { title: string; content: string } {
+  const module = normalizeModulePath(input.module);
+  const bundle = input.bundle;
+  const n = bundle?.itemCount ?? 1;
+  const title = input.autoPass
+    ? `Star PM · 已自动验收：${input.projectTitle} / ${module}`
+    : `Star PM · 待你验收：${input.projectTitle} / ${module}（${n}项）`;
+
+  const why = bundle?.why || (input.session
+    ? [input.session.goal, input.session.reason].filter(Boolean).join(" — ")
+    : "");
+  const result =
+    bundle?.result ||
+    input.session?.result?.trim() ||
+    "（待过目）";
+  const how =
+    bundle?.howToVerify?.length
+      ? bundle.howToVerify
+      : (input.session?.expected ?? []).filter(Boolean).slice(0, 5);
+
+  const detailLines =
+    bundle?.items?.length
+      ? bundle.items.map((it, i) => formatItemLine(it, i))
+      : input.session
+        ? [`1. [会话] ${input.session.goal}`]
+        : [];
+
+  const contentPretty = [
+    `【${input.projectTitle} · ${module}】共 ${n} 项待验`,
+    "",
+    `为何：${why || "（未写）"}`,
+    `结果：${result}`,
+    how.length
+      ? ["怎么验：", ...how.map((e, i) => `${i + 1}. ${e}`)].join("\n")
+      : "怎么验：（未写）",
+    "",
+    "明细：",
+    ...detailLines.slice(0, 12),
+    ...(detailLines.length > 12 ? [`…另有 ${detailLines.length - 12} 项`] : []),
+    ...(module === UNCATEGORIZED_MODULE ? ["⚠ 缺板块，请补 module"] : []),
+    ...(input.policyReason ? [`策略：${input.policyReason}`] : []),
+    "",
+    `工作台：${input.workbenchUrl}`,
+    ...(input.evolutionUrl ? [`演进：${input.evolutionUrl}`] : []),
+  ].join("\n");
+
+  return { title, content: contentPretty };
+}
+
 /**
  * After finish_change_session: apply A/B/C + PushPlus + in-app notification.
+ * 待验：按「项目×板块」汇总成**一条**推送（含明细）；自动过仍推本条短讯。
  */
 export async function applyAcceptanceAfterFinish(input: {
   session: ChangeSession;
@@ -120,24 +217,64 @@ export async function applyAcceptanceAfterFinish(input: {
     });
   }
 
-  await addAcceptanceNotification(session, resolved.autoPass);
+  const module = normalizeModulePath(session.module);
+  let projectTitle = "项目";
+  try {
+    const { getProjectById } = await import("@/lib/studio/data");
+    const p = await getProjectById(session.projectId);
+    if (p?.title) projectTitle = p.title;
+  } catch {
+    // ignore
+  }
+
+  await addAcceptanceNotification(session, resolved.autoPass, module, projectTitle);
 
   const base = resolveSiteBaseUrl(input.siteBaseUrl);
-  const link = absoluteAppUrl(base, `/projects/${session.projectId}/evolution`);
+  const workbenchUrl = absoluteAppUrl(base, "/?focus=pm-today");
+  const evolutionUrl = absoluteAppUrl(
+    base,
+    `/projects/${session.projectId}/evolution`
+  );
 
-  const title = resolved.autoPass
-    ? `Star PM · 已自动验收`
-    : `Star PM · 待你验收`;
-  const content = [
-    session.goal,
-    resolved.reason,
-    session.result ? `结果：${session.result}` : "",
-    `打开：${link}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  let bundle: PmAcceptanceBundle | null = null;
+  if (!resolved.autoPass) {
+    try {
+      const { getPmAcceptanceQueue } = await import("@/lib/workbench/pm-inbox");
+      const q = await getPmAcceptanceQueue({ projectId: session.projectId });
+      bundle =
+        q.bundles.find(
+          (b) =>
+            b.projectId === session.projectId &&
+            normalizeModulePath(b.module) === module
+        ) ?? null;
+    } catch {
+      bundle = null;
+    }
+  }
 
-  const push = await sendPushPlus({ title, content });
+  const formatted = formatModuleAcceptancePush({
+    projectTitle,
+    module,
+    bundle,
+    session,
+    workbenchUrl,
+    evolutionUrl,
+    policyReason: resolved.reason,
+    autoPass: resolved.autoPass,
+  });
+
+  // 自动过：短讯即可，不必灌明细列表
+  const pushPayload = resolved.autoPass
+    ? {
+        title: formatted.title,
+        content: [
+          ...formatSessionAcceptanceLines(session),
+          `打开：${workbenchUrl}`,
+        ].join("\n"),
+      }
+    : formatted;
+
+  const push = await sendPushPlus(pushPayload);
 
   return {
     session,

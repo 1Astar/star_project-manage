@@ -10,6 +10,7 @@ type Body = {
   attachUntaggedEvolution?: boolean;
   draft?: boolean;
   prerelease?: boolean;
+  forceSkipAcceptance?: boolean;
 };
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -30,6 +31,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       attachUntaggedEvolution: body.attachUntaggedEvolution,
       draft: body.draft,
       prerelease: body.prerelease,
+      forceSkipAcceptance: body.forceSkipAcceptance,
     });
     return studioOk(result, 201);
   } catch (error) {

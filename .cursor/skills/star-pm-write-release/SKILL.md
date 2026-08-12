@@ -76,45 +76,56 @@ description: >-
 
 ### 1.3 ChangeSession 写入标准
 
+给人验收看的，**禁止只写工程黑话**（文件名 / lore / 单测）。验收人要一眼知道：哪个大/小板块、大运（或功能）**变了什么**、**用户会感知到什么**。
+
 **start_change_session**
 
 | 字段 | 要求 |
 |------|------|
 | `projectId` | 必填（见 §4） |
-| `goal` | 必填：本轮修改目标（一句话） |
-| `reason` | 建议：为什么现在改 |
-| `expected` | 建议：期望效果列表 |
-| `module` | 强烈建议 |
+| `module` | **必填口径**：`大板块·小板块…`（`·` 分层）。例：`八字·图鉴·大运流年` → 大=八字，小=图鉴·大运流年。缺则进「未分板块」 |
+| `goal` | 必填：**人话**修改目标（「统一大运/流年解释文案」✓；「落地 luck-lore」✗） |
+| `reason` | **必填**：为什么现在改 + **对用户影响**（一到两句） |
+| `expected` | **必填**：怎么验，写成用户路径（「打开图鉴→…」「打开造命→…」），2～5 条 |
 | `startedAt` | **本轮对话最早用户消息**时间戳 ISO |
 
 **finish_change_session**
 
 | 字段 | 要求 |
 |------|------|
-| `doneItems` / `pendingItems` | ✅ / ❌ 拆开写，别糊成一段 |
-| `aiOps` | 改了哪些文件/做了啥（可扫） |
-| `result` | 一句话结果 |
+| `doneItems` / `pendingItems` | ✅ / ❌ 用产品语言拆开；工程细节放 `aiOps` |
+| `aiOps` | 改了哪些文件（可略读，不进验收主叙事） |
+| `result` | **用户能感知到什么** + 明确「没改什么」（例：文案统一了，Buff 数值没改） |
 | `finishedAt` | **本轮对话最后相关消息**时间戳 ISO |
 | `acceptancePolicy` | 见下节「人工验收」 |
 
 工时：不叫「AI 工时」产品名；就是开始–结束。条目有时段，板块表可 Σ。
 
-### 1.3.1 人工验收（A+B+C，硬规则）
+收工自检（不过不宣称可验）：
+1. 板块路径能拆出大/小吗？  
+2. 不懂代码的人读 goal/reason/result 能懂吗？  
+3. expected 是可点路径，不是「单测通过」？
 
-工作台已有 **「待你验收」**（正式待验需求 + 未收口变更会话）。收工后默认**不**代用户点通过。
+### 1.3.1 人工验收（按板块汇总 + A+B+C，硬规则）
+
+**目的**：不忘「为啥做 / 做完没」；AI 收工后人闸。工作台「待你验收」按 **项目 × 板块路径**（`大·小`）汇总成卡，不按会话堆。
+
+收工 `finish_change_session` **必带**：`module`（`大·小`）、人话 `goal`/`reason`（含用户影响）/`expected`（用户路径怎么验）/`result`（用户感知+没改什么）、`acceptancePolicy`。
 
 | 策略 | 何时 | `acceptancePolicy` | 结果 |
 |------|------|-------------------|------|
-| **A 默认提醒** | 大功能 / 不确定 | `remind` 或省略（非小修） | `unreviewed` → 进待验清单 + PushPlus + 浏览器提醒；**必须用户点通过** |
+| **A 默认提醒** | **产品行为变化** / 不确定 | `remind` 或省略（非小修） | `unreviewed` → 并入板块汇总卡 + 按板块 PushPlus；**用户整板块或单条点通过** |
 | **B 用户免验** | 用户明确说「这次不用我验 / 直接过 / 免验」 | **`user_waived`** | 标 `passed` |
-| **C 小修/bug** | 纯修复、hotfix、文案/样式微调，且 `pendingItems` 空 | **`auto_pass_small`**（或 goal/result 含修复类词时启发式） | 标 `passed`，并推送「已自动验收」 |
+| **C 小修** | 纯修复、hotfix、文案/样式、**文档 / skill / changelog**，且 `pendingItems` 空 | **`auto_pass_small`**（或启发式） | 标 `passed`，推送「已自动验收：项目 / 板块」 |
 
 补充闭环：
 
-1. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug` / 需求或灵感），挂上相关 `requirementId` / 会话。  
-2. AI 做完该补充 → 再 `finish_change_session`（小修用 C；大改用 A）。  
-3. **禁止**在用户未表态时，对大功能静默 `humanAcceptance=passed`。  
-4. 推送依赖环境变量 **`PUSHPLUS_TOKEN`**；未配置则只站内通知 + 工作台清单。每日 cron（`/api/cron/reminders`）会推综合日报：待验收、Git 同步建议、今日待办、昨天未完成，正文含可点页面链接（根地址 `NEXT_PUBLIC_APP_URL`，缺省 `https://pm.starry-studio.cn`）。
+1. 缺 `module` → 进 **「未分板块」** + warning，禁止瞎填。  
+2. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug`），挂板块/会话。  
+3. AI 做完补充 → 再 `finish_change_session`（小修用 C；行为变化用 A）。  
+4. **禁止**对大功能静默 `humanAcceptance=passed`。  
+5. 推送**按板块一条**：标题 `待你验收：项目 / 板块（N项）`；正文含为何 / 结果 / 怎么验 / **明细列表** + 工作台链接。同板块再收工会再推更新后的汇总（不限全站一条）。日报同样按板块。  
+6. **发版门禁**：`publish_release` 若该项目仍有未验板块（含未分板块）则失败；`draft` 或用户明确要求时用 `forceSkipAcceptance=true`。
 
 ### 1.4 Evolution 写入标准
 

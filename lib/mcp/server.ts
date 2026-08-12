@@ -23,6 +23,8 @@ import {
   listStudioTables,
 } from "@/lib/mcp/schema-tools";
 import { registerWorkspaceTools } from "@/lib/mcp/workspace-tools";
+import { registerDynamicMetaTools } from "@/lib/mcp/register-dynamic-meta-tools";
+import { registerDynamicMcpTools } from "@/lib/mcp/dynamic-tools";
 import { logAiAction } from "@/lib/mcp/action-log";
 
 const ideaStatusSchema = z.enum([
@@ -68,8 +70,10 @@ function slimProject(project: Awaited<ReturnType<typeof getAllProjects>>[number]
   };
 }
 
-export function registerStarPmTools(server: McpServer) {
+export async function registerStarPmTools(server: McpServer) {
   registerWorkspaceTools(server);
+  registerDynamicMetaTools(server);
+  await registerDynamicMcpTools(server);
 
   server.registerTool(
     "capture_idea",

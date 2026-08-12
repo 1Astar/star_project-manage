@@ -39,9 +39,11 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 发版：用 **`publish_release`**，按板块汇总后创建 GitHub Release（Tag 名可用英文 `vX.Y.Z`，正文用中文）。  
 发版后会附带 **`shippedSuggestions`**（按 CHANGELOG/tag 模糊匹配未完成需求）；**不自动改状态**。核对后用 **`confirm_shipped_requirements`** 批量标完成。也可单独调 **`suggest_shipped_from_release`**。
 
+**动态 MCP 工具（套娃）**：`add_mcp_tool` 落盘骨架到 `lib/mcp/dynamic-tools/`，**重启/重连 MCP 后**加载；`list_dynamic_mcp_tools` / `disable_mcp_tool`。本期不做：热挂、沙箱任意 JS、自动改 `workspace-tools.ts`（原因与后期做法见 `docs/ai/MCP_DYNAMIC_TOOLS_DEFER.md`）。
+
 每日 **`sync-git`**（cron）在写入新 commit 后，会用 commit message 模糊匹配未完成需求，写入待确认建议；**不自动改状态**。用 **`list_git_sync_suggestions`** 查看，**`confirm_git_sync_suggestions`**（`accept` / `dismiss`）确认。
 
-**人工验收（A+B+C）**：`finish_change_session` 默认进工作台「待你验收」并 PushPlus/浏览器提醒，**不代点通过**。仅当用户明确免验（`user_waived`）或小修/bug（`auto_pass_small` / 启发式）才标 `passed`。打回/补充的 bug·优化必须记入 PM。环境变量：`PUSHPLUS_TOKEN`。每日 cron 推综合日报（待验收 / Git 同步建议 / 今日待办 / 昨天未完成，含页面绝对链接；根地址 `NEXT_PUBLIC_APP_URL`）。
+**人工验收（按板块汇总 + A+B+C）**：`finish_change_session` 须带 `module` + 为何/结果/`expected`（怎么验）。默认进工作台「待你验收」**按项目×板块汇总**并按板块 PushPlus，**不代点通过**。仅 `user_waived` 或小修/文档/skill（`auto_pass_small` / 启发式）才标 `passed`。缺板块进「未分板块」。`publish_release` 有未验板块则阻断（`draft` / `forceSkipAcceptance` 可跳过）。打回须记 Bug。环境变量：`PUSHPLUS_TOKEN`。
 
 ---
 

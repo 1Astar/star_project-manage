@@ -13,26 +13,24 @@ import {
 import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
 import { projectLiveSiteUrl } from "@/lib/project-live-url";
+import {
+  findPmProjectForStudio,
+  getStudioIdFromPmSlug,
+} from "@/lib/project-bridge";
+import {
+  bundlePmAcceptanceItems,
+  modulePathFromRequirement,
+  normalizeModulePath,
+  UNCATEGORIZED_MODULE,
+  type PmAcceptanceBundle,
+} from "@/lib/workbench/acceptance-bundles";
 
 /** 变更会话回看（天） */
 const SESSION_LOOKBACK_DAYS = 14;
 
-const STUDIO_TO_PM_SLUG: Record<string, string> = {
-  "proj-ai-pet": "ai-pet",
-  "proj-ai-controller": "ai-controller",
-  "proj-star-pm": "star-pm",
-  "proj-c84ff6fa": "yoking-pump",
-  "proj-star-lab-os": "star-lab-os",
-  "proj-personal-tools": "personal-tools",
-  "proj-moonpie": "moonpie",
-};
-
-const PM_SLUG_TO_STUDIO: Record<string, string> = Object.fromEntries(
-  Object.entries(STUDIO_TO_PM_SLUG).map(([studioId, slug]) => [slug, studioId])
-);
-
+/** PM slug → 路由用 Studio id（与 project-bridge 一致，避免同名双份） */
 function routeIdForPmSlug(slug: string): string {
-  return PM_SLUG_TO_STUDIO[slug] ?? slug;
+  return getStudioIdFromPmSlug(slug) ?? slug;
 }
 
 /** 演示沙盘下只允许 demo-showcase 的 PM 项目 id */
@@ -92,7 +90,17 @@ export type PmAcceptanceItem = {
   changeSessionId?: string;
   note?: string;
   at: string;
+  /** 板块路径（大·小）；缺省「未分板块」 */
+  module: string;
+  /** 为何做 */
+  why: string;
+  /** 实际结果 */
+  result: string;
+  /** 怎么验（checklist） */
+  howToVerify: string[];
 };
+
+export type { PmAcceptanceBundle };
 
 export type PmFollowUpItem = {
   id: string;
@@ -137,11 +145,18 @@ function hasProductPass(
  * 待你验收（收紧）：
  * - 正式生命周期「待验收」且你还没点通过
  * - 近 N 天变更会话 humanAcceptance=unreviewed（你还没收口）
- * 不含：已标完成、已挂 releaseTag 的上版条目（版本上已有 = 免验）
+ * 展示时按「项目 × 板块」汇总（见 bundles）
  */
 export async function getPmAcceptanceQueue(opts?: {
   todayDay?: string;
-}): Promise<{ todayDay: string; lookbackDays: number; items: PmAcceptanceItem[] }> {
+  /** 仅某 Studio 项目（发版门禁用） */
+  projectId?: string;
+}): Promise<{
+  todayDay: string;
+  lookbackDays: number;
+  items: PmAcceptanceItem[];
+  bundles: PmAcceptanceBundle[];
+}> {
   const todayDay = opts?.todayDay ?? shanghaiDay();
   const db = await readDb();
   const studio = await getScopedStudioSnapshot();
@@ -169,9 +184,20 @@ export async function getPmAcceptanceQueue(opts?: {
     const pmProject = pmById.get(req.project_id);
     if (!pmProject) continue;
     const routeId = routeIdForPmSlug(pmProject.slug);
+    if (opts?.projectId && routeId !== opts.projectId) continue;
     const projectTitle =
       studioById.get(routeId)?.title ?? pmProject.name ?? "未知项目";
     const studioProject = studioById.get(routeId);
+    const module = modulePathFromRequirement(req, db.modules);
+    const whyBits = [req.title, req.detail_work?.slice(0, 120)]
+      .filter(Boolean)
+      .join(" — ");
+    const how =
+      req.acceptance_criteria
+        ?.split(/\n+/)
+        .map((s) => s.replace(/^[-*•\d.\s]+/, "").trim())
+        .filter(Boolean)
+        .slice(0, 5) ?? [];
     items.push({
       id: `req:${req.id}`,
       title: req.title,
@@ -184,6 +210,12 @@ export async function getPmAcceptanceQueue(opts?: {
       sourceLabel: SOURCE_LABEL.formal,
       requirementId: req.id,
       at: req.updated_at || todayDay,
+      module,
+      why: whyBits || req.title,
+      result: req.next_step?.trim()
+        ? `下一步曾写：${req.next_step.trim()}`
+        : "正式需求待产品点通过",
+      howToVerify: how,
     });
   }
 
@@ -202,12 +234,12 @@ export async function getPmAcceptanceQueue(opts?: {
 
     const project = studioById.get(session.projectId);
     if (!project || project.status === "archived") continue;
-    const pmSlug = STUDIO_TO_PM_SLUG[project.id];
-    const pmProject = pmSlug
-      ? [...pmById.values()].find((p) => p.slug === pmSlug)
-      : undefined;
+    if (opts?.projectId && project.id !== opts.projectId) continue;
+    const pmProject = findPmProjectForStudio(project.id, [...pmById.values()]);
     if (!pmProject) continue;
 
+    const module = normalizeModulePath(session.module);
+    const why = [session.goal, session.reason].filter(Boolean).join(" — ") || session.goal;
     items.push({
       id: `chg:${session.id}`,
       title: session.goal || "变更会话待收口",
@@ -221,8 +253,14 @@ export async function getPmAcceptanceQueue(opts?: {
       changeSessionId: session.id,
       note: hasPending
         ? `未勾完 ${session.pendingItems!.length} 项`
-        : "会话已收工，待你过目",
+        : module === UNCATEGORIZED_MODULE
+          ? "缺板块 · 会话已收工"
+          : "会话已收工，待你过目",
       at,
+      module,
+      why,
+      result: session.result?.trim() || (hasPending ? "仍有未勾项" : "已收工待过目"),
+      howToVerify: (session.expected ?? []).filter(Boolean).slice(0, 5),
     });
   }
 
@@ -231,7 +269,8 @@ export async function getPmAcceptanceQueue(opts?: {
       SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || b.at.localeCompare(a.at)
   );
 
-  return { todayDay, lookbackDays: SESSION_LOOKBACK_DAYS, items };
+  const bundles = bundlePmAcceptanceItems(items);
+  return { todayDay, lookbackDays: SESSION_LOOKBACK_DAYS, items, bundles };
 }
 
 export async function getPmFollowUps(opts?: {

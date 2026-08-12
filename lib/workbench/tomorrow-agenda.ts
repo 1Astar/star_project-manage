@@ -1,5 +1,6 @@
 import { getProjects, getProjectBundle, getPoolBundle } from "@/lib/db/local-store";
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { getStudioIdFromPmSlug } from "@/lib/project-bridge";
 import {
   TASK_STATUS_LABELS as STUDIO_TASK_STATUS_LABELS,
   type TaskPriority,
@@ -46,22 +47,8 @@ function addShanghaiDays(day: string, delta: number): string {
   return shanghaiDay(d.toISOString());
 }
 
-const STUDIO_TO_PM_SLUG: Record<string, string> = {
-  "proj-ai-pet": "ai-pet",
-  "proj-ai-controller": "ai-controller",
-  "proj-star-pm": "star-pm",
-  "proj-c84ff6fa": "yoking-pump",
-  "proj-star-lab-os": "star-lab-os",
-  "proj-personal-tools": "personal-tools",
-  "proj-moonpie": "moonpie",
-};
-
-const PM_SLUG_TO_STUDIO: Record<string, string> = Object.fromEntries(
-  Object.entries(STUDIO_TO_PM_SLUG).map(([studioId, slug]) => [slug, studioId])
-);
-
 function routeIdForPmSlug(slug: string): string {
-  return PM_SLUG_TO_STUDIO[slug] ?? slug;
+  return getStudioIdFromPmSlug(slug) ?? slug;
 }
 
 function priorityRank(p: string | null | undefined) {

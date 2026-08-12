@@ -10,6 +10,24 @@
 
 ---
 
+## v1.13.0 · 2026-08-12
+
+相对 **v1.12.2**（合并发版：同日验收减负主线 + MCP 套娃；CHANGELOG 分方向）：
+
+### 工作台 · 验收
+
+- **按板块汇总**：待你验收按项目×板块（大·小）成卡；默认三行：为何 / 结果 / 怎么验；整板块通过/打回/免验
+- **推送按板块一条**：含明细列表 + 工作台链接；同板块再收工推更新后的包；日报同步
+- **小修自动过扩围**：文档 / skill / changelog 等可 `auto_pass_small`
+- **发版验收门禁**：`publish_release` 有未验板块则阻断；`draft` / `forceSkipAcceptance` 可跳
+- **变更会话人话**：Peek 顶部大/小板块；goal/reason/result/expected 写用户影响
+- **随心而行双份筛选 / 缺站点链接**：统一 `project-bridge`（兼容历史 `moonpie` slug）
+
+### MCP · 动态工具
+
+- **套娃 `add_mcp_tool`**：落盘骨架（registry + handler），重启后加载；`list_dynamic_mcp_tools` / `disable_mcp_tool`
+- **延期**（热挂 / 沙箱 JS / 改 workspace-tools）：见 `docs/ai/MCP_DYNAMIC_TOOLS_DEFER.md`
+
 ## v1.12.2 · 2026-08-11
 
 相对 **v1.12.1**（本版仅 AI 协作节奏，不含 PushPlus/产品功能）：

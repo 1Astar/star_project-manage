@@ -165,7 +165,10 @@ export default async function WorkbenchPage({
           <p className="mt-1 text-sm text-slate-700">
             待验收{" "}
             <a href="#pm-today" className="font-semibold text-orange-700 hover:underline">
-              {acceptanceQueue.items.length}
+              {acceptanceQueue.bundles.length} 板块
+              {acceptanceQueue.items.length
+                ? `（${acceptanceQueue.items.length}）`
+                : ""}
             </a>
             <span className="mx-1 text-slate-300">·</span>
             Bug{" "}
@@ -205,6 +208,7 @@ export default async function WorkbenchPage({
       <div className="mt-6">
         <WorkbenchPmToday
           acceptance={acceptanceQueue.items}
+          acceptanceBundles={acceptanceQueue.bundles}
           followUps={followUps.items}
           openBugs={openBugs}
           lookbackDays={acceptanceQueue.lookbackDays}

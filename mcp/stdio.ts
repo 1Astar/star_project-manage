@@ -10,7 +10,7 @@ async function main() {
     name: MCP_SERVER_NAME,
     version: MCP_SERVER_VERSION,
   });
-  registerStarPmTools(server);
+  await registerStarPmTools(server);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

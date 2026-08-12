@@ -1601,11 +1601,22 @@ export async function publishStudioProjectRelease(input: {
   attachUntaggedEvolution?: boolean;
   draft?: boolean;
   prerelease?: boolean;
+  /**
+   * 跳过发版前验收门禁（未验板块 / 未分板块）。
+   * draft 发版默认不拦；正式发版有待验则需 force 或先验收。
+   */
+  forceSkipAcceptance?: boolean;
 }): Promise<{
   release: StudioRelease;
   githubUrl: string;
   modules: string[];
   attachedEvolutionIds: string[];
+  acceptanceReview?: {
+    bundleCount: number;
+    itemCount: number;
+    modules: string[];
+    skipped: boolean;
+  };
 }> {
   const snapshot = await getStudioSnapshot();
   const project = snapshot.projects.find((p) => p.id === input.projectId);
@@ -1615,6 +1626,32 @@ export async function publishStudioProjectRelease(input: {
 
   const tag = input.tag.trim();
   if (!tag) throw new Error("tag 必填");
+
+  const { getPmAcceptanceQueue } = await import("@/lib/workbench/pm-inbox");
+  const acceptanceQ = await getPmAcceptanceQueue({ projectId: input.projectId });
+  const pendingModules = acceptanceQ.bundles.map((b) => b.module);
+  const hasUncategorized = pendingModules.includes("未分板块");
+  const acceptanceReview = {
+    bundleCount: acceptanceQ.bundles.length,
+    itemCount: acceptanceQ.items.length,
+    modules: pendingModules,
+    skipped: Boolean(input.forceSkipAcceptance || input.draft),
+  };
+
+  if (
+    acceptanceQ.bundles.length > 0 &&
+    !input.forceSkipAcceptance &&
+    !input.draft
+  ) {
+    const list = acceptanceQ.bundles
+      .map((b) => `${b.module}（${b.itemCount}）`)
+      .join("、");
+    throw new Error(
+      `发版前还有未验收板块：${list}${
+        hasUncategorized ? "。请先补板块或验收「未分板块」" : ""
+      }。可在工作台整板块通过，或传 forceSkipAcceptance=true 强制发版。`
+    );
+  }
 
   const { createGitHubRelease, buildRepoUrl } = await import("@/lib/github/client");
   const { groupChangesByModule, formatReleaseNotesMarkdown, modulesForReleaseTag } =
@@ -1684,6 +1721,7 @@ export async function publishStudioProjectRelease(input: {
     githubUrl: gh.html_url || `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`,
     modules: modulesForReleaseTag(tag, evolution),
     attachedEvolutionIds,
+    acceptanceReview,
   };
 }
 

@@ -896,6 +896,67 @@ export async function productReviewRequirementAction(input: {
   return { ok: true as const, requirementId: result.req.id, bugId };
 }
 
+/** PM 工作台：整板块批量通过 / 打回 */
+export async function productReviewAcceptanceBundleAction(input: {
+  items: Array<{
+    requirementId?: string;
+    changeSessionId?: string;
+    pmProjectId?: string;
+    title?: string;
+  }>;
+  passed: boolean;
+  note?: string;
+  createBug?: boolean;
+  bugTitle?: string;
+  bugSeverity?: import("@/lib/types").BugSeverity;
+  bugType?: import("@/lib/types").BugType;
+}) {
+  await assertNotViewerWrite();
+  if (!input.items.length) throw new Error("没有可验收项");
+  if (!input.passed && !input.note?.trim()) {
+    throw new Error("打回请填写原因 / 补充（会记为 Bug）");
+  }
+
+  const bugIds: string[] = [];
+  let firstBug = true;
+  for (const item of input.items) {
+    if (item.requirementId) {
+      const r = await productReviewRequirementAction({
+        requirementId: item.requirementId,
+        passed: input.passed,
+        note: input.note,
+        createBug: input.passed ? false : input.createBug !== false && firstBug,
+        bugTitle: input.bugTitle,
+        bugSeverity: input.bugSeverity,
+        bugType: input.bugType,
+      });
+      if (r.bugId) {
+        bugIds.push(r.bugId);
+        firstBug = false;
+      }
+    } else if (item.changeSessionId) {
+      const r = await productReviewChangeSessionAction({
+        sessionId: item.changeSessionId,
+        passed: input.passed,
+        note: input.note,
+        pmProjectId: item.pmProjectId,
+        createBug: input.passed ? false : input.createBug !== false && firstBug,
+        bugTitle: input.bugTitle || (item.title ? `验收打回：${item.title}` : undefined),
+        bugSeverity: input.bugSeverity,
+        bugType: input.bugType,
+      });
+      if (r.bugId) {
+        bugIds.push(r.bugId);
+        firstBug = false;
+      }
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/todos");
+  return { ok: true as const, count: input.items.length, bugIds };
+}
+
 /** PM 工作台：变更会话验收（打回默认同建 Bug） */
 export async function productReviewChangeSessionAction(input: {
   sessionId: string;
@@ -903,9 +964,9 @@ export async function productReviewChangeSessionAction(input: {
   note?: string;
   pmProjectId?: string;
   createBug?: boolean;
-  bugTitle?: string;
   bugSeverity?: import("@/lib/types").BugSeverity;
   bugType?: import("@/lib/types").BugType;
+  bugTitle?: string;
 }) {
   await assertNotViewerWrite();
   const { updateChangeSession } = await import("@/lib/studio/mutations");

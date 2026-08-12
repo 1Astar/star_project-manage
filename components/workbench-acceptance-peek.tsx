@@ -11,6 +11,10 @@ import {
 } from "@/lib/studio/types";
 import { TASK_STATUS_LABELS, type TaskStatus } from "@/lib/types";
 import { openLiveSite } from "@/lib/project-live-url";
+import {
+  splitModuleMajorMinor,
+  UNCATEGORIZED_MODULE,
+} from "@/lib/workbench/acceptance-bundles";
 
 type PeekData = Awaited<ReturnType<typeof fetchWorkbenchAcceptancePeekAction>>;
 
@@ -37,30 +41,47 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
 }
 
 function SessionBody({ session }: { session: ChangeSession }) {
+  const { major, minor, path } = splitModuleMajorMinor(session.module);
   return (
     <div className="space-y-4">
+      <section className="rounded-lg border border-orange-100 bg-orange-50/50 px-3 py-2">
+        <h4 className="text-xs font-semibold text-slate-500">板块</h4>
+        <p className="mt-1 text-sm text-slate-900">
+          <span className="font-medium">大板块</span> {major}
+          {minor ? (
+            <>
+              <span className="mx-1.5 text-slate-300">·</span>
+              <span className="font-medium">小板块</span> {minor}
+            </>
+          ) : null}
+        </p>
+        {path !== UNCATEGORIZED_MODULE ? (
+          <p className="mt-0.5 text-[11px] text-slate-400">路径 {path}</p>
+        ) : (
+          <p className="mt-0.5 text-[11px] text-amber-700">未写板块，验收时难归类</p>
+        )}
+      </section>
       <section>
-        <h4 className="text-xs font-semibold text-slate-500">目标</h4>
+        <h4 className="text-xs font-semibold text-slate-500">改了什么（人话）</h4>
         <p className="mt-1 text-sm text-slate-900">{session.goal}</p>
       </section>
       {session.reason ? (
         <section>
-          <h4 className="text-xs font-semibold text-slate-500">原因</h4>
+          <h4 className="text-xs font-semibold text-slate-500">为何现在改 / 对用户影响</h4>
           <p className="mt-1 text-sm text-slate-700">{session.reason}</p>
         </section>
       ) : null}
-      <ListBlock title="期望效果" items={session.expected ?? []} />
-      <ListBlock title="已完成 ✅" items={session.doneItems ?? []} />
-      <ListBlock title="未完成 ❌" items={session.pendingItems ?? []} />
-      <ListBlock title="AI 操作" items={session.aiOps ?? []} />
+      <ListBlock title="怎么验（用户侧）" items={session.expected ?? []} />
       {session.result ? (
         <section>
-          <h4 className="text-xs font-semibold text-slate-500">结果</h4>
+          <h4 className="text-xs font-semibold text-slate-500">结果（用户能感知到什么）</h4>
           <p className="mt-1 text-sm text-slate-700">{session.result}</p>
         </section>
       ) : null}
+      <ListBlock title="已完成 ✅" items={session.doneItems ?? []} />
+      <ListBlock title="未完成 ❌" items={session.pendingItems ?? []} />
+      <ListBlock title="工程备注（可略读）" items={session.aiOps ?? []} />
       <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-        {session.module ? <StudioBadge>{session.module}</StudioBadge> : null}
         <span>{session.day}</span>
         <span>{CHANGE_SESSION_ACCEPTANCE_LABELS[session.humanAcceptance]}</span>
         <span>{session.status === "finished" ? "已收工" : "进行中"}</span>

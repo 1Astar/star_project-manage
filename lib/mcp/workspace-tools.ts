@@ -709,7 +709,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Publish Release",
       description:
-        "按项目汇总带板块的演进，创建 GitHub Release（含本版内容与板块），并把未挂版本的演进挂到该 tag。发版前请先确保 MCP/站内写入时带了 module。",
+        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。收工变更须带 module。",
       inputSchema: {
         projectId: z.string().min(1),
         tag: z.string().min(1).describe("版本号，如 v1.9.1"),
@@ -725,6 +725,10 @@ export function registerWorkspaceTools(server: McpServer) {
           .describe("默认 true：把未挂版本且有板块的演进挂到本 tag"),
         draft: z.boolean().optional(),
         prerelease: z.boolean().optional(),
+        forceSkipAcceptance: z
+          .boolean()
+          .optional()
+          .describe("强制跳过未验收板块门禁（需用户明确要求）"),
       },
     },
     async (input) => {
@@ -739,6 +743,7 @@ export function registerWorkspaceTools(server: McpServer) {
           attachUntaggedEvolution: input.attachUntaggedEvolution,
           draft: input.draft,
           prerelease: input.prerelease,
+          forceSkipAcceptance: input.forceSkipAcceptance,
         });
         let shippedSuggestions: unknown = null;
         try {
@@ -1165,13 +1170,19 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Start Change Session",
       description:
-        "改东西之前开一条 AI 变更会话：写修改目标/原因/期望效果。返回 sessionId，改完后用 finish_change_session。",
+        "改前开变更会话。字段用人话：goal=改了什么；reason=为何+对用户影响；expected=用户怎么验的路径；module必填大·小（如 八字·图鉴·大运流年）。禁止只写文件名/黑话。返回 sessionId，改完 finish_change_session。",
       inputSchema: {
         projectId: z.string().min(1),
-        goal: z.string().min(1).describe("修改目标"),
-        reason: z.string().optional().describe("修改原因"),
-        expected: stringList.describe("期望效果列表"),
-        module: z.string().optional(),
+        goal: z.string().min(1).describe("人话目标，例：统一大运/流年解释文案"),
+        reason: z
+          .string()
+          .optional()
+          .describe("为何现在改 + 对用户影响（验收主叙事）"),
+        expected: stringList.describe("怎么验：用户路径列表，非单测口号"),
+        module: z
+          .string()
+          .optional()
+          .describe("大板块·小板块…，例 八字·图鉴·大运流年"),
         requirementId: z.string().nullable().optional(),
         ideaId: z.string().nullable().optional(),
         day: z.string().optional().describe("YYYY-MM-DD，默认今天（上海）"),
@@ -1210,7 +1221,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Finish Change Session",
       description:
-        "改完后收尾变更会话：写入 ✅/❌、aiOps、result。默认进入待验清单并 PushPlus/站内提醒（不自动标已验收）。acceptancePolicy：remind=只提醒；user_waived=用户明确免验则 passed；auto_pass_small=小修/bug 自动 passed。省略时：像小修/bug 且无 pending → 自动过，否则提醒。",
+        "收尾变更会话。result=用户能感知到什么（含没改什么）；done/pending 用产品语言；工程细节放 aiOps。module 须大·小。默认按板块进待验汇总并 PushPlus。acceptancePolicy：remind / user_waived / auto_pass_small。",
       inputSchema: {
         sessionId: z.string().min(1),
         doneItems: stringList.describe("已完成项"),

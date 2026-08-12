@@ -9,8 +9,8 @@ export const maxDuration = 60;
 export const runtime = "nodejs";
 
 const handler = createMcpHandler(
-  (server) => {
-    registerStarPmTools(server);
+  async (server) => {
+    await registerStarPmTools(server);
   },
   {
     serverInfo: {
