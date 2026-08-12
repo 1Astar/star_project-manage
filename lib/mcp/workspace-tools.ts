@@ -709,7 +709,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Publish Release",
       description:
-        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。正式发版成功后汇总 PushPlus（日常收工不推）。收工变更须带 module。",
+        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。收工/发版均不即时 PushPlus，进晚报日总结（更新+待验收）。收工变更须带 module。",
       inputSchema: {
         projectId: z.string().min(1),
         tag: z.string().min(1).describe("版本号，如 v1.9.1"),

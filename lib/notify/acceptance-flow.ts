@@ -189,7 +189,7 @@ export function formatModuleAcceptancePush(input: {
 
 /**
  * After finish_change_session: apply A/B/C + 站内通知。
- * **不发 PushPlus**（用户约定：日常收工不推，发版时再汇总推）。
+ * **不发 PushPlus**（用户约定：收工/发版均不即时推；晚报日总结两条）。
  * 待验仍进工作台「待你验收」按项目×板块汇总。
  */
 export async function applyAcceptanceAfterFinish(input: {
@@ -238,14 +238,13 @@ export async function applyAcceptanceAfterFinish(input: {
     push: {
       ok: true,
       skipped: true,
-      reason: "收工不推送；发版 publish_release 时再汇总 PushPlus",
+      reason: "收工不推送；晚报日总结（更新 + 待验收）再推",
     },
   };
 }
 
 /**
- * 发版成功后汇总推送：本版板块 + 发布说明摘要 + 工作台/Release 链接。
- * draft 发版默认不推（可 force）。
+ * 发版摘要文案。默认不即时推，进晚报「今日更新」；`force` 才 PushPlus。
  */
 export function formatReleaseSummaryPush(input: {
   projectTitle: string;
@@ -294,14 +293,19 @@ export async function pushReleaseSummary(input: {
   githubUrl?: string;
   siteBaseUrl?: string | null;
   draft?: boolean;
-  /** draft 默认不推；true 时 draft 也推 */
+  /**
+   * 默认不即时推（进晚报「今日更新」）。
+   * true 时强制 PushPlus（含 draft 也可推）。
+   */
   force?: boolean;
 }): Promise<Awaited<ReturnType<typeof sendPushPlus>>> {
-  if (input.draft && !input.force) {
+  if (!input.force) {
     return {
       ok: true,
       skipped: true,
-      reason: "draft 发版默认不推送汇总",
+      reason: input.draft
+        ? "draft 发版不推送；正式发版也不即时推，进晚报日总结"
+        : "发版不即时推送；进晚报「今日更新」日总结",
     };
   }
   const base = resolveSiteBaseUrl(input.siteBaseUrl);

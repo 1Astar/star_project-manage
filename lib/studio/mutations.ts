@@ -1617,7 +1617,7 @@ export async function publishStudioProjectRelease(input: {
     modules: string[];
     skipped: boolean;
   };
-  /** 发版汇总 PushPlus（draft 默认跳过） */
+  /** 发版 PushPlus（默认跳过，进晚报日总结；force 才即时） */
   releasePush?: {
     ok: boolean;
     skipped?: boolean;
@@ -1728,7 +1728,7 @@ export async function publishStudioProjectRelease(input: {
   const githubUrl =
     gh.html_url || `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`;
 
-  // 正式发版才汇总 PushPlus（日常 finish_change_session 不推）
+  // 收工/发版均不即时 PushPlus；进晚报「今日更新」日总结（force 才即时推）
   let releasePush: Awaited<
     ReturnType<typeof import("@/lib/notify/acceptance-flow").pushReleaseSummary>
   > | null = null;

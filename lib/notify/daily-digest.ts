@@ -1,10 +1,16 @@
 /**
  * 每日工作台 PushPlus：
- * - 早报（今日要做/推荐）
- * - 晚报（待验收）
- * - 旧版综合日报（兼容）
+ * - 晚报两条：① 今日更新汇总 ② 待验收
+ * - 收工/发版即时不推（进日总结）
+ * - 旧版综合日报 / 早报格式（兼容）
  */
-import { getTodayFocus } from "@/lib/studio/data";
+import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import {
+  getAllChangeSessions,
+  getAllEvolutionLogs,
+  getAllProjects,
+  getTodayFocus,
+} from "@/lib/studio/data";
 import { listPendingGitSyncSuggestions } from "@/lib/mcp/suggest-from-commits";
 import {
   filterTomorrowDueOnly,
@@ -18,6 +24,17 @@ import { absoluteAppUrl, resolveSiteBaseUrl } from "@/lib/notify/site-url";
 
 const MAX_PER_SECTION = 8;
 
+/** Asia/Shanghai 日历日 YYYY-MM-DD（避免依赖 mutations 大模块） */
+function shanghaiDay(iso?: string | null): string {
+  const d = iso ? new Date(iso) : new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
 export type DigestLine = {
   title: string;
   meta?: string;
@@ -27,6 +44,8 @@ export type DigestLine = {
 
 export type DailyDigestSections = {
   todayDay: string;
+  /** 今日已更新（收工会话 / 演进 / 发版） */
+  updates: DigestLine[];
   acceptance: DigestLine[];
   gitSync: DigestLine[];
   todayTodos: DigestLine[];
@@ -70,6 +89,18 @@ function formatSection(
   return `## ${heading}\n${body}`;
 }
 
+function emptySectionsStub(): DailyDigestSections {
+  return {
+    todayDay: "",
+    updates: [],
+    acceptance: [],
+    gitSync: [],
+    todayTodos: [],
+    yesterdayOpen: [],
+    hubHref: "",
+  };
+}
+
 /** 纯函数：把各块数据排成 Markdown（便于单测） */
 export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
   title: string;
@@ -77,6 +108,7 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
   total: number;
 } {
   const total =
+    sections.updates.length +
     sections.acceptance.length +
     sections.gitSync.length +
     sections.todayTodos.length +
@@ -88,6 +120,7 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
       : `Star PM · ${sections.todayDay} 日报（${total}）`;
 
   const content = [
+    formatSection("今日更新", sections.updates, "无"),
     formatSection("待你验收", sections.acceptance, "无"),
     formatSection("Git 同步建议", sections.gitSync, "无待确认"),
     formatSection("今日待办", sections.todayTodos, "无"),
@@ -99,7 +132,7 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
   return { title, content, total };
 }
 
-/** 早 9:00：今日要做 / 推荐 */
+/** @deprecated 早报今日要做；现改晚报双推，保留兼容 */
 export function formatMorningDigestMarkdown(sections: DailyDigestSections): {
   title: string;
   content: string;
@@ -123,7 +156,26 @@ export function formatMorningDigestMarkdown(sections: DailyDigestSections): {
   return { title, content, total };
 }
 
-/** 晚 18:30：待验收汇总 */
+/** 日报①：今日更新过的内容 */
+export function formatUpdatesDigestMarkdown(sections: DailyDigestSections): {
+  title: string;
+  content: string;
+  total: number;
+} {
+  const total = sections.updates.length;
+  const title =
+    total === 0
+      ? `Star PM · ${sections.todayDay} · 今日暂无更新`
+      : `Star PM · ${sections.todayDay} · 今日更新（${total}）`;
+  const content = [
+    formatSection("今日更新", sections.updates, "今天没有收工/演进/发版记录"),
+    "",
+    `工作台：${mdLink("打开工作台", sections.hubHref)}`,
+  ].join("\n\n");
+  return { title, content, total };
+}
+
+/** 日报②：待验收汇总 */
 export function formatEveningAcceptanceMarkdown(sections: DailyDigestSections): {
   title: string;
   content: string;
@@ -132,8 +184,8 @@ export function formatEveningAcceptanceMarkdown(sections: DailyDigestSections): 
   const total = sections.acceptance.length;
   const title =
     total === 0
-      ? `Star PM · ${sections.todayDay} 晚报 · 暂无待验收`
-      : `Star PM · ${sections.todayDay} 晚报 · 待你验收（${total}板块）`;
+      ? `Star PM · ${sections.todayDay} · 暂无待验收`
+      : `Star PM · ${sections.todayDay} · 待你验收（${total}板块）`;
   const content = [
     formatSection("待你验收", sections.acceptance, "今天没有待验板块"),
     "",
@@ -155,6 +207,10 @@ export async function collectDailyDigestSections(opts?: {
     focus,
     agenda,
     openBugs,
+    projects,
+    sessions,
+    evolutions,
+    snapshot,
   ] = await Promise.all([
     getPmAcceptanceQueue({ todayDay }),
     getPmFollowUps({ todayDay }),
@@ -162,10 +218,78 @@ export async function collectDailyDigestSections(opts?: {
     getTodayFocus(),
     getTomorrowAgenda({ todayDay }),
     getOpenBugsAcrossProjects(),
+    getAllProjects(),
+    getAllChangeSessions(),
+    getAllEvolutionLogs(),
+    getScopedStudioSnapshot(),
   ]);
 
-  const day = acceptanceQ.todayDay;
+  const day = todayDay?.trim().slice(0, 10) || acceptanceQ.todayDay;
   const hubHref = abs(base, "/?focus=pm-today") || "/?focus=pm-today";
+  const projectTitle = (id: string) =>
+    projects.find((p) => p.id === id)?.title?.trim() || id;
+
+  const updates: DigestLine[] = [];
+
+  const finishedToday = sessions
+    .filter((s) => {
+      if (s.status !== "finished" && !s.finishedAt) return false;
+      const d =
+        s.day ||
+        shanghaiDay(s.finishedAt) ||
+        shanghaiDay(s.updatedAt) ||
+        shanghaiDay(s.createdAt);
+      return d === day;
+    })
+    .sort((a, b) =>
+      (b.finishedAt || b.updatedAt).localeCompare(a.finishedAt || a.updatedAt),
+    );
+
+  for (const s of finishedToday.slice(0, MAX_PER_SECTION)) {
+    const mod = s.module?.trim() || "未分板块";
+    const result = (s.result || s.goal || "").trim();
+    updates.push({
+      title: `${projectTitle(s.projectId)} / ${mod}`,
+      meta: result
+        ? result.slice(0, 48) + (result.length > 48 ? "…" : "")
+        : "变更会话已收工",
+      href: abs(base, `/projects/${s.projectId}/evolution`),
+    });
+  }
+
+  const evoToday = evolutions
+    .filter((e) => shanghaiDay(e.createdAt) === day)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  for (const e of evoToday.slice(0, MAX_PER_SECTION)) {
+    // 避免与同日会话完全重复：同项目同标题且已有会话行则跳过标题撞车；仍列出演进决策
+    const title = `${projectTitle(e.projectId)} · ${e.title}`;
+    if (updates.some((u) => u.title.startsWith(`${projectTitle(e.projectId)} /`) && u.meta?.includes(e.title))) {
+      continue;
+    }
+    updates.push({
+      title,
+      meta: [e.module?.trim(), e.after?.trim() || e.decision?.trim()]
+        .filter(Boolean)
+        .map((t) => (t!.length > 40 ? `${t!.slice(0, 40)}…` : t))
+        .join(" · ") || "演进",
+      href: abs(base, `/projects/${e.projectId}/evolution`),
+    });
+  }
+
+  const releases = snapshot.releases ?? [];
+  const releaseToday = releases
+    .filter((r) => r.publishedAt && shanghaiDay(r.publishedAt) === day)
+    .sort((a, b) => (b.publishedAt || "").localeCompare(a.publishedAt || ""));
+
+  for (const r of releaseToday.slice(0, 4)) {
+    updates.push({
+      title: `${projectTitle(r.projectId)} · 发版 ${r.tag}`,
+      meta: r.name?.trim() || "Release",
+      href: abs(base, `/projects/${r.projectId}`),
+      externalHref: r.htmlUrl || null,
+    });
+  }
 
   const acceptance: DigestLine[] = acceptanceQ.bundles
     .slice(0, MAX_PER_SECTION)
@@ -248,6 +372,7 @@ export async function collectDailyDigestSections(opts?: {
 
   return {
     todayDay: day,
+    updates: updates.slice(0, MAX_PER_SECTION + 4),
     acceptance,
     gitSync,
     todayTodos: todayTodos.slice(0, MAX_PER_SECTION),
@@ -265,13 +390,15 @@ async function pushFormattedDigest(opts: {
     content: string;
     total: number;
   };
+  /** 复用已收集的 sections，避免双推时查库两次 */
+  sections?: DailyDigestSections;
 }): Promise<{
   sent: boolean;
   total: number;
   sections: DailyDigestSections;
   push: Awaited<ReturnType<typeof sendPushPlus>>;
 }> {
-  const sections = await collectDailyDigestSections(opts);
+  const sections = opts.sections ?? (await collectDailyDigestSections(opts));
   const formatted = opts.format(sections);
   if (formatted.total === 0 && opts.pushEmpty === false) {
     return {
@@ -314,7 +441,7 @@ export async function pushDailyWorkbenchDigest(opts?: {
   });
 }
 
-/** 早报：今日要做 / 推荐（默认空则不推） */
+/** @deprecated 早报今日要做；默认改晚报双推 */
 export async function pushMorningWorkbenchDigest(opts?: {
   siteBaseUrl?: string | null;
   todayDay?: string;
@@ -328,16 +455,64 @@ export async function pushMorningWorkbenchDigest(opts?: {
   });
 }
 
-/** 晚报：待验收汇总（默认空则不推） */
-export async function pushEveningAcceptanceDigest(opts?: {
+/** 日报①：今日更新（默认空则不推） */
+export async function pushDailyUpdatesDigest(opts?: {
   siteBaseUrl?: string | null;
   todayDay?: string;
   pushEmpty?: boolean;
+  sections?: DailyDigestSections;
 }) {
   return pushFormattedDigest({
     siteBaseUrl: opts?.siteBaseUrl,
     todayDay: opts?.todayDay,
     pushEmpty: opts?.pushEmpty ?? false,
+    sections: opts?.sections,
+    format: formatUpdatesDigestMarkdown,
+  });
+}
+
+/** 日报②：待验收汇总（默认空则不推） */
+export async function pushEveningAcceptanceDigest(opts?: {
+  siteBaseUrl?: string | null;
+  todayDay?: string;
+  pushEmpty?: boolean;
+  sections?: DailyDigestSections;
+}) {
+  return pushFormattedDigest({
+    siteBaseUrl: opts?.siteBaseUrl,
+    todayDay: opts?.todayDay,
+    pushEmpty: opts?.pushEmpty ?? false,
+    sections: opts?.sections,
     format: formatEveningAcceptanceMarkdown,
   });
 }
+
+/**
+ * 晚报一次跑完：先推「今日更新」，再推「待验收」（两条独立 PushPlus）。
+ * 空的那条默认跳过。
+ */
+export async function pushEveningDailySummaries(opts?: {
+  siteBaseUrl?: string | null;
+  todayDay?: string;
+  pushEmpty?: boolean;
+}): Promise<{
+  sections: DailyDigestSections;
+  updates: Awaited<ReturnType<typeof pushDailyUpdatesDigest>>;
+  acceptance: Awaited<ReturnType<typeof pushEveningAcceptanceDigest>>;
+}> {
+  const sections = await collectDailyDigestSections(opts);
+  const pushEmpty = opts?.pushEmpty ?? false;
+  const updates = await pushDailyUpdatesDigest({
+    ...opts,
+    pushEmpty,
+    sections,
+  });
+  const acceptance = await pushEveningAcceptanceDigest({
+    ...opts,
+    pushEmpty,
+    sections,
+  });
+  return { sections, updates, acceptance };
+}
+
+export { emptySectionsStub };
