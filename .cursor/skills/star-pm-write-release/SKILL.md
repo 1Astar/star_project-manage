@@ -114,9 +114,9 @@ description: >-
 
 | 策略 | 何时 | `acceptancePolicy` | 结果 |
 |------|------|-------------------|------|
-| **A 默认提醒** | **产品行为变化** / 不确定 | `remind` 或省略（非小修） | `unreviewed` → 并入板块汇总卡 + 按板块 PushPlus；**用户整板块或单条点通过** |
+| **A 默认提醒** | **产品行为变化** / 不确定 | `remind` 或省略（非小修） | `unreviewed` → 并入板块汇总卡（**收工不 Push**）；**用户整板块或单条点通过** |
 | **B 用户免验** | 用户明确说「这次不用我验 / 直接过 / 免验」 | **`user_waived`** | 标 `passed` |
-| **C 小修** | 纯修复、hotfix、文案/样式、**文档 / skill / changelog**，且 `pendingItems` 空 | **`auto_pass_small`**（或启发式） | 标 `passed`，推送「已自动验收：项目 / 板块」 |
+| **C 小修** | 纯修复、hotfix、文案/样式、**文档 / skill / changelog**，且 `pendingItems` 空 | **`auto_pass_small`**（或启发式） | 标 `passed`（收工不 Push） |
 
 补充闭环：
 
@@ -124,7 +124,7 @@ description: >-
 2. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug`），挂板块/会话。  
 3. AI 做完补充 → 再 `finish_change_session`（小修用 C；行为变化用 A）。  
 4. **禁止**对大功能静默 `humanAcceptance=passed`。  
-5. 推送**按板块一条**：标题 `待你验收：项目 / 板块（N项）`；正文含为何 / 结果 / 怎么验 / **明细列表** + 工作台链接。同板块再收工会再推更新后的汇总（不限全站一条）。日报同样按板块。  
+5. **推送节奏（硬）**：**日常 `finish_change_session` 不发 PushPlus**（只进工作台待验）。**正式 `publish_release` 成功后**再汇总推一条（本版板块 + 说明摘要 + Release/工作台链接）。`draft` 发版默认不推。日报 cron 另计。  
 6. **发版门禁**：`publish_release` 若该项目仍有未验板块（含未分板块）则失败；`draft` 或用户明确要求时用 `forceSkipAcceptance=true`。
 
 ### 1.4 Evolution 写入标准

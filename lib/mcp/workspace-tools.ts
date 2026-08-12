@@ -709,7 +709,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Publish Release",
       description:
-        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。收工变更须带 module。",
+        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。正式发版成功后汇总 PushPlus（日常收工不推）。收工变更须带 module。",
       inputSchema: {
         projectId: z.string().min(1),
         tag: z.string().min(1).describe("版本号，如 v1.9.1"),
@@ -1221,7 +1221,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Finish Change Session",
       description:
-        "收尾变更会话。result=用户能感知到什么（含没改什么）；done/pending 用产品语言；工程细节放 aiOps。module 须大·小。默认按板块进待验汇总并 PushPlus。acceptancePolicy：remind / user_waived / auto_pass_small。",
+        "收尾变更会话。result=用户能感知到什么（含没改什么）；done/pending 用产品语言；工程细节放 aiOps。module 须大·小。默认按板块进待验汇总；**收工不发 PushPlus**（发版时汇总推）。acceptancePolicy：remind / user_waived / auto_pass_small。",
       inputSchema: {
         sessionId: z.string().min(1),
         doneItems: stringList.describe("已完成项"),
@@ -1278,7 +1278,7 @@ export function registerWorkspaceTools(server: McpServer) {
             push: acceptance.push,
             nextStep: acceptance.autoPass
               ? "已自动标 passed（小修或用户免验）。大功能若误过，可 update_change_session 改回 unreviewed。"
-              : "已进工作台待验收清单并尝试 PushPlus。请用户在工作台点通过/退回；退回时记 Bug/优化到 PM。",
+              : "已进工作台待验收清单（收工不推微信）。发版 publish_release 时再汇总 PushPlus。请在工作台点通过/退回；退回时记 Bug/优化到 PM。",
           },
         });
       } catch (error) {

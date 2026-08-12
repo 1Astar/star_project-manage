@@ -1617,6 +1617,14 @@ export async function publishStudioProjectRelease(input: {
     modules: string[];
     skipped: boolean;
   };
+  /** 发版汇总 PushPlus（draft 默认跳过） */
+  releasePush?: {
+    ok: boolean;
+    skipped?: boolean;
+    reason?: string;
+    error?: string;
+    data?: unknown;
+  } | null;
 }> {
   const snapshot = await getStudioSnapshot();
   const project = snapshot.projects.find((p) => p.id === input.projectId);
@@ -1716,12 +1724,36 @@ export async function publishStudioProjectRelease(input: {
       syncedAt: nowIso(),
     } satisfies StudioRelease);
 
+  const modules = modulesForReleaseTag(tag, evolution);
+  const githubUrl =
+    gh.html_url || `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`;
+
+  // 正式发版才汇总 PushPlus（日常 finish_change_session 不推）
+  let releasePush: Awaited<
+    ReturnType<typeof import("@/lib/notify/acceptance-flow").pushReleaseSummary>
+  > | null = null;
+  try {
+    const { pushReleaseSummary } = await import("@/lib/notify/acceptance-flow");
+    releasePush = await pushReleaseSummary({
+      projectTitle: project.title,
+      tag,
+      modules,
+      releaseName: input.name || tag,
+      bodyPreview: body,
+      githubUrl,
+      draft: input.draft,
+    });
+  } catch {
+    releasePush = null;
+  }
+
   return {
     release,
-    githubUrl: gh.html_url || `${buildRepoUrl(repo)}/releases/tag/${encodeURIComponent(tag)}`,
-    modules: modulesForReleaseTag(tag, evolution),
+    githubUrl,
+    modules,
     attachedEvolutionIds,
     acceptanceReview,
+    releasePush,
   };
 }
 

@@ -43,7 +43,7 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 
 每日 **`sync-git`**（cron）在写入新 commit 后，会用 commit message 模糊匹配未完成需求，写入待确认建议；**不自动改状态**。用 **`list_git_sync_suggestions`** 查看，**`confirm_git_sync_suggestions`**（`accept` / `dismiss`）确认。
 
-**人工验收（按板块汇总 + A+B+C）**：`finish_change_session` 须带 `module` + 为何/结果/`expected`（怎么验）。默认进工作台「待你验收」**按项目×板块汇总**并按板块 PushPlus，**不代点通过**。仅 `user_waived` 或小修/文档/skill（`auto_pass_small` / 启发式）才标 `passed`。缺板块进「未分板块」。`publish_release` 有未验板块则阻断（`draft` / `forceSkipAcceptance` 可跳过）。打回须记 Bug。环境变量：`PUSHPLUS_TOKEN`。
+**人工验收（按板块汇总 + A+B+C）**：`finish_change_session` 须带 `module` + 为何/结果/`expected`（怎么验）。默认进工作台「待你验收」**按项目×板块汇总**，**收工不发 PushPlus**；仅正式 `publish_release` 成功后再汇总推送。仅 `user_waived` 或小修/文档/skill（`auto_pass_small` / 启发式）才标 `passed`。缺板块进「未分板块」。`publish_release` 有未验板块则阻断（`draft` / `forceSkipAcceptance` 可跳过）。打回须记 Bug。环境变量：`PUSHPLUS_TOKEN`。
 
 ---
 
@@ -75,6 +75,7 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 4. **开新项目 / 从零搭能力前**：先看一下 GitHub 上有没有能直接复用的项目，或者能部分拿来用的；简要交代候选与取舍后再动手（Agent Skill：`using-star-skills`）。用户明确说不必检索时可跳过。  
 5. **计划 / 项目需求直接写进 Star PM**（有则写之，无则跳过）  
 6. 对齐后 **开做**；默认不写 `docs/superpowers/specs/*`（除非用户明确要设计文档）  
+   - **Agent 注意：** Codex 自带 `brainstorming` 仍含「写 spec」步骤；Star 仓以本库覆盖 skill + 上文为准，**不要问用户要不要写 spec**。 
 7. **验收 / 发版前**：对照初始要求 + 全链路核对，再跑技术检查  
 8. **做完一条仍有未完成时**：PM「下一步」+ 当面告知**接下来接哪条**；用户插队搁置原计划 → 写清搁置，插队做完**必须归队**；不做/后期说清，避免双方都不知道做什么（见 `star-pm-write-release` §1.5、`defer-scope-record`）  
 

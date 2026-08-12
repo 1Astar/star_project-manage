@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  formatReleaseSummaryPush,
   looksLikeSmallFix,
   resolveAcceptancePolicy,
 } from "@/lib/notify/acceptance-flow";
@@ -44,6 +45,21 @@ assert.ok(!looksLikeSmallFix("工作台月历待办表大功能"));
     pendingItems: [],
   });
   assert.equal(r.autoPass, false);
+}
+
+{
+  const push = formatReleaseSummaryPush({
+    projectTitle: "Star PM",
+    tag: "v1.13.1",
+    modules: ["工作台·验收·推送节奏"],
+    releaseName: "v1.13.1 收工不推、发版汇总推",
+    bodyPreview: "- 收工不 Push\n- 发版汇总推",
+    githubUrl: "https://github.com/1Astar/star_project-manage/releases/tag/v1.13.1",
+    workbenchUrl: "https://pm.starry-studio.cn/?focus=pm-today",
+  });
+  assert.match(push.title, /已发版/);
+  assert.match(push.content, /本版板块/);
+  assert.match(push.content, /Release：/);
 }
 
 console.log("lib/notify/acceptance-flow.test.ts ok");

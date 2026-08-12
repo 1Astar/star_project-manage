@@ -188,8 +188,9 @@ export function formatModuleAcceptancePush(input: {
 }
 
 /**
- * After finish_change_session: apply A/B/C + PushPlus + in-app notification.
- * 待验：按「项目×板块」汇总成**一条**推送（含明细）；自动过仍推本条短讯。
+ * After finish_change_session: apply A/B/C + 站内通知。
+ * **不发 PushPlus**（用户约定：日常收工不推，发版时再汇总推）。
+ * 待验仍进工作台「待你验收」按项目×板块汇总。
  */
 export async function applyAcceptanceAfterFinish(input: {
   session: ChangeSession;
@@ -229,60 +230,93 @@ export async function applyAcceptanceAfterFinish(input: {
 
   await addAcceptanceNotification(session, resolved.autoPass, module, projectTitle);
 
-  const base = resolveSiteBaseUrl(input.siteBaseUrl);
-  const workbenchUrl = absoluteAppUrl(base, "/?focus=pm-today");
-  const evolutionUrl = absoluteAppUrl(
-    base,
-    `/projects/${session.projectId}/evolution`
-  );
-
-  let bundle: PmAcceptanceBundle | null = null;
-  if (!resolved.autoPass) {
-    try {
-      const { getPmAcceptanceQueue } = await import("@/lib/workbench/pm-inbox");
-      const q = await getPmAcceptanceQueue({ projectId: session.projectId });
-      bundle =
-        q.bundles.find(
-          (b) =>
-            b.projectId === session.projectId &&
-            normalizeModulePath(b.module) === module
-        ) ?? null;
-    } catch {
-      bundle = null;
-    }
-  }
-
-  const formatted = formatModuleAcceptancePush({
-    projectTitle,
-    module,
-    bundle,
-    session,
-    workbenchUrl,
-    evolutionUrl,
-    policyReason: resolved.reason,
-    autoPass: resolved.autoPass,
-  });
-
-  // 自动过：短讯即可，不必灌明细列表
-  const pushPayload = resolved.autoPass
-    ? {
-        title: formatted.title,
-        content: [
-          ...formatSessionAcceptanceLines(session),
-          `打开：${workbenchUrl}`,
-        ].join("\n"),
-      }
-    : formatted;
-
-  const push = await sendPushPlus(pushPayload);
-
   return {
     session,
     policy: resolved.policy,
     autoPass: resolved.autoPass,
     reason: resolved.reason,
-    push,
+    push: {
+      ok: true,
+      skipped: true,
+      reason: "收工不推送；发版 publish_release 时再汇总 PushPlus",
+    },
   };
+}
+
+/**
+ * 发版成功后汇总推送：本版板块 + 发布说明摘要 + 工作台/Release 链接。
+ * draft 发版默认不推（可 force）。
+ */
+export function formatReleaseSummaryPush(input: {
+  projectTitle: string;
+  tag: string;
+  modules: string[];
+  releaseName?: string;
+  bodyPreview?: string;
+  githubUrl?: string;
+  workbenchUrl: string;
+  draft?: boolean;
+}): { title: string; content: string } {
+  const tag = input.tag.trim();
+  const title = `Star PM · 已发版：${input.projectTitle} ${tag}`;
+  const mods = input.modules.filter(Boolean);
+  const preview = (input.bodyPreview ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter(Boolean)
+    .slice(0, 24)
+    .join("\n");
+
+  const content = [
+    `【${input.projectTitle}】${input.releaseName || tag}`,
+    input.draft ? "（draft，未正式推送渠道也记一笔）" : "",
+    "",
+    mods.length ? `本版板块：${mods.join("、")}` : "本版板块：（未挂 module 的演进未计入）",
+    "",
+    preview ? ["发布说明摘要：", preview].join("\n") : "发布说明：（空）",
+    "",
+    `工作台：${input.workbenchUrl}`,
+    ...(input.githubUrl ? [`Release：${input.githubUrl}`] : []),
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  return { title, content };
+}
+
+export async function pushReleaseSummary(input: {
+  projectTitle: string;
+  tag: string;
+  modules: string[];
+  releaseName?: string;
+  bodyPreview?: string;
+  githubUrl?: string;
+  siteBaseUrl?: string | null;
+  draft?: boolean;
+  /** draft 默认不推；true 时 draft 也推 */
+  force?: boolean;
+}): Promise<Awaited<ReturnType<typeof sendPushPlus>>> {
+  if (input.draft && !input.force) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "draft 发版默认不推送汇总",
+    };
+  }
+  const base = resolveSiteBaseUrl(input.siteBaseUrl);
+  const workbenchUrl = absoluteAppUrl(base, "/?focus=pm-today");
+  const formatted = formatReleaseSummaryPush({
+    projectTitle: input.projectTitle,
+    tag: input.tag,
+    modules: input.modules,
+    releaseName: input.releaseName,
+    bodyPreview: input.bodyPreview,
+    githubUrl: input.githubUrl,
+    workbenchUrl,
+    draft: input.draft,
+  });
+  return sendPushPlus(formatted);
 }
 
 /** @deprecated 使用 pushDailyWorkbenchDigest；保留别名给旧 cron */
