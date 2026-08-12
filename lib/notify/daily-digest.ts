@@ -1,6 +1,8 @@
 /**
- * 每日工作台 PushPlus 综合摘要：
- * Git 同步建议 · 待验收 · 今日待办 · 昨日未完成（带可点页面链接）
+ * 每日工作台 PushPlus：
+ * - 早报（今日要做/推荐）
+ * - 晚报（待验收）
+ * - 旧版综合日报（兼容）
  */
 import { getTodayFocus } from "@/lib/studio/data";
 import { listPendingGitSyncSuggestions } from "@/lib/mcp/suggest-from-commits";
@@ -94,6 +96,49 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
     `工作台：${mdLink("打开今日要做", sections.hubHref)}`,
   ].join("\n\n");
 
+  return { title, content, total };
+}
+
+/** 早 9:00：今日要做 / 推荐 */
+export function formatMorningDigestMarkdown(sections: DailyDigestSections): {
+  title: string;
+  content: string;
+  total: number;
+} {
+  const total =
+    sections.todayTodos.length +
+    sections.yesterdayOpen.length +
+    sections.gitSync.length;
+  const title =
+    total === 0
+      ? `Star PM · ${sections.todayDay} 早报 · 暂无推荐`
+      : `Star PM · ${sections.todayDay} 早报 · 今日要做（${total}）`;
+  const content = [
+    formatSection("今日要做 / 推荐", sections.todayTodos, "暂无，可打开工作台扫一眼"),
+    formatSection("昨天未完成", sections.yesterdayOpen, "无"),
+    formatSection("Git 同步建议", sections.gitSync, "无待确认"),
+    "",
+    `工作台：${mdLink("打开今日要做", sections.hubHref)}`,
+  ].join("\n\n");
+  return { title, content, total };
+}
+
+/** 晚 18:30：待验收汇总 */
+export function formatEveningAcceptanceMarkdown(sections: DailyDigestSections): {
+  title: string;
+  content: string;
+  total: number;
+} {
+  const total = sections.acceptance.length;
+  const title =
+    total === 0
+      ? `Star PM · ${sections.todayDay} 晚报 · 暂无待验收`
+      : `Star PM · ${sections.todayDay} 晚报 · 待你验收（${total}板块）`;
+  const content = [
+    formatSection("待你验收", sections.acceptance, "今天没有待验板块"),
+    "",
+    `工作台：${mdLink("打开待验收", sections.hubHref)}`,
+  ].join("\n\n");
   return { title, content, total };
 }
 
@@ -211,14 +256,15 @@ export async function collectDailyDigestSections(opts?: {
   };
 }
 
-/**
- * 每日综合推送。无任何条目时仍可发「暂无待办」短讯（便于确认 cron 活着）；
- * 若 pushEmpty=false 则跳过空日报。
- */
-export async function pushDailyWorkbenchDigest(opts?: {
+async function pushFormattedDigest(opts: {
   siteBaseUrl?: string | null;
   todayDay?: string;
   pushEmpty?: boolean;
+  format: (sections: DailyDigestSections) => {
+    title: string;
+    content: string;
+    total: number;
+  };
 }): Promise<{
   sent: boolean;
   total: number;
@@ -226,13 +272,13 @@ export async function pushDailyWorkbenchDigest(opts?: {
   push: Awaited<ReturnType<typeof sendPushPlus>>;
 }> {
   const sections = await collectDailyDigestSections(opts);
-  const formatted = formatDailyDigestMarkdown(sections);
-  if (formatted.total === 0 && opts?.pushEmpty === false) {
+  const formatted = opts.format(sections);
+  if (formatted.total === 0 && opts.pushEmpty === false) {
     return {
       sent: false,
       total: 0,
       sections,
-      push: { ok: true, skipped: true, reason: "日报为空" },
+      push: { ok: true, skipped: true, reason: "摘要为空" },
     };
   }
   const push = await sendPushPlus({
@@ -246,4 +292,52 @@ export async function pushDailyWorkbenchDigest(opts?: {
     sections,
     push,
   };
+}
+
+/**
+ * 每日综合推送（兼容旧 cron）。无任何条目时仍可发「暂无待办」短讯；
+ * 若 pushEmpty=false 则跳过空日报。
+ */
+export async function pushDailyWorkbenchDigest(opts?: {
+  siteBaseUrl?: string | null;
+  todayDay?: string;
+  pushEmpty?: boolean;
+}): Promise<{
+  sent: boolean;
+  total: number;
+  sections: DailyDigestSections;
+  push: Awaited<ReturnType<typeof sendPushPlus>>;
+}> {
+  return pushFormattedDigest({
+    ...opts,
+    format: formatDailyDigestMarkdown,
+  });
+}
+
+/** 早报：今日要做 / 推荐（默认空则不推） */
+export async function pushMorningWorkbenchDigest(opts?: {
+  siteBaseUrl?: string | null;
+  todayDay?: string;
+  pushEmpty?: boolean;
+}) {
+  return pushFormattedDigest({
+    siteBaseUrl: opts?.siteBaseUrl,
+    todayDay: opts?.todayDay,
+    pushEmpty: opts?.pushEmpty ?? false,
+    format: formatMorningDigestMarkdown,
+  });
+}
+
+/** 晚报：待验收汇总（默认空则不推） */
+export async function pushEveningAcceptanceDigest(opts?: {
+  siteBaseUrl?: string | null;
+  todayDay?: string;
+  pushEmpty?: boolean;
+}) {
+  return pushFormattedDigest({
+    siteBaseUrl: opts?.siteBaseUrl,
+    todayDay: opts?.todayDay,
+    pushEmpty: opts?.pushEmpty ?? false,
+    format: formatEveningAcceptanceMarkdown,
+  });
 }

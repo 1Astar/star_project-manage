@@ -124,7 +124,8 @@ description: >-
 2. 用户验收打回或口述 bug/优化 → **立刻记入 PM**（`create_bug`），挂板块/会话。  
 3. AI 做完补充 → 再 `finish_change_session`（小修用 C；行为变化用 A）。  
 4. **禁止**对大功能静默 `humanAcceptance=passed`。  
-5. **推送节奏（硬）**：**日常 `finish_change_session` 不发 PushPlus**（只进工作台待验）。**正式 `publish_release` 成功后**再汇总推一条（本版板块 + 说明摘要 + Release/工作台链接）。`draft` 发版默认不推。日报 cron 另计。  
+5. **推送节奏（硬）**：**日常 `finish_change_session` 不发 PushPlus**（只进工作台待验）。**正式 `publish_release` 成功后**再汇总推一条（本版板块 + 说明摘要 + Release/工作台链接）。`draft` 发版默认不推。  
+   **定时推送（上海时区）**：每天 **09:00** 早报（今日要做/推荐）；每天 **18:30** 晚报（待验收板块汇总）。空队列默认不推。  
 6. **发版门禁**：`publish_release` 若该项目仍有未验板块（含未分板块）则失败；`draft` 或用户明确要求时用 `forceSkipAcceptance=true`。
 
 ### 1.4 Evolution 写入标准

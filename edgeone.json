@@ -19,11 +19,18 @@
   },
   "schedules": [
     {
-      "name": "cron-reminders",
+      "name": "cron-reminders-morning",
       "cron": "0 9 * * *",
       "path": "/api/cron/reminders",
       "method": "GET",
-      "timezone": "UTC"
+      "timezone": "Asia/Shanghai"
+    },
+    {
+      "name": "cron-acceptance-evening",
+      "cron": "30 18 * * *",
+      "path": "/api/cron/acceptance-digest",
+      "method": "GET",
+      "timezone": "Asia/Shanghai"
     },
     {
       "name": "cron-sync-ideas",

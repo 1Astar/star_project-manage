@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   formatDailyDigestMarkdown,
+  formatEveningAcceptanceMarkdown,
+  formatMorningDigestMarkdown,
   type DailyDigestSections,
 } from "@/lib/notify/daily-digest";
 import { absoluteAppUrl, resolveSiteBaseUrl } from "@/lib/notify/site-url";
@@ -85,6 +87,48 @@ import { absoluteAppUrl, resolveSiteBaseUrl } from "@/lib/notify/site-url";
   });
   assert.equal(empty.total, 0);
   assert.match(empty.title, /暂无待办/);
+}
+
+{
+  const morning = formatMorningDigestMarkdown({
+    todayDay: "2026-08-12",
+    hubHref: "https://pm.starry-studio.cn/?focus=pm-today",
+    acceptance: [{ title: "不应出现在早报", href: null }],
+    gitSync: [],
+    todayTodos: [
+      {
+        title: "主线 · Star PM",
+        meta: "做早晚报",
+        href: "https://pm.starry-studio.cn/projects/proj-star-pm",
+      },
+    ],
+    yesterdayOpen: [],
+  });
+  assert.equal(morning.total, 1);
+  assert.match(morning.title, /早报 · 今日要做/);
+  assert.match(morning.content, /今日要做 \/ 推荐/);
+  assert.doesNotMatch(morning.content, /不应出现在早报/);
+}
+
+{
+  const evening = formatEveningAcceptanceMarkdown({
+    todayDay: "2026-08-12",
+    hubHref: "https://pm.starry-studio.cn/?focus=pm-today",
+    acceptance: [
+      {
+        title: "随心而行 / 玩法·双盘·映照",
+        meta: "2 项",
+        href: "https://pm.starry-studio.cn/?focus=pm-today",
+      },
+    ],
+    gitSync: [{ title: "不应出现在晚报", href: null }],
+    todayTodos: [],
+    yesterdayOpen: [],
+  });
+  assert.equal(evening.total, 1);
+  assert.match(evening.title, /晚报 · 待你验收/);
+  assert.match(evening.content, /待你验收/);
+  assert.doesNotMatch(evening.content, /不应出现在晚报/);
 }
 
 console.log("lib/notify/daily-digest.test.ts ok");

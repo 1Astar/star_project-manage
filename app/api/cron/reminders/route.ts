@@ -1,20 +1,24 @@
 import { NextResponse } from "next/server";
 import { authorizeCronRequest } from "@/lib/cron/authorize";
 import { runDeadlineReminders } from "@/lib/db/local-store";
-import { pushDailyWorkbenchDigest } from "@/lib/notify/daily-digest";
+import { pushMorningWorkbenchDigest } from "@/lib/notify/daily-digest";
 
+/**
+ * 早报 cron（上海 09:00 ≈ UTC 01:00）：
+ * 期限提醒 + 今日要做 / 推荐 PushPlus
+ */
 export async function GET(request: Request) {
   if (!authorizeCronRequest(request)) {
     return NextResponse.json({ error: "未授权" }, { status: 401 });
   }
 
   const result = await runDeadlineReminders();
-  let dailyDigest: Awaited<ReturnType<typeof pushDailyWorkbenchDigest>> | null =
+  let morningDigest: Awaited<ReturnType<typeof pushMorningWorkbenchDigest>> | null =
     null;
   try {
-    dailyDigest = await pushDailyWorkbenchDigest({ pushEmpty: false });
+    morningDigest = await pushMorningWorkbenchDigest({ pushEmpty: false });
   } catch (e) {
-    dailyDigest = {
+    morningDigest = {
       sent: false,
       total: 0,
       sections: {
@@ -27,19 +31,21 @@ export async function GET(request: Request) {
       },
       push: {
         ok: false,
-        error: e instanceof Error ? e.message : "daily digest 失败",
+        error: e instanceof Error ? e.message : "morning digest 失败",
       },
     };
   }
   return NextResponse.json({
     ok: true,
+    kind: "morning",
     ...result,
-    dailyDigest,
+    morningDigest,
     /** 兼容旧字段名 */
+    dailyDigest: morningDigest,
     acceptanceDigest: {
-      sent: dailyDigest.sent,
-      count: dailyDigest.total,
-      push: dailyDigest.push,
+      sent: morningDigest.sent,
+      count: morningDigest.total,
+      push: morningDigest.push,
     },
   });
 }
