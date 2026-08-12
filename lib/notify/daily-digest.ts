@@ -62,10 +62,20 @@ function abs(base: string, href?: string | null): string | undefined {
   return absoluteAppUrl(base, href) || undefined;
 }
 
-function mdLink(label: string, url?: string | null): string {
-  const t = label.replace(/[\[\]]/g, "").trim() || "打开";
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** 微信 PushPlus 用 HTML 锚点；并附裸 URL（客户端常只认明文 https） */
+function htmlLink(label: string, url?: string | null): string {
+  const t = esc(label.replace(/[\[\]]/g, "").trim() || "打开");
   if (!url) return t;
-  return `[${t}](${url})`;
+  const u = esc(url);
+  return `<a href="${u}">${t}</a>`;
 }
 
 function formatSection(
@@ -73,20 +83,29 @@ function formatSection(
   lines: DigestLine[],
   emptyHint: string,
 ): string {
-  if (!lines.length) return `## ${heading}\n（${emptyHint}）`;
+  if (!lines.length) {
+    return `<h3>${esc(heading)}</h3><p>（${esc(emptyHint)}）</p>`;
+  }
   const body = lines
     .map((line, i) => {
-      const head = `${i + 1}. ${mdLink(line.title, line.href)}`;
-      const bits = [
-        line.meta ? `　${line.meta}` : "",
-        line.externalHref ? `　${mdLink("提交", line.externalHref)}` : "",
-      ]
-        .filter(Boolean)
-        .join("");
-      return `${head}${bits}`;
+      const title = htmlLink(line.title, line.href);
+      const meta = line.meta ? `<br/><span>${esc(line.meta)}</span>` : "";
+      const ext = line.externalHref
+        ? `<br/>${htmlLink("打开提交", line.externalHref)}`
+        : "";
+      const bare =
+        line.href && /^https?:\/\//i.test(line.href)
+          ? `<br/><span style="color:#666;font-size:12px;word-break:break-all;">${esc(line.href)}</span>`
+          : "";
+      return `<p>${i + 1}. ${title}${meta}${ext}${bare}</p>`;
     })
-    .join("\n");
-  return `## ${heading}\n${body}`;
+    .join("");
+  return `<h3>${esc(heading)}</h3>${body}`;
+}
+
+function footerLink(label: string, href: string): string {
+  if (!href) return `<p>${esc(label)}</p>`;
+  return `<p>${htmlLink(label, href)}<br/><span style="color:#666;font-size:12px;word-break:break-all;">${esc(href)}</span></p>`;
 }
 
 function emptySectionsStub(): DailyDigestSections {
@@ -125,9 +144,8 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
     formatSection("Git 同步建议", sections.gitSync, "无待确认"),
     formatSection("今日待办", sections.todayTodos, "无"),
     formatSection("昨天未完成", sections.yesterdayOpen, "无"),
-    "",
-    `工作台：${mdLink("打开今日要做", sections.hubHref)}`,
-  ].join("\n\n");
+    footerLink("打开今日要做", sections.hubHref),
+  ].join("");
 
   return { title, content, total };
 }
@@ -150,9 +168,8 @@ export function formatMorningDigestMarkdown(sections: DailyDigestSections): {
     formatSection("今日要做 / 推荐", sections.todayTodos, "暂无，可打开工作台扫一眼"),
     formatSection("昨天未完成", sections.yesterdayOpen, "无"),
     formatSection("Git 同步建议", sections.gitSync, "无待确认"),
-    "",
-    `工作台：${mdLink("打开今日要做", sections.hubHref)}`,
-  ].join("\n\n");
+    footerLink("打开今日要做", sections.hubHref),
+  ].join("");
   return { title, content, total };
 }
 
@@ -169,9 +186,8 @@ export function formatUpdatesDigestMarkdown(sections: DailyDigestSections): {
       : `Star PM · ${sections.todayDay} · 今日更新（${total}）`;
   const content = [
     formatSection("今日更新", sections.updates, "今天没有收工/演进/发版记录"),
-    "",
-    `工作台：${mdLink("打开工作台", sections.hubHref)}`,
-  ].join("\n\n");
+    footerLink("打开工作台", sections.hubHref),
+  ].join("");
   return { title, content, total };
 }
 
@@ -188,9 +204,8 @@ export function formatEveningAcceptanceMarkdown(sections: DailyDigestSections): 
       : `Star PM · ${sections.todayDay} · 待你验收（${total}板块）`;
   const content = [
     formatSection("待你验收", sections.acceptance, "今天没有待验板块"),
-    "",
-    `工作台：${mdLink("打开待验收", sections.hubHref)}`,
-  ].join("\n\n");
+    footerLink("打开待验收", sections.hubHref),
+  ].join("");
   return { title, content, total };
 }
 
@@ -411,7 +426,8 @@ async function pushFormattedDigest(opts: {
   const push = await sendPushPlus({
     title: formatted.title,
     content: formatted.content,
-    template: "markdown",
+    /** html + <a> 在微信里比 markdown 链接更稳 */
+    template: "html",
   });
   return {
     sent: push.ok && !("skipped" in push && push.skipped),

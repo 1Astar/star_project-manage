@@ -267,19 +267,30 @@ export function formatReleaseSummaryPush(input: {
     .slice(0, 24)
     .join("\n");
 
+  const wb = input.workbenchUrl.trim();
+  const gh = input.githubUrl?.trim() || "";
+  const a = (label: string, url: string) =>
+    url
+      ? `<a href="${url.replace(/"/g, "&quot;")}">${label}</a><br/><span style="color:#666;font-size:12px;word-break:break-all;">${url.replace(/</g, "&lt;")}</span>`
+      : label;
+
   const content = [
-    `【${input.projectTitle}】${input.releaseName || tag}`,
-    input.draft ? "（draft，未正式推送渠道也记一笔）" : "",
-    "",
-    mods.length ? `本版板块：${mods.join("、")}` : "本版板块：（未挂 module 的演进未计入）",
-    "",
-    preview ? ["发布说明摘要：", preview].join("\n") : "发布说明：（空）",
-    "",
-    `工作台：${input.workbenchUrl}`,
-    ...(input.githubUrl ? [`Release：${input.githubUrl}`] : []),
+    `<p><b>【${input.projectTitle}】</b>${input.releaseName || tag}</p>`,
+    input.draft ? "<p>（draft）</p>" : "",
+    mods.length
+      ? `<p>本版板块：${mods.join("、")}</p>`
+      : "<p>本版板块：（未挂 module 的演进未计入）</p>",
+    preview
+      ? `<p>发布说明摘要：</p><pre style="white-space:pre-wrap;font-size:13px;">${preview
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")}</pre>`
+      : "<p>发布说明：（空）</p>",
+    `<p>${a("打开工作台", wb)}</p>`,
+    gh ? `<p>${a("打开 Release", gh)}</p>` : "",
   ]
     .filter((line) => line !== "")
-    .join("\n");
+    .join("");
 
   return { title, content };
 }
@@ -320,7 +331,7 @@ export async function pushReleaseSummary(input: {
     workbenchUrl,
     draft: input.draft,
   });
-  return sendPushPlus(formatted);
+  return sendPushPlus({ ...formatted, template: "html" });
 }
 
 /** @deprecated 使用 pushDailyWorkbenchDigest；保留别名给旧 cron */

@@ -59,7 +59,8 @@ assert.ok(!looksLikeSmallFix("工作台月历待办表大功能"));
   });
   assert.match(push.title, /已发版/);
   assert.match(push.content, /本版板块/);
-  assert.match(push.content, /Release：/);
+  assert.match(push.content, /<a href="https:\/\/pm\.starry-studio\.cn\/\?focus=pm-today">打开工作台<\/a>/);
+  assert.match(push.content, /<a href="https:\/\/github\.com\/1Astar\/star_project-manage\/releases\/tag\/v1\.13\.1">打开 Release<\/a>/);
 }
 
 console.log("lib/notify/acceptance-flow.test.ts ok");

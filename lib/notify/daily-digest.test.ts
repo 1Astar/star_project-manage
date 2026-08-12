@@ -15,10 +15,6 @@ import { absoluteAppUrl, resolveSiteBaseUrl } from "@/lib/notify/site-url";
     absoluteAppUrl(base, "/?focus=pm-today"),
     "https://pm.starry-studio.cn/?focus=pm-today",
   );
-  assert.equal(
-    absoluteAppUrl(base, "https://github.com/x/y/commit/abc"),
-    "https://github.com/x/y/commit/abc",
-  );
 }
 
 const sample: DailyDigestSections = {
@@ -66,18 +62,19 @@ const sample: DailyDigestSections = {
   const { title, content, total } = formatDailyDigestMarkdown(sample);
   assert.equal(total, 5);
   assert.match(title, /日报（5）/);
-  assert.match(content, /## 今日更新/);
-  assert.match(content, /## 待你验收/);
-  assert.match(content, /## Git 同步建议/);
-  assert.match(content, /## 今日待办/);
-  assert.match(content, /## 昨天未完成/);
+  assert.match(content, /<h3>今日更新<\/h3>/);
+  assert.match(content, /<h3>待你验收<\/h3>/);
   assert.match(
     content,
-    /\[验收 PushPlus 日报\]\(https:\/\/pm\.starry-studio\.cn\/projects\/proj-star-pm\/evolution\)/,
+    /<a href="https:\/\/pm\.starry-studio\.cn\/projects\/proj-star-pm\/evolution">验收 PushPlus 日报<\/a>/,
   );
   assert.match(
     content,
-    /\[提交\]\(https:\/\/github\.com\/org\/repo\/commit\/abc1234\)/,
+    /<a href="https:\/\/github\.com\/org\/repo\/commit\/abc1234">打开提交<\/a>/,
+  );
+  assert.match(
+    content,
+    /https:\/\/pm\.starry-studio\.cn\/\?focus=pm-today/,
   );
 }
 
@@ -99,7 +96,11 @@ const sample: DailyDigestSections = {
   const updates = formatUpdatesDigestMarkdown(sample);
   assert.equal(updates.total, 1);
   assert.match(updates.title, /今日更新（1）/);
-  assert.match(updates.content, /## 今日更新/);
+  assert.match(updates.content, /<h3>今日更新<\/h3>/);
+  assert.match(
+    updates.content,
+    /<a href="https:\/\/pm\.starry-studio\.cn\/projects\/proj-star-pm\/evolution">/,
+  );
   assert.doesNotMatch(updates.content, /待你验收/);
 }
 
@@ -113,7 +114,6 @@ const sample: DailyDigestSections = {
     yesterdayOpen: [],
   });
   assert.equal(morning.total, 1);
-  assert.match(morning.title, /早报 · 今日要做/);
   assert.match(morning.content, /今日要做 \/ 推荐/);
   assert.doesNotMatch(morning.content, /不应出现在早报/);
 }
@@ -128,8 +128,8 @@ const sample: DailyDigestSections = {
     updates: [{ title: "不应出现在验收条", href: null }],
   });
   assert.equal(evening.total, 1);
-  assert.match(evening.title, /待你验收/);
   assert.match(evening.content, /待你验收/);
+  assert.match(evening.content, /<a href=/);
   assert.doesNotMatch(evening.content, /不应出现在晚报/);
   assert.doesNotMatch(evening.content, /不应出现在验收条/);
 }

@@ -1333,6 +1333,10 @@ export function registerWorkspaceTools(server: McpServer) {
       inputSchema: {
         title: z.string().optional().describe("默认：Star PM · 测试推送"),
         content: z.string().optional().describe("默认说明文字"),
+        template: z
+          .enum(["html", "txt", "json", "markdown"])
+          .optional()
+          .describe("默认 html（超链接用 <a>）"),
       },
     },
     async (input) => {
@@ -1347,7 +1351,8 @@ export function registerWorkspaceTools(server: McpServer) {
           title: input.title?.trim() || "Star PM · 测试推送",
           content:
             input.content?.trim() ||
-            "若你收到这条微信消息，说明 PushPlus 已接通。",
+            `<p>若你收到这条微信消息，说明 PushPlus 已接通。</p><p><a href="https://pm.starry-studio.cn/?focus=pm-today">打开工作台</a><br/><span style="color:#666;font-size:12px;">https://pm.starry-studio.cn/?focus=pm-today</span></p>`,
+          template: input.template ?? "html",
         });
         if (!push.ok) return mcpError(push.error);
         return mcpJson({ ok: true, push });
