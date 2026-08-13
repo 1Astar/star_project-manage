@@ -125,7 +125,9 @@ description: >-
 3. AI 做完补充 → 再 `finish_change_session`（小修用 C；行为变化用 A）。  
 4. **禁止**对大功能静默 `humanAcceptance=passed`。  
 5. **推送节奏（硬）**：**收工 / 发版均不即时 PushPlus**（只进工作台；`pushReleaseSummary` 需 `force` 才即时推）。  
-   **定时日总结（上海 18:30）分两条**：① 今日更新（收工/演进/发版）② 待你验收。空队列默认不推。早 09:00 仅站内期限提醒，不再推微信。
+   **定时（上海时区）**：  
+   - **09:00** 早报微信：今日要做 / 推荐（空则不推）  
+   - **18:30** 晚报微信分两条：① 今日更新 ② 待你验收（空则不推）
 6. **发版门禁**：`publish_release` 若该项目仍有未验板块（含未分板块）则失败；`draft` 或用户明确要求时用 `forceSkipAcceptance=true`。
 
 ### 1.4 Evolution 写入标准

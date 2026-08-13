@@ -8,8 +8,8 @@ import { default as handler } from "./.open-next/worker.js";
 
 /** Cron expression → existing Next.js cron route (Bearer CRON_SECRET).
  * Cloudflare cron 为 UTC：
- * - 01:00 UTC = 上海 09:00 早报
- * - 10:30 UTC = 上海 18:30 待验收晚报
+ * - 01:00 UTC = 上海 09:00 早报（今日要做）
+ * - 10:30 UTC = 上海 18:30 晚报（更新 + 待验收）
  * - 10:00 / 11:00 UTC = sync-ideas / sync-git（保持原节奏）
  */
 const CRON_ROUTES: Record<string, string> = {

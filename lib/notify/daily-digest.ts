@@ -150,7 +150,7 @@ export function formatDailyDigestMarkdown(sections: DailyDigestSections): {
   return { title, content, total };
 }
 
-/** @deprecated 早报今日要做；现改晚报双推，保留兼容 */
+/** 早报：今日要做 / 推荐（HTML 超链接；空则可不推） */
 export function formatMorningDigestMarkdown(sections: DailyDigestSections): {
   title: string;
   content: string;
@@ -457,7 +457,7 @@ export async function pushDailyWorkbenchDigest(opts?: {
   });
 }
 
-/** @deprecated 早报今日要做；默认改晚报双推 */
+/** 早报：今日要做 / 推荐（默认空则不推） */
 export async function pushMorningWorkbenchDigest(opts?: {
   siteBaseUrl?: string | null;
   todayDay?: string;

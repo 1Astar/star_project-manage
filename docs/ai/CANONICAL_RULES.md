@@ -43,7 +43,7 @@ MCP 写入缺板块会返回 `warning`，**不阻断**；导入缺板块 → 标
 
 每日 **`sync-git`**（cron）在写入新 commit 后，会用 commit message 模糊匹配未完成需求，写入待确认建议；**不自动改状态**。用 **`list_git_sync_suggestions`** 查看，**`confirm_git_sync_suggestions`**（`accept` / `dismiss`）确认。
 
-**人工验收（按板块汇总 + A+B+C）**：`finish_change_session` 须带 `module` + 为何/结果/`expected`（怎么验）。默认进工作台「待你验收」**按项目×板块汇总**，**收工/发版均不即时 PushPlus**。定时日总结（上海 **18:30**）分两条推：① 今日更新 ② 待验收；早 **09:00** 仅期限提醒。仅 `user_waived` 或小修/文档/skill（`auto_pass_small` / 启发式）才标 `passed`。缺板块进「未分板块」。`publish_release` 有未验板块则阻断（`draft` / `forceSkipAcceptance` 可跳过）。打回须记 Bug。环境变量：`PUSHPLUS_TOKEN`。
+**人工验收（按板块汇总 + A+B+C）**：`finish_change_session` 须带 `module` + 为何/结果/`expected`（怎么验）。默认进工作台「待你验收」**按项目×板块汇总**，**收工/发版均不即时 PushPlus**。定时推送（上海）：**09:00** 早报今日要做；**18:30** 晚报分两条（今日更新 + 待验收）；空则不推。仅 `user_waived` 或小修/文档/skill（`auto_pass_small` / 启发式）才标 `passed`。缺板块进「未分板块」。`publish_release` 有未验板块则阻断（`draft` / `forceSkipAcceptance` 可跳过）。打回须记 Bug。环境变量：`PUSHPLUS_TOKEN`。
 
 ---
 
