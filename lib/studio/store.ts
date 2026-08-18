@@ -1,6 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
+  bumpDurableReadGeneration,
+  memoizeDurableRead,
+} from "@/lib/runtime/durable-read-memo";
+import {
   assetToRow,
   changeSessionToRow,
   columnDefToRow,
@@ -198,24 +202,28 @@ function readMemoryFallback(): StudioSnapshot {
 }
 
 export async function getStudioSnapshot(): Promise<StudioSnapshot> {
-  if (isSupabaseConfigured()) {
-    try {
-      return await ensureSupabaseStudio();
-    } catch {
-      return readMemoryFallback();
+  return memoizeDurableRead("studio", async () => {
+    if (isSupabaseConfigured()) {
+      try {
+        return await ensureSupabaseStudio();
+      } catch {
+        return readMemoryFallback();
+      }
     }
-  }
-  return readMemoryFallback();
+    return readMemoryFallback();
+  });
 }
 
 export function invalidateStudioCache() {
   memorySnapshot = null;
+  bumpDurableReadGeneration();
 }
 
 export function applyMemoryMutation(mutator: (snap: StudioSnapshot) => void) {
   const snap = structuredClone(readMemoryFallback());
   mutator(snap);
   memorySnapshot = normalizeSnapshot(snap);
+  bumpDurableReadGeneration();
 }
 
 export async function ensureStudioReady(): Promise<void> {

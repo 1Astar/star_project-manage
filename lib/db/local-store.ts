@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { assertDurableStorage, isSupabaseConfigured } from "@/lib/supabase/config";
+import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import {
@@ -366,7 +367,7 @@ export async function persistGitSyncResult(
 }
 
 export async function readDb(): Promise<DatabaseSnapshot> {
-  return ensureDb();
+  return memoizeDurableRead("pm-db", ensureDb);
 }
 
 export async function writeDb(db: DatabaseSnapshot): Promise<void> {

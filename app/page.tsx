@@ -27,12 +27,19 @@ import {
 } from "@/lib/workbench/pm-inbox";
 import { getSuggestedMainline } from "@/lib/workbench/mainline-score";
 import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
+import { runWithDurableReadMemo } from "@/lib/runtime/durable-read-memo";
 
 export default async function WorkbenchPage({
   searchParams,
 }: {
   searchParams?: Promise<{ error?: string; focus?: string }>;
 }) {
+  return runWithDurableReadMemo(() => renderWorkbenchPage(searchParams));
+}
+
+async function renderWorkbenchPage(
+  searchParams?: Promise<{ error?: string; focus?: string }>
+) {
   const params = searchParams ? await searchParams : {};
   const session = await getAdminSession();
   const [

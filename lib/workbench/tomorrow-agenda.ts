@@ -1,6 +1,7 @@
 import { getProjects, getProjectBundle, getPoolBundle } from "@/lib/db/local-store";
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { getStudioIdFromPmSlug } from "@/lib/project-bridge";
+import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import {
   TASK_STATUS_LABELS as STUDIO_TASK_STATUS_LABELS,
   type TaskPriority,
@@ -94,6 +95,21 @@ function inShanghaiDay(iso: string | null | undefined, day: string): boolean {
  */
 export async function getTomorrowAgenda(opts?: {
   /** 基准「今天」的上海日；默认现在。清单对应「明天要看」= 以今天为参照看昨天变更 + 到期=明天 */
+  todayDay?: string;
+  projectId?: string | null;
+}): Promise<{
+  todayDay: string;
+  yesterdayDay: string;
+  tomorrowDay: string;
+  items: TomorrowAgendaItem[];
+  projects: Array<{ id: string; title: string }>;
+}> {
+  const todayDay = opts?.todayDay ?? shanghaiDay();
+  const key = `tomorrow:${todayDay}:${opts?.projectId ?? "_"}`;
+  return memoizeDurableRead(key, () => loadTomorrowAgenda({ ...opts, todayDay }));
+}
+
+async function loadTomorrowAgenda(opts?: {
   todayDay?: string;
   projectId?: string | null;
 }): Promise<{

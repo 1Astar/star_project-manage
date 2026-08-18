@@ -12,6 +12,7 @@ import {
 } from "@/lib/types";
 import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
+import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import { projectLiveSiteUrl } from "@/lib/project-live-url";
 import {
   findPmProjectForStudio,
@@ -158,6 +159,20 @@ export async function getPmAcceptanceQueue(opts?: {
   bundles: PmAcceptanceBundle[];
 }> {
   const todayDay = opts?.todayDay ?? shanghaiDay();
+  const key = `accept:${todayDay}:${opts?.projectId ?? "_"}`;
+  return memoizeDurableRead(key, () => loadPmAcceptanceQueue({ ...opts, todayDay }));
+}
+
+async function loadPmAcceptanceQueue(opts?: {
+  todayDay?: string;
+  projectId?: string;
+}): Promise<{
+  todayDay: string;
+  lookbackDays: number;
+  items: PmAcceptanceItem[];
+  bundles: PmAcceptanceBundle[];
+}> {
+  const todayDay = opts?.todayDay ?? shanghaiDay();
   const db = await readDb();
   const studio = await getScopedStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
@@ -277,6 +292,13 @@ export async function getPmFollowUps(opts?: {
   todayDay?: string;
 }): Promise<{ todayDay: string; items: PmFollowUpItem[] }> {
   const todayDay = opts?.todayDay ?? shanghaiDay();
+  return memoizeDurableRead(`follow:${todayDay}`, () => loadPmFollowUps({ todayDay }));
+}
+
+async function loadPmFollowUps(opts?: {
+  todayDay?: string;
+}): Promise<{ todayDay: string; items: PmFollowUpItem[] }> {
+  const todayDay = opts?.todayDay ?? shanghaiDay();
   const studio = await getScopedStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
   const items: PmFollowUpItem[] = [];
@@ -326,6 +348,10 @@ export async function getPmFollowUps(opts?: {
 
 /** 全项目未关闭 Bug（工作台露出）；演示范围仅 demo-showcase */
 export async function getOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
+  return memoizeDurableRead("open-bugs", loadOpenBugsAcrossProjects);
+}
+
+async function loadOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
   const db = await readDb();
   const studio = await getScopedStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));

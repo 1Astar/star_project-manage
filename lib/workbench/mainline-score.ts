@@ -3,6 +3,7 @@
  * 项目库 status=mainline 视为「钉主线」强加权，不是唯一来源。
  */
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import type { Project, StudioTask } from "@/lib/studio/types";
 import {
   getOpenBugsAcrossProjects,
@@ -55,6 +56,10 @@ function pickFocusTask(tasks: StudioTask[], projectId: string): StudioTask | nul
 }
 
 export async function getSuggestedMainline(): Promise<MainlineSuggestion | null> {
+  return memoizeDurableRead("mainline", loadSuggestedMainline);
+}
+
+async function loadSuggestedMainline(): Promise<MainlineSuggestion | null> {
   const todayDay = shanghaiDay();
   const [{ projects, tasks, evolutionLogs, changeSessions }, acceptance, followUps, openBugs] =
     await Promise.all([

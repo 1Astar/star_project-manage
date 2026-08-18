@@ -1,4 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { bumpDurableReadGeneration } from "@/lib/runtime/durable-read-memo";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import type {
   Bug,
@@ -170,6 +171,7 @@ async function upsertRows<T extends object>(table: string, rows: T[]) {
   const sb = client();
   const { error } = await sb.from(table).upsert(rows, { onConflict: "id" });
   if (error) throw new Error(`${table} upsert: ${error.message}`);
+  bumpDurableReadGeneration();
 }
 
 /** 新列未跑迁移 029 时回退，避免整库保存失败 */
@@ -338,6 +340,7 @@ export async function updateProjectById(
     .select("*")
     .single();
   if (error) throw new Error(`projects update: ${error.message}`);
+  bumpDurableReadGeneration();
   return data as Project;
 }
 
@@ -379,6 +382,7 @@ export async function deleteRequirementAttachmentRow(id: string): Promise<void> 
   const sb = client();
   const { error } = await sb.from("requirement_attachments").delete().eq("id", id);
   if (error) throw new Error(`requirement_attachments delete: ${error.message}`);
+  bumpDurableReadGeneration();
 }
 
 export async function upsertRequirementLinkRow(link: RequirementLink): Promise<void> {
@@ -389,6 +393,7 @@ export async function deleteRequirementLinkRow(id: string): Promise<void> {
   const sb = client();
   const { error } = await sb.from("requirement_links").delete().eq("id", id);
   if (error) throw new Error(`requirement_links delete: ${error.message}`);
+  bumpDurableReadGeneration();
 }
 
 export async function deleteRequirementRows(ids: string[]): Promise<void> {
@@ -396,6 +401,7 @@ export async function deleteRequirementRows(ids: string[]): Promise<void> {
   const sb = client();
   const { error } = await sb.from("requirements").delete().in("id", ids);
   if (error) throw new Error(`requirements delete: ${error.message}`);
+  bumpDurableReadGeneration();
 }
 
 export async function upsertGitActivities(rows: GitActivity[]) {
