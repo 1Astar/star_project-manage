@@ -71,6 +71,11 @@ function throwOnError<T>(
   return (result.data ?? []) as T;
 }
 
+/** 列裁剪后的 select 结果在 supabase-js 里类型偏宽，统一经 unknown 再映射 */
+function asRows(data: unknown): Array<Record<string, unknown>> {
+  return (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
+}
+
 function shanghaiDay(iso?: string | null): string {
   const d = iso ? new Date(iso) : new Date();
   return new Intl.DateTimeFormat("en-CA", {
@@ -175,9 +180,9 @@ export async function readDemoWorkbenchPmDb(pmProjectId: string): Promise<Databa
     modules = throwOnError(mod, "modules");
   }
 
-  const reqs = (
-    throwOnError(requirements, "requirements") as Array<Record<string, unknown>>
-  ).map(rowToWorkbenchRequirement);
+  const reqs = asRows(throwOnError(requirements, "requirements")).map(
+    rowToWorkbenchRequirement
+  );
   const reqIds = reqs.map((r) => r.id);
   let acceptance: DatabaseSnapshot["acceptance_records"] = [];
   if (reqIds.length) {
@@ -237,17 +242,15 @@ export async function readWorkbenchSupabaseDb(): Promise<DatabaseSnapshot> {
     ]);
 
   const requirements = mergeRequirementsById([
-    (
-      throwOnError(recentOpen, "requirements.recent") as Array<Record<string, unknown>>
-    ).map(rowToWorkbenchRequirement),
-    (
-      throwOnError(byStatusAcceptance, "requirements.status") as Array<
-        Record<string, unknown>
-      >
-    ).map(rowToWorkbenchRequirement),
-    (
-      throwOnError(dueTomorrow, "requirements.due") as Array<Record<string, unknown>>
-    ).map(rowToWorkbenchRequirement),
+    asRows(throwOnError(recentOpen, "requirements.recent")).map(
+      rowToWorkbenchRequirement
+    ),
+    asRows(throwOnError(byStatusAcceptance, "requirements.status")).map(
+      rowToWorkbenchRequirement
+    ),
+    asRows(throwOnError(dueTomorrow, "requirements.due")).map(
+      rowToWorkbenchRequirement
+    ),
   ]);
 
   const moduleIds = [
