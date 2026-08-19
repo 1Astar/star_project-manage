@@ -370,6 +370,79 @@ export async function readDb(): Promise<DatabaseSnapshot> {
   return memoizeDurableRead("pm-db", ensureDb);
 }
 
+/**
+ * 工作台精简 PM 读：跳过评论/附件/活动等重表。
+ * 演示访客只拉 demo-showcase 项目。
+ */
+export async function readWorkbenchDb(): Promise<DatabaseSnapshot> {
+  return memoizeDurableRead("pm-db-workbench", async () => {
+    const { emptyPmSnapshot } = await import("@/lib/db/empty-snapshot");
+    const { isDemoPublicScope } = await import("@/lib/demo/scope");
+    const { DEMO_SHOWCASE_PM_SLUG, isDemoShowcaseId } = await import(
+      "@/lib/demo/showcase"
+    );
+
+    if (isSupabaseConfigured()) {
+      try {
+        const {
+          readWorkbenchSupabaseDb,
+          readDemoWorkbenchPmDb,
+        } = await import("@/lib/db/workbench-pm");
+        if (await isDemoPublicScope()) {
+          const { createServiceClient } = await import("@/lib/supabase/server");
+          const sb = createServiceClient();
+          if (!sb) throw new Error("Supabase 未配置");
+          const { data: demoRows, error } = await sb
+            .from("projects")
+            .select("id,slug")
+            .or(`slug.eq.${DEMO_SHOWCASE_PM_SLUG},id.eq.proj-demo-showcase`)
+            .limit(1);
+          if (error) throw new Error(error.message);
+          const demo = (demoRows ?? [])[0];
+          if (demo?.id) return await readDemoWorkbenchPmDb(String(demo.id));
+          return emptyPmSnapshot();
+        }
+        return await readWorkbenchSupabaseDb();
+      } catch {
+        // fall through
+      }
+    }
+
+    const full = await ensureDb();
+    if (await isDemoPublicScope()) {
+      const allowed = new Set(
+        full.projects
+          .filter((p) => isDemoShowcaseId(p.slug) || isDemoShowcaseId(p.id))
+          .map((p) => p.id)
+      );
+      const iterationIds = new Set(
+        full.iterations.filter((i) => allowed.has(i.project_id)).map((i) => i.id)
+      );
+      const reqIds = new Set(
+        full.requirements.filter((r) => allowed.has(r.project_id)).map((r) => r.id)
+      );
+      return emptyPmSnapshot({
+        projects: full.projects.filter((p) => allowed.has(p.id)),
+        iterations: full.iterations.filter((i) => allowed.has(i.project_id)),
+        modules: full.modules.filter((m) => iterationIds.has(m.iteration_id)),
+        requirements: full.requirements.filter((r) => allowed.has(r.project_id)),
+        acceptance_records: full.acceptance_records.filter((a) =>
+          reqIds.has(a.requirement_id)
+        ),
+        bugs: full.bugs.filter((b) => allowed.has(b.project_id) && b.status !== "done"),
+      });
+    }
+    return emptyPmSnapshot({
+      projects: full.projects,
+      iterations: full.iterations,
+      modules: full.modules,
+      requirements: full.requirements,
+      acceptance_records: full.acceptance_records,
+      bugs: full.bugs.filter((b) => b.status !== "done"),
+    });
+  });
+}
+
 export async function writeDb(db: DatabaseSnapshot): Promise<void> {
   await saveDb(db);
 }

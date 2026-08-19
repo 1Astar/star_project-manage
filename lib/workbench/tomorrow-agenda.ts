@@ -1,5 +1,5 @@
-import { getProjects, getProjectBundle, getPoolBundle } from "@/lib/db/local-store";
-import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { readWorkbenchDb } from "@/lib/db/local-store";
+import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { getStudioIdFromPmSlug } from "@/lib/project-bridge";
 import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import {
@@ -123,54 +123,44 @@ async function loadTomorrowAgenda(opts?: {
   const yesterdayDay = addShanghaiDays(todayDay, -1);
   const tomorrowDay = addShanghaiDays(todayDay, 1);
 
-  const studioSnap = await getScopedStudioSnapshot();
+  const studioSnap = await getScopedWorkbenchStudioSnapshot();
   const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
   const items: TomorrowAgendaItem[] = [];
   const seen = new Set<string>();
 
   // —— 1+3) PM 需求：昨日更新未完，或到期=明天 ——
-  const pmProjects = await getProjects();
-  await Promise.all(
-    pmProjects.map(async (pmProject) => {
-      const [bundle, pool] = await Promise.all([
-        getProjectBundle(pmProject.id),
-        getPoolBundle(pmProject.id).catch(() => null),
-      ]);
-      const routeId = routeIdForPmSlug(pmProject.slug);
-      const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
-      const reqs = [
-        ...(bundle?.requirements ?? []),
-        ...(pool?.poolRequirements ?? []),
-      ];
-      const byId = new Map(reqs.map((r) => [r.id, r]));
+  const db = await readWorkbenchDb();
+  const pmById = new Map(db.projects.map((p) => [p.id, p]));
 
-      for (const req of byId.values()) {
-        if (requirementIsDone(req) || requirementIsCancelled(req)) continue;
-        const yesterdayHit = inShanghaiDay(req.updated_at, yesterdayDay);
-        const dueHit = inShanghaiDay(req.due_date, tomorrowDay);
-        if (!yesterdayHit && !dueHit) continue;
+  for (const req of db.requirements) {
+    if (requirementIsDone(req) || requirementIsCancelled(req)) continue;
+    const yesterdayHit = inShanghaiDay(req.updated_at, yesterdayDay);
+    const dueHit = inShanghaiDay(req.due_date, tomorrowDay);
+    if (!yesterdayHit && !dueHit) continue;
 
-        const id = `pm:${req.id}`;
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const reason: TomorrowAgendaReason = yesterdayHit
-          ? "yesterday_changed"
-          : "due_tomorrow";
-        items.push({
-          id,
-          title: req.title,
-          priority: req.priority || "P2",
-          projectId: routeId,
-          projectTitle,
-          href: `/projects/${routeId}/tasks?req=${req.id}`,
-          source: "pm_req",
-          reason,
-          reasonLabel: REASON_LABELS[reason],
-          statusLabel: PM_TASK_STATUS_LABELS[req.status as PmTaskStatus] ?? req.status,
-        });
-      }
-    })
-  );
+    const pmProject = pmById.get(req.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
+    const id = `pm:${req.id}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const reason: TomorrowAgendaReason = yesterdayHit
+      ? "yesterday_changed"
+      : "due_tomorrow";
+    items.push({
+      id,
+      title: req.title,
+      priority: req.priority || "P2",
+      projectId: routeId,
+      projectTitle,
+      href: `/projects/${routeId}/tasks?req=${req.id}`,
+      source: "pm_req",
+      reason,
+      reasonLabel: REASON_LABELS[reason],
+      statusLabel: PM_TASK_STATUS_LABELS[req.status as PmTaskStatus] ?? req.status,
+    });
+  }
 
   // —— 2) 昨日变更会话 pendingItems ——
   for (const session of studioSnap.changeSessions ?? []) {

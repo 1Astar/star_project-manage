@@ -8,25 +8,58 @@ import {
 import { isDemoPublicScope } from "@/lib/demo/scope";
 import { createPoolRequirement, ensurePmProjectForStudio } from "@/lib/db/local-store";
 import { getStudioSnapshot, upsertStudioSnapshot } from "@/lib/studio/store";
+import {
+  getWorkbenchStudioSnapshot,
+  readDemoStudioSnapshot,
+} from "@/lib/studio/workbench-snapshot";
 import type { StudioSnapshot } from "@/lib/studio/store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 
 export { isCurrentUserViewer, isDemoPublicScope } from "@/lib/demo/scope";
 
+async function loadDemoScopedStudio(): Promise<StudioSnapshot> {
+  return memoizeDurableRead("studio-demo", async () => {
+    if (isSupabaseConfigured()) {
+      try {
+        let snap = await readDemoStudioSnapshot();
+        if (!snap.projects.some((p) => p.id === DEMO_SHOWCASE_STUDIO_ID)) {
+          try {
+            await ensureDemoShowcase();
+            snap = await readDemoStudioSnapshot();
+          } catch (e) {
+            console.error("ensureDemoShowcase", e);
+          }
+        }
+        return snap;
+      } catch {
+        // fall through to full+filter
+      }
+    }
+
+    let snap = await getStudioSnapshot();
+    if (!snap.projects.some((p) => p.id === DEMO_SHOWCASE_STUDIO_ID)) {
+      try {
+        await ensureDemoShowcase();
+        snap = await getStudioSnapshot();
+      } catch (e) {
+        console.error("ensureDemoShowcase", e);
+      }
+    }
+    return filterStudioSnapshotForDemo(snap);
+  });
+}
+
 /** UI 读路径：访客/观看者只看到演示切片；缺数据时自动种子 */
 export async function getScopedStudioSnapshot(): Promise<StudioSnapshot> {
-  let snap = await getStudioSnapshot();
-  if (!(await isDemoPublicScope())) return snap;
+  if (await isDemoPublicScope()) return loadDemoScopedStudio();
+  return getStudioSnapshot();
+}
 
-  const hasDemo = snap.projects.some((p) => p.id === DEMO_SHOWCASE_STUDIO_ID);
-  if (!hasDemo) {
-    try {
-      await ensureDemoShowcase();
-      snap = await getStudioSnapshot();
-    } catch (e) {
-      console.error("ensureDemoShowcase", e);
-    }
-  }
-  return filterStudioSnapshotForDemo(snap);
+/** 工作台读路径：登录态裁剪时间窗；访客仍走演示切片 */
+export async function getScopedWorkbenchStudioSnapshot(): Promise<StudioSnapshot> {
+  if (await isDemoPublicScope()) return loadDemoScopedStudio();
+  return getWorkbenchStudioSnapshot();
 }
 
 /** 确保演示项目与样本数据存在（幂等 upsert） */

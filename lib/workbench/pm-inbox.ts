@@ -1,8 +1,8 @@
 /**
  * PM 工作台「今日要做」：只验收「还没看过」的；已上版的免验
  */
-import { readDb } from "@/lib/db/local-store";
-import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { readWorkbenchDb } from "@/lib/db/local-store";
+import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { isDemoPublicScope } from "@/lib/demo/scope";
 import { isDemoShowcaseId } from "@/lib/demo/showcase";
 import {
@@ -173,8 +173,8 @@ async function loadPmAcceptanceQueue(opts?: {
   bundles: PmAcceptanceBundle[];
 }> {
   const todayDay = opts?.todayDay ?? shanghaiDay();
-  const db = await readDb();
-  const studio = await getScopedStudioSnapshot();
+  const db = await readWorkbenchDb();
+  const studio = await getScopedWorkbenchStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
   const demoOnly = await isDemoPublicScope();
   const allowedPmIds = demoOnly ? demoPmProjectIds(db.projects) : null;
@@ -299,7 +299,7 @@ async function loadPmFollowUps(opts?: {
   todayDay?: string;
 }): Promise<{ todayDay: string; items: PmFollowUpItem[] }> {
   const todayDay = opts?.todayDay ?? shanghaiDay();
-  const studio = await getScopedStudioSnapshot();
+  const studio = await getScopedWorkbenchStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
   const items: PmFollowUpItem[] = [];
   const seen = new Set<string>();
@@ -352,8 +352,8 @@ export async function getOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
 }
 
 async function loadOpenBugsAcrossProjects(): Promise<PmOpenBugItem[]> {
-  const db = await readDb();
-  const studio = await getScopedStudioSnapshot();
+  const db = await readWorkbenchDb();
+  const studio = await getScopedWorkbenchStudioSnapshot();
   const studioById = new Map(studio.projects.map((p) => [p.id, p]));
   const demoOnly = await isDemoPublicScope();
   const allowedPmIds = demoOnly ? demoPmProjectIds(db.projects) : null;

@@ -10,14 +10,7 @@ import { WorkbenchFocusScroll } from "@/components/workbench-focus-scroll";
 import { buildStarMapLayout } from "@/lib/studio/idea-star-map";
 import { buildImprovementCalendar } from "@/lib/studio/improvement-calendar";
 import { getAdminSession } from "@/lib/auth/session";
-import {
-  getAllProjects,
-  getAllIdeas,
-  getAllEvolutionLogs,
-  getAllChangeSessions,
-  getPendingAlerts,
-  getNextActionDrafts,
-} from "@/lib/studio/data";
+import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { getTomorrowAgenda } from "@/lib/workbench/tomorrow-agenda";
 import {
   filterTomorrowDueOnly,
@@ -44,29 +37,47 @@ async function renderWorkbenchPage(
   const session = await getAdminSession();
   const [
     suggestedMainline,
-    allProjects,
-    allIdeas,
-    allEvolution,
-    allChangeSessions,
-    alerts,
-    nextActionDrafts,
+    studioSnap,
     tomorrowAgenda,
     acceptanceQueue,
     followUps,
     openBugs,
   ] = await Promise.all([
     getSuggestedMainline(),
-    getAllProjects(),
-    getAllIdeas(),
-    getAllEvolutionLogs(),
-    getAllChangeSessions(),
-    getPendingAlerts(),
-    getNextActionDrafts(),
+    getScopedWorkbenchStudioSnapshot(),
     getTomorrowAgenda(),
     getPmAcceptanceQueue(),
     getPmFollowUps(),
     getOpenBugsAcrossProjects(),
   ]);
+
+  const allProjects = studioSnap.projects;
+  const allIdeas = studioSnap.ideas;
+  const allEvolution = studioSnap.evolutionLogs;
+  const allChangeSessions = studioSnap.changeSessions ?? [];
+
+  const blockers = studioSnap.tasks.filter((t) => t.blocker && t.status !== "done");
+  const inboxCount = allIdeas.filter((i) => i.status === "inbox").length;
+  const emptyNextActionCount = allProjects.filter((p) => {
+    if (p.status === "archived" || p.status === "parking") return false;
+    const next = p.nextAction?.trim() || p.body?.nextStep?.trim() || "";
+    return !next;
+  }).length;
+  const alerts = { blockers, inboxCount, emptyNextActionCount };
+
+  const rank: Record<string, number> = { in_progress: 0, todo: 1, paused: 2 };
+  const nextActionDrafts: Record<string, string> = {};
+  const openTasks = [...studioSnap.tasks]
+    .filter((t) => t.status !== "done" && t.title.trim())
+    .sort((a, b) => {
+      const ra = rank[a.status] ?? 9;
+      const rb = rank[b.status] ?? 9;
+      if (ra !== rb) return ra - rb;
+      return b.id.localeCompare(a.id);
+    });
+  for (const t of openTasks) {
+    if (!nextActionDrafts[t.projectId]) nextActionDrafts[t.projectId] = t.title.trim();
+  }
 
   const focus = suggestedMainline
     ? { project: suggestedMainline.project, task: suggestedMainline.focusTask }

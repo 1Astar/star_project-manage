@@ -2,7 +2,7 @@
  * 工作台「当前主线」算法：按今日压力 / 近期活动打分，取最高。
  * 项目库 status=mainline 视为「钉主线」强加权，不是唯一来源。
  */
-import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import type { Project, StudioTask } from "@/lib/studio/types";
 import {
@@ -63,7 +63,7 @@ async function loadSuggestedMainline(): Promise<MainlineSuggestion | null> {
   const todayDay = shanghaiDay();
   const [{ projects, tasks, evolutionLogs, changeSessions }, acceptance, followUps, openBugs] =
     await Promise.all([
-      getScopedStudioSnapshot(),
+      getScopedWorkbenchStudioSnapshot(),
       getPmAcceptanceQueue({ todayDay }),
       getPmFollowUps({ todayDay }),
       getOpenBugsAcrossProjects(),
