@@ -29,12 +29,20 @@ import {
   type StudioSnapshot,
 } from "@/lib/studio/store";
 
-/** 星图灵感条数上限 */
-export const WORKBENCH_IDEA_LIMIT = 400;
+/** 星图灵感条数上限（首页 SSR，再低以免 Worker CPU） */
+export const WORKBENCH_IDEA_LIMIT = 120;
 /** 改进日历：演进回看天数 */
-export const WORKBENCH_EVOLUTION_DAYS = 90;
+export const WORKBENCH_EVOLUTION_DAYS = 45;
 /** 改进日历 / 明日议程：变更会话回看天数 */
-export const WORKBENCH_SESSION_DAYS = 60;
+export const WORKBENCH_SESSION_DAYS = 45;
+/** 演进条数上限 */
+export const WORKBENCH_EVOLUTION_LIMIT = 200;
+/** 日历用近期会话上限 */
+export const WORKBENCH_SESSION_CALENDAR_LIMIT = 150;
+/** 待验收 unreviewed 会话上限（另按 14 天窗过滤） */
+export const WORKBENCH_SESSION_UNREVIEWED_LIMIT = 80;
+/** 待验收会话回看天数（与 pm-inbox SESSION_LOOKBACK 对齐） */
+export const WORKBENCH_ACCEPT_SESSION_DAYS = 14;
 
 function shanghaiDay(iso?: string | null): string {
   const d = iso ? new Date(iso) : new Date();
@@ -155,10 +163,12 @@ export async function readDemoStudioSnapshot(): Promise<StudioSnapshot> {
   });
 }
 
-/** 登录工作台：项目/任务全量；灵感/演进/会话按窗口裁剪；资源/发版不拉 */
+/** 登录工作台：项目全量；任务仅未完成；灵感/演进/会话按窗口裁剪；资源/发版不拉 */
 async function readWorkbenchStudioFromSupabase(): Promise<StudioSnapshot> {
   const evoSince = daysAgoIso(WORKBENCH_EVOLUTION_DAYS);
   const sessionSince = daysAgoIso(WORKBENCH_SESSION_DAYS);
+  const acceptSince = daysAgoIso(WORKBENCH_ACCEPT_SESSION_DAYS);
+  const acceptDay = addShanghaiDays(shanghaiDay(), -(WORKBENCH_ACCEPT_SESSION_DAYS - 1));
 
   const [
     projectRows,
@@ -166,7 +176,8 @@ async function readWorkbenchStudioFromSupabase(): Promise<StudioSnapshot> {
     evolutionRows,
     taskRows,
     columnRows,
-    changeSessionRows,
+    calendarSessions,
+    unreviewedSessions,
   ] = await Promise.all([
     loadOrdered<StudioProjectRow>("studio_projects", {
       order: { column: "updated_at", ascending: false },
@@ -178,18 +189,42 @@ async function readWorkbenchStudioFromSupabase(): Promise<StudioSnapshot> {
     loadOrdered<StudioEvolutionRow>("studio_evolution_logs", {
       gte: { column: "created_at", value: evoSince },
       order: { column: "created_at", ascending: false },
-      limit: 800,
+      limit: WORKBENCH_EVOLUTION_LIMIT,
     }),
-    loadOrdered<StudioTaskRow>("studio_tasks"),
+    // 主线 / 阻塞 / 下一步草稿：只要未完成
+    (async () => {
+      let query = sb()
+        .from("studio_tasks")
+        .select("*")
+        .neq("status", "done");
+      const { data, error } = await query;
+      if (error) {
+        if (error.message.includes("studio_tasks")) return [] as StudioTaskRow[];
+        throw new Error(`studio_tasks: ${error.message}`);
+      }
+      return (data ?? []) as StudioTaskRow[];
+    })(),
     loadOrdered<StudioProjectColumnDefRow>("studio_project_column_defs", {
       order: { column: "sort_order", ascending: true },
     }),
     loadOrdered<StudioChangeSessionRow>("studio_change_sessions", {
-      or: `human_acceptance.eq.unreviewed,created_at.gte.${sessionSince}`,
+      gte: { column: "created_at", value: sessionSince },
       order: { column: "created_at", ascending: false },
-      limit: 500,
+      limit: WORKBENCH_SESSION_CALENDAR_LIMIT,
+    }),
+    // 待验收：只拉近窗 unreviewed，避免把几百条历史未验一次塞进 SSR
+    loadOrdered<StudioChangeSessionRow>("studio_change_sessions", {
+      eq: { column: "human_acceptance", value: "unreviewed" },
+      or: `finished_at.gte.${acceptSince},created_at.gte.${acceptSince},day.gte.${acceptDay}`,
+      order: { column: "created_at", ascending: false },
+      limit: WORKBENCH_SESSION_UNREVIEWED_LIMIT,
     }),
   ]);
+
+  const sessionById = new Map<string, StudioChangeSessionRow>();
+  for (const row of [...calendarSessions, ...unreviewedSessions]) {
+    sessionById.set(row.id, row);
+  }
 
   return normalize({
     projects: projectRows.map(rowToProject),
@@ -199,29 +234,48 @@ async function readWorkbenchStudioFromSupabase(): Promise<StudioSnapshot> {
     assets: [],
     releases: [],
     projectColumnDefs: columnRows.map(rowToColumnDef),
-    changeSessions: changeSessionRows.map(rowToChangeSession),
+    changeSessions: [...sessionById.values()].map(rowToChangeSession),
   });
 }
 
 function capFromFull(snap: StudioSnapshot): StudioSnapshot {
   const evoOldest = daysAgoIso(WORKBENCH_EVOLUTION_DAYS);
   const sessionOldestDay = addShanghaiDays(shanghaiDay(), -(WORKBENCH_SESSION_DAYS - 1));
+  const acceptOldestDay = addShanghaiDays(
+    shanghaiDay(),
+    -(WORKBENCH_ACCEPT_SESSION_DAYS - 1)
+  );
+  const recentSessions = (snap.changeSessions ?? []).filter(
+    (s) =>
+      s.createdAt >= `${sessionOldestDay}T00:00:00.000+08:00` ||
+      (s.day && s.day >= sessionOldestDay)
+  );
+  const unreviewed = (snap.changeSessions ?? []).filter(
+    (s) =>
+      s.humanAcceptance === "unreviewed" &&
+      (s.finishedAt || s.updatedAt || s.createdAt || `${s.day}T12:00:00+08:00`) >=
+        `${acceptOldestDay}T00:00:00.000+08:00`
+  );
+  const sessionById = new Map<string, (typeof recentSessions)[number]>();
+  for (const s of [
+    ...recentSessions.slice(0, WORKBENCH_SESSION_CALENDAR_LIMIT),
+    ...unreviewed.slice(0, WORKBENCH_SESSION_UNREVIEWED_LIMIT),
+  ]) {
+    sessionById.set(s.id, s);
+  }
   return normalize({
     projects: snap.projects,
     ideas: [...snap.ideas]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, WORKBENCH_IDEA_LIMIT),
-    evolutionLogs: snap.evolutionLogs.filter((e) => e.createdAt >= evoOldest),
-    tasks: snap.tasks,
+    evolutionLogs: snap.evolutionLogs
+      .filter((e) => e.createdAt >= evoOldest)
+      .slice(0, WORKBENCH_EVOLUTION_LIMIT),
+    tasks: snap.tasks.filter((t) => t.status !== "done"),
     assets: [],
     releases: [],
     projectColumnDefs: snap.projectColumnDefs ?? [],
-    changeSessions: (snap.changeSessions ?? []).filter(
-      (s) =>
-        s.humanAcceptance === "unreviewed" ||
-        s.createdAt >= `${sessionOldestDay}T00:00:00.000+08:00` ||
-        (s.day && s.day >= sessionOldestDay)
-    ),
+    changeSessions: [...sessionById.values()],
   });
 }
 
