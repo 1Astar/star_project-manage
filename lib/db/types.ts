@@ -15,6 +15,7 @@ import type {
   Prototype,
   Requirement,
   RequirementAttachment,
+  BugAttachment,
   BugComment,
   RequirementComment,
   RequirementLink,
@@ -43,6 +44,7 @@ export interface DatabaseSnapshot {
   project_members: ProjectMember[];
   pool_column_defs: PoolColumnDef[];
   requirement_attachments: RequirementAttachment[];
+  bug_attachments: BugAttachment[];
   requirement_links: RequirementLink[];
   project_interviews: ProjectInterview[];
   interview_requirement_links: InterviewRequirementLink[];

@@ -375,6 +375,17 @@ export interface Bug {
   updated_at: string;
 }
 
+export interface BugAttachment {
+  id: string;
+  project_id: string;
+  bug_id: string;
+  title: string;
+  url: string;
+  storage_path: string | null;
+  mime_type: string | null;
+  created_at: string;
+}
+
 export interface RequirementAttachment {
   id: string;
   project_id: string;

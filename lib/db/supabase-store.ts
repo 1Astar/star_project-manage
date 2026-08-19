@@ -12,6 +12,7 @@ import type {
   ProjectInterview,
   Requirement,
   RequirementAttachment,
+  BugAttachment,
   RequirementLink,
 } from "@/lib/types";
 import { BUG_TYPE_LABELS } from "@/lib/types";
@@ -117,6 +118,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   const project_members = await loadOptionalTable(sb, "project_members");
   const pool_column_defs = await loadOptionalTable(sb, "pool_column_defs");
   const requirement_attachments = await loadOptionalTable(sb, "requirement_attachments");
+  const bug_attachments = await loadOptionalTable(sb, "bug_attachments");
   const requirement_links = await loadOptionalTable(sb, "requirement_links");
   const project_interviews = await loadOptionalTable(sb, "project_interviews");
   const interview_requirement_links = await loadOptionalTable(
@@ -146,6 +148,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     project_members,
     pool_column_defs,
     requirement_attachments,
+    bug_attachments,
     requirement_links,
     project_interviews: ((project_interviews ?? []) as Record<string, unknown>[]).map(
       (row) => ({
@@ -202,6 +205,7 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "project_members" ||
       table === "pool_column_defs" ||
       table === "requirement_attachments" ||
+      table === "bug_attachments" ||
       table === "requirement_links" ||
       table === "project_interviews" ||
       table === "interview_requirement_links"
@@ -252,6 +256,14 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   if ((snapshot.requirement_attachments ?? []).length) {
     await upsertRows("requirement_attachments", snapshot.requirement_attachments ?? []);
   }
+  if ((snapshot.bug_attachments ?? []).length) {
+    try {
+      await upsertRows("bug_attachments", snapshot.bug_attachments ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/bug_attachments|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
   if ((snapshot.requirement_links ?? []).length) {
     await upsertRows("requirement_links", snapshot.requirement_links ?? []);
   }
@@ -282,6 +294,10 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await deleteMissing(
     "requirement_attachments",
     (snapshot.requirement_attachments ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "bug_attachments",
+    (snapshot.bug_attachments ?? []).map((r) => r.id)
   );
   await deleteMissing(
     "requirement_links",
@@ -382,6 +398,17 @@ export async function deleteRequirementAttachmentRow(id: string): Promise<void> 
   const sb = client();
   const { error } = await sb.from("requirement_attachments").delete().eq("id", id);
   if (error) throw new Error(`requirement_attachments delete: ${error.message}`);
+  bumpDurableReadGeneration();
+}
+
+export async function upsertBugAttachmentRow(attachment: BugAttachment): Promise<void> {
+  await upsertRows("bug_attachments", [attachment]);
+}
+
+export async function deleteBugAttachmentRow(id: string): Promise<void> {
+  const sb = client();
+  const { error } = await sb.from("bug_attachments").delete().eq("id", id);
+  if (error) throw new Error(`bug_attachments delete: ${error.message}`);
   bumpDurableReadGeneration();
 }
 

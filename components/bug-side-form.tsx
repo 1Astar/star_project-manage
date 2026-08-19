@@ -9,8 +9,9 @@ import {
   updateBugAction,
   updateBugStatusAction,
 } from "@/lib/actions";
+import { BugAttachmentsBlock } from "@/components/bug-attachments";
 import { assigneeRosterNames, PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
-import type { Bug, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
+import type { Bug, BugAttachment, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
 import {
   BUG_SEVERITY_LABELS,
   BUG_TYPE_LABELS,
@@ -352,6 +353,7 @@ export function BugDetailEditor({
   members,
   requirements,
   comments,
+  attachments = [],
 }: {
   bug: Bug;
   projectSlug: string;
@@ -360,6 +362,7 @@ export function BugDetailEditor({
   members: MemberOption[];
   requirements: BugFormOption[];
   comments: BugComment[];
+  attachments?: BugAttachment[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -553,6 +556,11 @@ export function BugDetailEditor({
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
+            <BugAttachmentsBlock
+              projectId={bug.project_id}
+              bugId={bug.id}
+              attachments={attachments}
+            />
             <section className="space-y-2 border-t border-slate-100 pt-3">
               <h4 className="text-xs font-semibold text-slate-500">补充与评论</h4>
               {comments.length === 0 ? (

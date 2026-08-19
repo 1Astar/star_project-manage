@@ -10,6 +10,8 @@ import {
   upsertProjectRow,
   upsertRequirementRow,
   upsertRequirementAttachmentRow,
+  upsertBugAttachmentRow,
+  deleteBugAttachmentRow,
   upsertAcceptanceItemRow,
   upsertAcceptanceRecordRow,
   deleteRequirementAttachmentRow,
@@ -39,6 +41,7 @@ import type {
   AcceptanceRecord,
   ActivityLog,
   Bug,
+  BugAttachment,
   BugComment,
   BugSeverity,
   BugType,
@@ -182,6 +185,7 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
       options: Array.isArray(def.options) ? def.options : [],
     })),
     requirement_attachments: db.requirement_attachments ?? [],
+    bug_attachments: db.bug_attachments ?? [],
     requirement_links: db.requirement_links ?? [],
     project_interviews: db.project_interviews ?? [],
     interview_requirement_links: db.interview_requirement_links ?? [],
@@ -1105,7 +1109,10 @@ export async function getBugById(bugId: string) {
   const comments = (db.bug_comments ?? [])
     .filter((c) => c.bug_id === bugId)
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  return { bug, project, requirement, comments };
+  const attachments = (db.bug_attachments ?? [])
+    .filter((a) => a.bug_id === bugId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return { bug, project, requirement, comments, attachments };
 }
 
 export async function createBug(input: {
@@ -1119,6 +1126,8 @@ export async function createBug(input: {
   bug_type?: BugType;
   status?: TaskStatus;
   created_at?: string | null;
+  /** 批量导入时关通知，避免刷屏 */
+  notify?: boolean;
 }) {
   const db = await readDb();
   const project = db.projects.find((p) => p.id === input.project_id);
@@ -1139,6 +1148,20 @@ export async function createBug(input: {
     updated_at: createdAt,
   };
   db.bugs.unshift(bug);
+  if (input.notify === false) {
+    await logActivity(db, {
+      project_id: input.project_id,
+      entity_type: "bug",
+      entity_id: bug.id,
+      field_name: "create",
+      old_value: null,
+      new_value: bug.title,
+      actor_name: "产品",
+      actor_role: "admin",
+    });
+    await saveDb(db);
+    return bug;
+  }
   if (input.assignee?.trim()) {
     db.notifications.unshift({
       id: uid("notif-"),
@@ -1270,6 +1293,9 @@ export async function deleteBug(bugId: string) {
   if (db.bug_comments?.length) {
     db.bug_comments = db.bug_comments.filter((c) => c.bug_id !== bugId);
   }
+  if (db.bug_attachments?.length) {
+    db.bug_attachments = db.bug_attachments.filter((a) => a.bug_id !== bugId);
+  }
   await logActivity(db, {
     project_id: removed.project_id,
     entity_type: "bug",
@@ -1322,6 +1348,155 @@ export async function listBugsByProject(projectId: string) {
   return db.bugs
     .filter((b) => b.project_id === project.id)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function listBugAttachments(bugId: string) {
+  const db = await readDb();
+  return (db.bug_attachments ?? [])
+    .filter((a) => a.bug_id === bugId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export async function createBugAttachment(input: {
+  project_id: string;
+  bug_id: string;
+  title: string;
+  url: string;
+  storage_path?: string | null;
+  mime_type?: string | null;
+}) {
+  const db = await readDb();
+  const bug = db.bugs.find((b) => b.id === input.bug_id);
+  if (!bug) throw new Error("Bug 不存在");
+  const attachment: BugAttachment = {
+    id: uid(),
+    project_id: input.project_id,
+    bug_id: input.bug_id,
+    title: input.title.trim() || "截图",
+    url: input.url,
+    storage_path: input.storage_path ?? null,
+    mime_type: input.mime_type ?? null,
+    created_at: nowIso(),
+  };
+
+  if (!db.bug_attachments) db.bug_attachments = [];
+  db.bug_attachments.unshift(attachment);
+
+  if (isSupabaseConfigured()) {
+    await upsertBugAttachmentRow(attachment);
+    memoryDb = db;
+    return attachment;
+  }
+
+  await saveLocalDb(db);
+  return attachment;
+}
+
+export async function deleteBugAttachment(id: string) {
+  const db = await readDb();
+  const exists = (db.bug_attachments ?? []).some((a) => a.id === id);
+  if (!exists) throw new Error("附件不存在");
+  db.bug_attachments = (db.bug_attachments ?? []).filter((a) => a.id !== id);
+
+  if (isSupabaseConfigured()) {
+    await deleteBugAttachmentRow(id);
+    memoryDb = db;
+    return;
+  }
+
+  await saveLocalDb(db);
+}
+
+/** 批量入库 Bug：单条不刷通知，最后一条汇总通知 */
+export async function importBugs(
+  projectId: string,
+  items: Array<{
+    title: string;
+    description?: string;
+    repro_steps?: string;
+    severity?: BugSeverity;
+    bug_type?: BugType;
+    assignee?: string;
+    requirement_id?: string | null;
+    created_at?: string | null;
+  }>
+) {
+  const created: Bug[] = [];
+  for (const item of items) {
+    const title = item.title.trim();
+    if (!title) continue;
+    const bug = await createBug({
+      project_id: projectId,
+      title,
+      description: item.description,
+      repro_steps: item.repro_steps,
+      severity: item.severity,
+      bug_type: item.bug_type,
+      assignee: item.assignee,
+      requirement_id: item.requirement_id,
+      created_at: item.created_at,
+      notify: false,
+    });
+    created.push(bug);
+  }
+  if (created.length) {
+    const db = await readDb();
+    const project = db.projects.find((p) => p.id === projectId);
+    db.notifications.unshift({
+      id: uid("notif-"),
+      project_id: projectId,
+      recipient_name: null,
+      type: "bug_created",
+      title: `导入 ${created.length} 条 Bug`,
+      body: created
+        .slice(0, 8)
+        .map((b) => b.title)
+        .join("；"),
+      link: project ? `/projects/${project.slug}/bugs` : null,
+      is_read: false,
+      created_at: nowIso(),
+    });
+    await saveDb(db);
+  }
+  return created;
+}
+
+export async function applyOrganizeBugs(
+  projectId: string,
+  actions: {
+    fillTypes?: Array<{ bugId: string; to: BugType }>;
+    linkRequirements?: Array<{ bugId: string; requirementId: string }>;
+    mergeGroups?: Array<{ keepId: string; closeIds: string[] }>;
+  }
+) {
+  const applied = { fillTypes: 0, linkRequirements: 0, closedDuplicates: 0 };
+  for (const row of actions.fillTypes ?? []) {
+    await updateBug(row.bugId, { bug_type: row.to });
+    applied.fillTypes += 1;
+  }
+  for (const row of actions.linkRequirements ?? []) {
+    await updateBug(row.bugId, { requirement_id: row.requirementId });
+    applied.linkRequirements += 1;
+  }
+  for (const group of actions.mergeGroups ?? []) {
+    for (const closeId of group.closeIds) {
+      await addBugComment({
+        bug_id: closeId,
+        author_name: "产品",
+        author_role: "admin",
+        body: `整理：与 ${group.keepId} 重复，已关闭。`,
+      });
+      await updateBug(closeId, { status: "done" });
+      applied.closedDuplicates += 1;
+    }
+    await addBugComment({
+      bug_id: group.keepId,
+      author_name: "产品",
+      author_role: "admin",
+      body: `整理：合并了 ${group.closeIds.length} 条重复单。`,
+    });
+  }
+  return { projectId, ...applied };
 }
 
 export async function listRequirementAttachments(requirementId: string) {

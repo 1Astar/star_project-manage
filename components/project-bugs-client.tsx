@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateBugStatusAction } from "@/lib/actions";
 import { BugCreateForm, type BugFormOption, type MemberOption } from "@/components/bug-side-form";
+import { BugImportOrganizePanel } from "@/components/bug-import-organize";
 import { StudioBadge } from "@/components/studio/shell";
 import type { Bug, TaskStatus } from "@/lib/types";
 import {
@@ -89,6 +90,8 @@ export function ProjectBugsClient({
           </button>
         </div>
       </div>
+
+      <BugImportOrganizePanel projectId={projectId} projectSlug={projectSlug} />
 
       {showCreate ? (
         <BugCreateForm

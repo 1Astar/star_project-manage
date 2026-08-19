@@ -1776,6 +1776,231 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   server.registerTool(
+    "preview_bug_feedback",
+    {
+      title: "Preview Bug Feedback",
+      description:
+        "把一大段反馈拆成 Bug 清单预览（不入库）。默认规则拆分；传 preferAi + openAi 凭证可用 AI。",
+      inputSchema: {
+        text: z.string().min(1),
+        projectId: z.string().optional(),
+        preferAi: z.boolean().optional(),
+        openAiApiKey: z.string().optional(),
+        openAiModel: z.string().optional(),
+        openAiBaseUrl: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { previewBugFeedback } = await import("@/lib/bugs/parse-feedback");
+        let projectTitle: string | undefined;
+        if (input.projectId) {
+          const { resolvePmProject } = await import("@/lib/bugs/resolve-pm");
+          const { pm } = await resolvePmProject(input.projectId);
+          projectTitle = pm?.name;
+        }
+        const preview = await previewBugFeedback(input.text, {
+          projectTitle,
+          preferAi: input.preferAi === true,
+          credentials: input.openAiApiKey
+            ? {
+                apiKey: input.openAiApiKey,
+                model: input.openAiModel,
+                baseUrl: input.openAiBaseUrl,
+              }
+            : null,
+        });
+        return mcpJson({ ok: true, projectId: input.projectId ?? null, ...preview });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "preview_bug_feedback 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "import_bugs",
+    {
+      title: "Import Bugs",
+      description:
+        "批量入库 Bug。可先用 preview_bug_feedback 拆条，再把清单传进来。截图用 attach_bug_image 挂到对应 bugId。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        items: z
+          .array(
+            z.object({
+              title: z.string().min(1),
+              description: z.string().optional(),
+              reproSteps: z.string().optional(),
+              severity: z.number().int().min(1).max(4).optional(),
+              bugType: z
+                .enum([
+                  "code",
+                  "ui",
+                  "performance",
+                  "security",
+                  "design",
+                  "config",
+                  "install",
+                  "other",
+                ])
+                .optional(),
+              requirementId: z.string().nullable().optional(),
+              assignee: z.string().optional(),
+              createdAt: z.string().nullable().optional(),
+            })
+          )
+          .min(1)
+          .max(80),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolvePmProject } = await import("@/lib/bugs/resolve-pm");
+        const { importBugs } = await import("@/lib/db/local-store");
+        const { pm } = await resolvePmProject(input.projectId);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+        const created = await importBugs(
+          pm.id,
+          input.items.map((item) => ({
+            title: item.title,
+            description: item.description,
+            repro_steps: item.reproSteps,
+            severity: item.severity as 1 | 2 | 3 | 4 | undefined,
+            bug_type: item.bugType,
+            requirement_id: item.requirementId ?? null,
+            assignee: item.assignee,
+            created_at: item.createdAt ?? null,
+          }))
+        );
+        await logAiAction({
+          action: "import_bugs",
+          payload: { projectId: pm.id, count: created.length },
+        });
+        return mcpJson({
+          ok: true,
+          count: created.length,
+          pmSlug: pm.slug,
+          bugs: created.map((b) => ({
+            id: b.id,
+            title: b.title,
+            severity: b.severity,
+            bugType: b.bug_type,
+          })),
+        });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "import_bugs 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "attach_bug_image",
+    {
+      title: "Attach Bug Image",
+      description:
+        "给 Bug 上传截图。传 base64 或 url。多 bug 多图：文中「见图1」对第 1 张附件。",
+      inputSchema: {
+        bugId: z.string().min(1),
+        title: z.string().optional(),
+        url: z.string().optional(),
+        fileName: z.string().optional(),
+        mimeType: z.string().optional(),
+        base64: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { getBugById, createBugAttachment } = await import("@/lib/db/local-store");
+        const linked = await getBugById(input.bugId);
+        if (!linked) return mcpError("Bug 不存在");
+        let url = input.url?.trim() || "";
+        let storagePath: string | null = null;
+        let mimeType = input.mimeType ?? null;
+        if (!url && input.base64?.trim()) {
+          const { uploadStudioAssetFile } = await import("@/lib/studio/asset-storage");
+          const raw = input.base64.replace(/^data:[^;]+;base64,/, "");
+          const buf = Buffer.from(raw, "base64");
+          const name = input.fileName?.trim() || `${input.title ?? "screenshot"}.png`;
+          const file = new File([buf], name, { type: mimeType || "image/png" });
+          const uploaded = await uploadStudioAssetFile(linked.bug.project_id, file);
+          url = uploaded.url;
+          storagePath = uploaded.storagePath;
+          mimeType = uploaded.mimeType;
+        }
+        if (!url) return mcpError("请提供 url 或 base64");
+        const attachment = await createBugAttachment({
+          project_id: linked.bug.project_id,
+          bug_id: linked.bug.id,
+          title: input.title?.trim() || input.fileName || "截图",
+          url,
+          storage_path: storagePath,
+          mime_type: mimeType,
+        });
+        await logAiAction({
+          action: "attach_bug_image",
+          payload: { bugId: linked.bug.id, attachmentId: attachment.id },
+        });
+        return mcpJson({ ok: true, attachment });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "attach_bug_image 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "organize_bugs",
+    {
+      title: "Organize Bugs",
+      description:
+        "整理现有 Bug：补类型、按标题挂需求、关闭重复单。默认 dryRun=true 只预览。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        dryRun: z.boolean().optional().describe("默认 true，只预览不改库"),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolvePmProject } = await import("@/lib/bugs/resolve-pm");
+        const { previewOrganizeBugs } = await import("@/lib/bugs/organize");
+        const {
+          applyOrganizeBugs,
+          listBugsByProject,
+          listProjectRequirementOptions,
+        } = await import("@/lib/db/local-store");
+        const { pm } = await resolvePmProject(input.projectId);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+        const bugs = await listBugsByProject(pm.id);
+        const requirements = await listProjectRequirementOptions(pm.id);
+        const preview = previewOrganizeBugs({
+          bugs,
+          requirements: requirements.map((r) => ({ id: r.id, title: r.title })),
+        });
+        if (input.dryRun !== false) {
+          return mcpJson({ ok: true, dryRun: true, preview });
+        }
+        const result = await applyOrganizeBugs(pm.id, {
+          fillTypes: preview.fillTypes.map((r) => ({ bugId: r.bugId, to: r.to })),
+          linkRequirements: preview.linkRequirements.map((r) => ({
+            bugId: r.bugId,
+            requirementId: r.requirementId,
+          })),
+          mergeGroups: preview.duplicateGroups.map((g) => ({
+            keepId: g.keepId,
+            closeIds: g.closeIds,
+          })),
+        });
+        await logAiAction({
+          action: "organize_bugs",
+          payload: result,
+        });
+        return mcpJson({ ok: true, dryRun: false, preview, result });
+      } catch (error) {
+        return mcpError(error instanceof Error ? error.message : "organize_bugs 失败");
+      }
+    }
+  );
+
+  server.registerTool(
     "list_bugs",
     {
       title: "List Bugs",
@@ -1915,7 +2140,7 @@ export function registerWorkspaceTools(server: McpServer) {
         const { getBugById } = await import("@/lib/db/local-store");
         const linked = await getBugById(input.bugId);
         if (!linked) return mcpError("Bug 不存在");
-        const { bug, project, requirement, comments } = linked;
+        const { bug, project, requirement, comments, attachments } = linked;
         return mcpJson({
           ok: true,
           bug: {
@@ -1934,6 +2159,11 @@ export function registerWorkspaceTools(server: McpServer) {
             createdAt: bug.created_at,
             updatedAt: bug.updated_at,
             commentCount: comments.length,
+            attachments: (attachments ?? []).map((a) => ({
+              id: a.id,
+              title: a.title,
+              url: a.url,
+            })),
           },
         });
       } catch (error) {

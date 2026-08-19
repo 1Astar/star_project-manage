@@ -590,6 +590,7 @@ export function createSeedData(): DatabaseSnapshot {
     project_members: [],
     pool_column_defs: [],
     requirement_attachments: [],
+    bug_attachments: [],
     requirement_links: [],
     project_interviews: [],
     interview_requirement_links: [],

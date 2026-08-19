@@ -29,6 +29,7 @@ export default async function BugDetailPage({
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
       comments={detail.comments ?? []}
+      attachments={detail.attachments ?? []}
     />
   );
 }
