@@ -45,5 +45,9 @@
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "wrangler": "^4.28.0"
+  },
+  "optionalDependencies": {
+    "@emnapi/core": "1.11.3",
+    "@emnapi/runtime": "1.11.3"
   }
 }
