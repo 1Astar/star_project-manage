@@ -10,6 +10,8 @@ type ImportBody = {
   mode?: "preview" | "commit";
   text?: string;
   preferAi?: boolean;
+  /** 已选截图文件名，供 AI 写进 imageHints */
+  imageFileNames?: string[];
   openAiApiKey?: string;
   openAiModel?: string;
   openAiBaseUrl?: string;
@@ -48,6 +50,7 @@ export async function POST(
       const preview = await previewBugFeedback(body.text, {
         projectTitle: pm.name,
         preferAi: body.preferAi !== false,
+        imageFileNames: body.imageFileNames,
         credentials: body.openAiApiKey
           ? {
               apiKey: body.openAiApiKey,

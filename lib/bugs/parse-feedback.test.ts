@@ -72,4 +72,18 @@ assert.deepEqual(org.duplicateGroups[0].closeIds, ["b"]);
 const imgMap = matchImagesToDrafts(preview.drafts, ["图1.png", "b.png", "c.png"]);
 assert.deepEqual(imgMap["h-0"], ["图1.png"]);
 
+const byName = matchImagesToDrafts(
+  [
+    {
+      key: "x",
+      title: "A",
+      description: "",
+      reproSteps: "",
+      imageHints: ["login-fail.png"],
+    },
+  ],
+  ["login-fail.png", "other.png"]
+);
+assert.deepEqual(byName.x, ["login-fail.png"]);
+
 console.log("lib/bugs parse+organize ok");

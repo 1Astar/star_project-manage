@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BugAttachment } from "@/lib/types";
+import { ImageDropZone } from "@/components/image-drop-zone";
 
 export function BugAttachmentsBlock({
   projectId,
@@ -18,25 +19,32 @@ export function BugAttachmentsBlock({
   const [attachments, setAttachments] = useState(initial);
   const [error, setError] = useState<string | null>(null);
 
-  function upload(file: File) {
+  function uploadMany(files: File[]) {
+    if (!files.length) return;
     setError(null);
     startTransition(async () => {
-      const form = new FormData();
-      form.set("projectId", projectId);
-      form.set("bugId", bugId);
-      form.set("title", file.name);
-      form.set("file", file);
-      const res = await fetch("/api/projects/bug-attachments", {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "上传失败");
-        return;
+      const added: BugAttachment[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.set("projectId", projectId);
+        form.set("bugId", bugId);
+        form.set("title", file.name);
+        form.set("file", file);
+        const res = await fetch("/api/projects/bug-attachments", {
+          method: "POST",
+          body: form,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? "上传失败");
+          break;
+        }
+        added.push(data.attachment as BugAttachment);
       }
-      setAttachments((prev) => [data.attachment as BugAttachment, ...prev]);
-      router.refresh();
+      if (added.length) {
+        setAttachments((prev) => [...added, ...prev]);
+        router.refresh();
+      }
     });
   }
 
@@ -60,21 +68,15 @@ export function BugAttachmentsBlock({
     <section className="space-y-2 border-t border-slate-100 pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-xs font-semibold text-slate-500">截图 / 附件</h4>
-        <label className="cursor-pointer rounded border border-slate-200 px-2 py-0.5 text-[11px] text-indigo-700">
-          {pending ? "上传中…" : "+ 上传图片"}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            disabled={pending}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) upload(file);
-              e.target.value = "";
-            }}
-          />
-        </label>
       </div>
+      <ImageDropZone
+        multiple
+        disabled={pending}
+        onFiles={uploadMany}
+        className="py-3 text-center"
+      >
+        {pending ? "上传中…" : "拖拽截图到这里，或点击选择（可多张）"}
+      </ImageDropZone>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {attachments.length === 0 ? (
         <p className="text-xs text-slate-400">还没有截图。导入反馈或这里上传。</p>

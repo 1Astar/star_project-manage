@@ -1785,6 +1785,7 @@ export function registerWorkspaceTools(server: McpServer) {
         text: z.string().min(1),
         projectId: z.string().optional(),
         preferAi: z.boolean().optional(),
+        imageFileNames: z.array(z.string()).optional(),
         openAiApiKey: z.string().optional(),
         openAiModel: z.string().optional(),
         openAiBaseUrl: z.string().optional(),
@@ -1802,6 +1803,7 @@ export function registerWorkspaceTools(server: McpServer) {
         const preview = await previewBugFeedback(input.text, {
           projectTitle,
           preferAi: input.preferAi === true,
+          imageFileNames: input.imageFileNames,
           credentials: input.openAiApiKey
             ? {
                 apiKey: input.openAiApiKey,

@@ -213,23 +213,32 @@ export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
 
 export async function parseBugFeedbackWithOpenAi(
   raw: string,
-  opts: { projectTitle?: string; credentials: OpenAiCredentials }
+  opts: {
+    projectTitle?: string;
+    credentials: OpenAiCredentials;
+    /** 用户已选截图文件名，便于 AI 在 imageHints 里直接填文件名 */
+    imageFileNames?: string[];
+  }
 ): Promise<BugFeedbackPreview> {
   const text = raw.trim();
   if (!text) return parseBugFeedbackHeuristic(raw);
 
   const { apiKey, model, baseUrl } = resolveOpenAiCredentials(opts.credentials);
   const types = Object.keys(BUG_TYPE_LABELS).join("/");
+  const names = (opts.imageFileNames ?? []).filter(Boolean).slice(0, 40);
 
   const prompt = [
     "你是测试/产品助手。把下面这段中文反馈（可能含聊天记录、多条问题、截图说明）整理成 Bug 清单。",
     opts.projectTitle ? `关联项目：${opts.projectTitle}` : "",
+    names.length
+      ? `用户已准备这些截图文件（按上传顺序）：\n${names.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
+      : "",
     "",
     "规则：",
     "- 一条独立问题一条 Bug，不要把整段糊成一条",
     "- title 短、可扫读；reproSteps 写怎么点出来；description 写期望 vs 实际",
     `- severity 1致命 2严重 3一般 4轻微；bugType 只能是 ${types}`,
-    "- imageHints 写出文中提到的截图/图序（如 图1、见截图）",
+    "- imageHints：优先填上面对应的**完整文件名**；若只能推断图序则写 图1 / 图2；不要瞎编不存在的文件名",
     "- 输出 JSON：{ summary, drafts:[{ title, description, reproSteps, severity, bugType, imageHints }] }",
     "",
     "【反馈原文】",
@@ -307,7 +316,36 @@ function parseImageOrdinal(raw: string): number | null {
   return null;
 }
 
-/** 文中「见图1」/文件名「图1」「img-2」对第 N 张；对不上则按顺序一对一 */
+function resolveHintToFile(
+  hint: string,
+  fileNames: string[],
+  byOrdinal: Map<number, string>,
+  used: Set<string>
+): string | null {
+  const h = hint.trim();
+  if (!h) return null;
+  const exact = fileNames.find((f) => f === h && !used.has(f));
+  if (exact) return exact;
+  const byBase = fileNames.find(
+    (f) => !used.has(f) && (f === h || f.endsWith(h) || h.endsWith(f) || f.includes(h))
+  );
+  if (byBase && h.length >= 3) return byBase;
+  const ord = [...h.matchAll(/(?:见图|截图|图片|图)\s*([0-9一二三四五六七八九十]+)/g)];
+  for (const m of ord) {
+    const n = parseImageOrdinal(m[1] ?? "");
+    if (!n) continue;
+    const file = byOrdinal.get(n) ?? fileNames[n - 1];
+    if (file && !used.has(file)) return file;
+  }
+  const bare = parseImageOrdinal(h.replace(/^图/, ""));
+  if (bare) {
+    const file = byOrdinal.get(bare) ?? fileNames[bare - 1];
+    if (file && !used.has(file)) return file;
+  }
+  return null;
+}
+
+/** 优先 imageHints 里的文件名；其次「见图1」/文件名「图1」；对不上则条数相等时一对一 */
 export function matchImagesToDrafts(
   drafts: Array<Pick<BugFeedbackDraft, "key" | "title" | "description" | "reproSteps" | "imageHints">>,
   fileNames: string[]
@@ -324,16 +362,23 @@ export function matchImagesToDrafts(
 
   const used = new Set<string>();
   drafts.forEach((d, i) => {
-    const blob = `${d.title}\n${d.description}\n${d.reproSteps}\n${(d.imageHints ?? []).join(" ")}`;
-    const hinted = [...blob.matchAll(/(?:见图|截图|图片|图)\s*([0-9一二三四五六七八九十]+)/g)];
     const names: string[] = [];
-    for (const h of hinted) {
-      const n = parseImageOrdinal(h[1] ?? "");
-      if (!n) continue;
-      const file = byOrdinal.get(n) ?? fileNames[n - 1];
-      if (file && !used.has(file)) {
+    for (const hint of d.imageHints ?? []) {
+      const file = resolveHintToFile(hint, fileNames, byOrdinal, used);
+      if (file) {
         names.push(file);
         used.add(file);
+      }
+    }
+    if (names.length === 0) {
+      const blob = `${d.title}\n${d.description}\n${d.reproSteps}`;
+      const hinted = [...blob.matchAll(/(?:见图|截图|图片|图)\s*([0-9一二三四五六七八九十]+)/g)];
+      for (const h of hinted) {
+        const file = resolveHintToFile(`图${h[1]}`, fileNames, byOrdinal, used);
+        if (file) {
+          names.push(file);
+          used.add(file);
+        }
       }
     }
     if (names.length === 0 && fileNames.length === drafts.length) {
@@ -354,6 +399,7 @@ export async function previewBugFeedback(
     projectTitle?: string;
     credentials?: OpenAiCredentials | null;
     preferAi?: boolean;
+    imageFileNames?: string[];
   }
 ): Promise<BugFeedbackPreview> {
   if (opts.preferAi !== false && opts.credentials?.apiKey?.trim()) {
@@ -361,6 +407,7 @@ export async function previewBugFeedback(
       return await parseBugFeedbackWithOpenAi(raw, {
         projectTitle: opts.projectTitle,
         credentials: opts.credentials,
+        imageFileNames: opts.imageFileNames,
       });
     } catch {
       /* fall through */

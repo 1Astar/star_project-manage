@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadOpenAiSettings } from "@/lib/studio/ai/openai-settings";
 import type { BugFeedbackDraft, BugFeedbackPreview } from "@/lib/bugs/parse-feedback";
 import { matchImagesToDrafts } from "@/lib/bugs/parse-feedback";
 import type { OrganizeBugsPreview } from "@/lib/bugs/organize";
+import { ImageDropZone } from "@/components/image-drop-zone";
 import {
   BUG_SEVERITY_LABELS,
   BUG_TYPE_LABELS,
@@ -39,6 +40,47 @@ export function BugImportOrganizePanel({
     () => preview?.drafts.filter((d) => d.selected).length ?? 0,
     [preview]
   );
+
+  const previewUrls = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const f of files) {
+      map[f.name] = URL.createObjectURL(f);
+    }
+    return map;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(previewUrls).forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [previewUrls]);
+
+  function addFiles(list: File[]) {
+    setFiles((prev) => {
+      const names = new Set(prev.map((f) => f.name));
+      const next = [...prev, ...list.filter((f) => !names.has(f.name))];
+      if (preview) {
+        setFileMap(
+          matchImagesToDrafts(
+            preview.drafts,
+            next.map((f) => f.name)
+          )
+        );
+      }
+      return next;
+    });
+  }
+
+  function removeFile(name: string) {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
+    setFileMap((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const [k, names] of Object.entries(prev)) {
+        next[k] = names.filter((n) => n !== name);
+      }
+      return next;
+    });
+  }
 
   function updateDraft(key: string, patch: Partial<BugFeedbackDraft>) {
     setPreview((prev) => {
@@ -76,6 +118,7 @@ export function BugImportOrganizePanel({
           mode: "preview",
           text,
           preferAi,
+          imageFileNames: files.map((f) => f.name),
           openAiApiKey: preferAi ? ai?.apiKey : undefined,
           openAiModel: preferAi ? ai?.model : undefined,
           openAiBaseUrl: preferAi ? ai?.baseUrl : undefined,
@@ -86,10 +129,12 @@ export function BugImportOrganizePanel({
         setError(data.error ?? "整理失败");
         return;
       }
-      setPreview(data.preview as BugFeedbackPreview);
       const next = data.preview as BugFeedbackPreview;
+      setPreview(next);
       if (files.length) {
         setFileMap(matchImagesToDrafts(next.drafts, files.map((f) => f.name)));
+      } else {
+        setFileMap({});
       }
     } catch {
       setError("网络错误");
@@ -211,7 +256,7 @@ export function BugImportOrganizePanel({
           整理现有
         </button>
         <p className="text-xs text-slate-500">
-          粘贴一大段聊天/测试反馈（含图），整理成 Bug 清单后再入库
+          粘贴反馈 + 拖入截图 → AI/规则整理成可改清单 → 你确认匹配后再入库
         </p>
       </div>
 
@@ -227,6 +272,32 @@ export function BugImportOrganizePanel({
             placeholder="粘贴反馈。多图请写「见图1」「见图2」，或按 bug 顺序附上同样张数的图。"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
           />
+          <ImageDropZone multiple disabled={loading} onFiles={addFiles} />
+          {files.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {files.map((f) => (
+                <div
+                  key={f.name}
+                  className="relative w-20 overflow-hidden rounded-md border border-slate-200 bg-white"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={previewUrls[f.name]}
+                    alt={f.name}
+                    className="h-16 w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeFile(f.name)}
+                    className="absolute right-0.5 top-0.5 rounded bg-black/60 px-1 text-[10px] text-white"
+                  >
+                    ×
+                  </button>
+                  <p className="truncate px-1 py-0.5 text-[10px] text-slate-500">{f.name}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <label className="inline-flex items-center gap-1.5 text-slate-600">
               <input
@@ -235,31 +306,6 @@ export function BugImportOrganizePanel({
                 onChange={(e) => setPreferAi(e.target.checked)}
               />
               优先用 AI 整理（需在设置里配过 OpenAI）
-            </label>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 text-indigo-700">
-              <span>+ 选择截图</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const list = Array.from(e.target.files ?? []);
-                  setFiles((prev) => {
-                    const names = new Set(prev.map((f) => f.name));
-                    const next = [...prev, ...list.filter((f) => !names.has(f.name))];
-                    if (preview) {
-                      setFileMap(
-                        matchImagesToDrafts(
-                          preview.drafts,
-                          next.map((f) => f.name)
-                        )
-                      );
-                    }
-                    return next;
-                  });
-                }}
-              />
             </label>
             <button
               type="button"
@@ -276,19 +322,19 @@ export function BugImportOrganizePanel({
                 onClick={() => void commitImport()}
                 className="rounded-lg bg-indigo-600 px-3 py-1.5 text-white disabled:opacity-50"
               >
-                入库 {selectedCount} 条
+                确认入库 {selectedCount} 条
               </button>
             ) : null}
           </div>
           {files.length > 0 ? (
             <p className="text-xs text-slate-500">
-              已选 {files.length} 张。有「见图1」按图序挂；没有则按顺序一对一。不对就改下面的勾选。
+              已选 {files.length} 张。AI 会尽量按「见图N」/文件名挂到对应问题；不对就在下面勾缩略图改配。
             </p>
           ) : null}
           {preview ? (
             <div className="space-y-2">
               <p className="text-xs text-slate-500">
-                {preview.summary} · {preview.method === "openai" ? "AI" : "规则"}拆分
+                {preview.summary} · {preview.method === "openai" ? "AI" : "规则"}拆分 · 请核对后再入库
               </p>
               {preview.drafts.map((d) => (
                 <div
@@ -346,17 +392,34 @@ export function BugImportOrganizePanel({
                     className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
                   />
                   {files.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-                      {files.map((f) => (
-                        <label key={f.name} className="inline-flex items-center gap-1">
-                          <input
-                            type="checkbox"
-                            checked={(fileMap[d.key] ?? []).includes(f.name)}
-                            onChange={() => toggleFileOnDraft(d.key, f.name)}
-                          />
-                          {f.name}
-                        </label>
-                      ))}
+                    <div className="flex flex-wrap gap-2">
+                      {files.map((f) => {
+                        const on = (fileMap[d.key] ?? []).includes(f.name);
+                        return (
+                          <button
+                            key={f.name}
+                            type="button"
+                            onClick={() => toggleFileOnDraft(d.key, f.name)}
+                            className={`w-20 overflow-hidden rounded-md border text-left ${
+                              on
+                                ? "border-indigo-500 ring-2 ring-indigo-200"
+                                : "border-slate-200 opacity-70"
+                            }`}
+                            title={f.name}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={previewUrls[f.name]}
+                              alt={f.name}
+                              className="h-14 w-full object-cover"
+                            />
+                            <span className="block truncate px-1 py-0.5 text-[10px] text-slate-600">
+                              {on ? "✓ " : ""}
+                              {f.name}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </div>
