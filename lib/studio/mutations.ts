@@ -857,6 +857,8 @@ export type CreateChangeSessionInput = {
 };
 
 export type UpdateChangeSessionInput = {
+  /** 纠偏：把会话迁到正确项目 */
+  projectId?: string;
   goal?: string;
   reason?: string;
   expected?: string[];
@@ -941,6 +943,9 @@ export async function updateChangeSession(
   const snapshot = await getStudioSnapshot();
   const existing = (snapshot.changeSessions ?? []).find((c) => c.id === id);
   if (!existing) throw new Error("变更会话不存在");
+  if (patch.projectId && !snapshot.projects.some((p) => p.id === patch.projectId)) {
+    throw new Error("关联项目不存在");
+  }
 
   const finish = patch.action === "finish" || patch.status === "finished";
   const finishedAt = finish
@@ -983,7 +988,7 @@ export async function updateChangeSession(
     finishedAt,
     updatedAt: nowIso(),
     createdAt: existing.createdAt,
-    projectId: existing.projectId,
+    projectId: patch.projectId ?? existing.projectId,
     id: existing.id,
   };
 
@@ -1602,8 +1607,7 @@ export async function publishStudioProjectRelease(input: {
   draft?: boolean;
   prerelease?: boolean;
   /**
-   * 跳过发版前验收门禁（未验板块 / 未分板块）。
-   * draft 发版默认不拦；正式发版有待验则需 force 或先验收。
+   * 兼容旧调用；发版不再因未验收阻断。
    */
   forceSkipAcceptance?: boolean;
 }): Promise<{
@@ -1638,28 +1642,12 @@ export async function publishStudioProjectRelease(input: {
   const { getPmAcceptanceQueue } = await import("@/lib/workbench/pm-inbox");
   const acceptanceQ = await getPmAcceptanceQueue({ projectId: input.projectId });
   const pendingModules = acceptanceQ.bundles.map((b) => b.module);
-  const hasUncategorized = pendingModules.includes("未分板块");
   const acceptanceReview = {
     bundleCount: acceptanceQ.bundles.length,
     itemCount: acceptanceQ.items.length,
     modules: pendingModules,
-    skipped: Boolean(input.forceSkipAcceptance || input.draft),
+    skipped: true,
   };
-
-  if (
-    acceptanceQ.bundles.length > 0 &&
-    !input.forceSkipAcceptance &&
-    !input.draft
-  ) {
-    const list = acceptanceQ.bundles
-      .map((b) => `${b.module}（${b.itemCount}）`)
-      .join("、");
-    throw new Error(
-      `发版前还有未验收板块：${list}${
-        hasUncategorized ? "。请先补板块或验收「未分板块」" : ""
-      }。可在工作台整板块通过，或传 forceSkipAcceptance=true 强制发版。`
-    );
-  }
 
   const { createGitHubRelease, buildRepoUrl } = await import("@/lib/github/client");
   const { groupChangesByModule, formatReleaseNotesMarkdown, modulesForReleaseTag } =

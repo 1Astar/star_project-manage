@@ -709,7 +709,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Publish Release",
       description:
-        "按项目汇总带板块的演进，创建 GitHub Release。发版前会检查该项目未验收板块（含未分板块）；有待验则失败，除非 draft 或 forceSkipAcceptance。收工/发版均不即时 PushPlus，进晚报日总结（更新+待验收）。收工变更须带 module。",
+        "按项目汇总带板块的演进，创建 GitHub Release。有待验收不阻断发版（仍附 acceptanceReview 供对照）。收工/发版均不即时 PushPlus，进晚报日总结（更新+待验收）。收工变更须带 module。",
       inputSchema: {
         projectId: z.string().min(1),
         tag: z.string().min(1).describe("版本号，如 v1.9.1"),
@@ -728,7 +728,7 @@ export function registerWorkspaceTools(server: McpServer) {
         forceSkipAcceptance: z
           .boolean()
           .optional()
-          .describe("强制跳过未验收板块门禁（需用户明确要求）"),
+          .describe("已废弃：发版不再因未验收阻断，传入无效果"),
       },
     },
     async (input) => {
@@ -1291,9 +1291,10 @@ export function registerWorkspaceTools(server: McpServer) {
     "update_change_session",
     {
       title: "Update Change Session",
-      description: "补记或改验收状态（passed/rejected/unreviewed）；也可改 goal/reason/expected 等。",
+      description: "补记或改验收状态（passed/rejected/unreviewed）；也可改 goal/reason/expected，或 projectId 把会话迁到正确项目。",
       inputSchema: {
         sessionId: z.string().min(1),
+        projectId: z.string().min(1).optional().describe("把会话迁到另一项目"),
         goal: z.string().optional(),
         reason: z.string().optional(),
         expected: stringList,

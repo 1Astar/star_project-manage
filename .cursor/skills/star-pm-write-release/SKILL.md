@@ -128,7 +128,7 @@ description: >-
    **定时（上海时区）**：  
    - **09:00** 早报微信：今日要做 / 推荐（空则不推）  
    - **18:30** 晚报微信分两条：① 今日更新 ② 待你验收（空则不推）
-6. **发版门禁**：`publish_release` 若该项目仍有未验板块（含未分板块）则失败；`draft` 或用户明确要求时用 `forceSkipAcceptance=true`。
+6. **发版**：`publish_release` **不因未验收阻断**；待验仍留在工作台，发版后可继续点通过。`forceSkipAcceptance` 已废弃（传入无效果）。
 
 ### 1.4 Evolution 写入标准
 
@@ -427,7 +427,7 @@ ChatGPT 网页 Custom GPT：走 OAuth 路径 `/api/mcp-oauth/mcp`（与 Cursor B
 | 项目 | `list_projects` / `get_project` / `update_project` |
 | 需求 | `list_requirements` / `create_requirement` / `update_requirement` / `create_task` / `list_tasks` / `update_task` / `delete_task` |
 | 迭代期 | `list_iterations` / `create_planning_iteration` / `align_project_periods` |
-| Bug | `create_bug` / `list_bugs` / `get_bug` / `update_bug` / `update_bugs` / `add_bug_comment` / `delete_bug` |
+| Bug | `create_bug` / `import_bugs` / `preview_bug_feedback` / `attach_bug_image` / `organize_bugs` / `list_bugs` / `get_bug` / `update_bug` / `update_bugs` / `add_bug_comment` / `delete_bug`；站内项目 Bug 页「导入反馈 / 整理现有」 |
 | 发版 | `publish_release` |
 | CHANGELOG→演进 | `import_changelog_evolution` |
 
