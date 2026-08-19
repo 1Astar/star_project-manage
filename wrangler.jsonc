@@ -27,5 +27,9 @@
   },
   "vars": {
     "NEXT_PUBLIC_CF_WORKER": "1"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
   }
 }

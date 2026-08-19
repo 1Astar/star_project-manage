@@ -14,9 +14,19 @@
 
 相对 **v1.13.7**：
 
+### 设置 · 发版
+
+- **发版不再卡未验收**：`publish_release` 有待验板块仍可发；`forceSkipAcceptance` 保留兼容但无效果。待验继续留在工作台。
+
+### 迭代记录 · 变更会话
+
+- **会话可改所属项目**：`update_change_session` 支持 `projectId`。已将误挂在「晨光手记（演示）」的 11 条 chris-phone 会话迁回 AI Companion。
+
 ### 设置 · 观测
 
 - **Workers 错误可回翻**：线上 `star-pm` 打开 Workers Logs（全量采样），Cloudflare Observability 里能搜到调用日志和未捕获异常，不再只看到总览里的错误个数
+
+合并发版原因：同日运营纠偏（门禁、会话搬家、观测）写在一版 CHANGELOG，代码按方向分条。
 
 ## v1.13.7 · 2026-08-19
 
