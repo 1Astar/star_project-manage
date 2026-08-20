@@ -1762,7 +1762,10 @@ export async function ensurePmProjectForStudio(input: {
   repo_branch?: string | null;
   repo_url?: string | null;
 }): Promise<Project> {
-  const existing = await getProjectById(input.slug);
+  // 全量库查找：公开反馈无登录时 getProjectById 会被演示沙盘挡掉
+  const dbExisting = await readDb();
+  const existing =
+    dbExisting.projects.find((p) => p.slug === input.slug || p.id === input.slug) ?? null;
   if (existing) {
     await ensurePoolIteration(existing.id);
     return existing;

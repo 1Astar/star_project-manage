@@ -15,6 +15,7 @@ const PUBLIC_PREFIXES = [
   "/api/github/sync-ideas",
   "/api/mcp",
   "/api/mcp-oauth",
+  "/api/public",
   "/api/sse",
   "/api/message",
   "/oauth",
@@ -24,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/icon",
   "/apple-icon",
   "/prototypes",
+  "/bug-feedback-widget.js",
 ];
 
 export function middleware(request: NextRequest) {

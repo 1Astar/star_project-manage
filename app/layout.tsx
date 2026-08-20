@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { StarPmBugFeedbackHost } from "@/components/star-pm-bug-feedback-host";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {children}
+        <StarPmBugFeedbackHost />
+      </body>
     </html>
   );
 }

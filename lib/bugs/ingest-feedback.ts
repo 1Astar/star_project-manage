@@ -1,5 +1,5 @@
 import { createBug, createBugAttachment } from "@/lib/db/local-store";
-import { resolvePmProject } from "@/lib/bugs/resolve-pm";
+import { resolvePmProjectForFeedback } from "@/lib/bugs/resolve-pm";
 import { resolveStudioProjectIdByToken } from "@/lib/bugs/feedback-token";
 import { matchRequirementForBug } from "@/lib/bugs/match-requirement";
 import { serverOpenAiCredentials } from "@/lib/studio/ai/openai-server-settings";
@@ -60,7 +60,7 @@ export async function ingestBugFeedback(
   const studioProjectId = await resolveStudioProjectIdByToken(token);
   if (!studioProjectId) throw new Error("无效的反馈 token");
 
-  const { pm } = await resolvePmProject(studioProjectId);
+  const { pm } = await resolvePmProjectForFeedback(studioProjectId);
   if (!pm) throw new Error(`找不到 PM 项目：${studioProjectId}`);
 
   const title = (input.title?.trim() || firstLineTitle(description)).slice(0, 120);
