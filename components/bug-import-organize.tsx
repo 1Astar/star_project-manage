@@ -23,6 +23,63 @@ import {
 const SEVERITIES = [1, 2, 3, 4] as BugSeverity[];
 const BUG_TYPES = Object.keys(BUG_TYPE_LABELS) as BugType[];
 
+type BugImportDraftStore = {
+  text: string;
+  preferAi: boolean;
+  tab: "import" | "organize" | null;
+  preview: BugFeedbackPreview | null;
+  updatedAt: string;
+};
+
+function draftStorageKey(projectId: string) {
+  return `star-pm:bug-import-draft:v1:${projectId}`;
+}
+
+function loadImportDraft(projectId: string): BugImportDraftStore | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(draftStorageKey(projectId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BugImportDraftStore>;
+    if (typeof parsed.text !== "string") return null;
+    return {
+      text: parsed.text,
+      preferAi: parsed.preferAi !== false,
+      tab: parsed.tab === "import" || parsed.tab === "organize" ? parsed.tab : null,
+      preview: parsed.preview && Array.isArray(parsed.preview.drafts) ? parsed.preview : null,
+      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveImportDraft(projectId: string, draft: Omit<BugImportDraftStore, "updatedAt">) {
+  if (typeof window === "undefined") return;
+  try {
+    if (!draft.text.trim() && !draft.preview) {
+      localStorage.removeItem(draftStorageKey(projectId));
+      return;
+    }
+    const payload: BugImportDraftStore = {
+      ...draft,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(draftStorageKey(projectId), JSON.stringify(payload));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function clearImportDraft(projectId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(draftStorageKey(projectId));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function BugImportOrganizePanel({
   projectId,
   projectSlug,
@@ -31,6 +88,7 @@ export function BugImportOrganizePanel({
   projectSlug: string;
 }) {
   const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
   const [tab, setTab] = useState<"import" | "organize" | null>(null);
   const [text, setText] = useState("");
   const [preferAi, setPreferAi] = useState(true);
@@ -41,6 +99,7 @@ export function BugImportOrganizePanel({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [draftHint, setDraftHint] = useState<string | null>(null);
 
   const selectedCount = useMemo(
     () => preview?.drafts.filter((d) => d.selected).length ?? 0,
@@ -61,6 +120,42 @@ export function BugImportOrganizePanel({
     };
   }, [previewUrls]);
 
+  useEffect(() => {
+    const saved = loadImportDraft(projectId);
+    if (saved) {
+      setText(saved.text);
+      setPreferAi(saved.preferAi);
+      setPreview(saved.preview);
+      if (saved.text.trim() || saved.preview) {
+        setTab(saved.tab === "organize" ? "import" : saved.tab ?? "import");
+        const when = saved.updatedAt
+          ? new Date(saved.updatedAt).toLocaleString("zh-CN", { hour12: false })
+          : "";
+        setDraftHint(
+          `已恢复本机草稿${when ? `（${when}）` : ""}。截图不会自动恢复，请重新拖入。`
+        );
+      }
+    }
+    setHydrated(true);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = window.setTimeout(() => {
+      saveImportDraft(projectId, { text, preferAi, tab, preview });
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, projectId, text, preferAi, tab, preview]);
+
+  function discardDraft() {
+    clearImportDraft(projectId);
+    setText("");
+    setPreview(null);
+    setFiles([]);
+    setFileMap({});
+    setDraftHint(null);
+    setMessage("已清空本机草稿");
+  }
   function addFiles(list: File[]) {
     if (!list.length) return;
     setError(null);
@@ -279,6 +374,8 @@ export function BugImportOrganizePanel({
       setText("");
       setFiles([]);
       setFileMap({});
+      clearImportDraft(projectId);
+      setDraftHint(null);
       router.refresh();
     } catch {
       setError("网络错误");
@@ -346,12 +443,24 @@ export function BugImportOrganizePanel({
           整理现有
         </button>
         <p className="text-xs text-slate-500">
-          粘贴反馈 + 拖入截图 → AI/规则整理成可改清单 → 你确认匹配后再入库
+          粘贴反馈 + 拖入截图 → AI/规则整理成可改清单 → 你确认匹配后再入库。正文会自动保存在本机。
         </p>
       </div>
 
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+      {draftHint ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-amber-700">
+          <span>{draftHint}</span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="rounded border border-amber-200 px-2 py-0.5 text-amber-800 hover:bg-amber-50"
+          >
+            清空草稿
+          </button>
+        </div>
+      ) : null}
 
       {tab === "import" ? (
         <div
@@ -367,9 +476,21 @@ export function BugImportOrganizePanel({
             onDragOver={handleImportDragOver}
             onDrop={handleImportDrop}
             rows={8}
-            placeholder="粘贴反馈文字。截图请 Ctrl+V 粘贴，或拖到下方虚线框（不要只拖进这个文本框）。多图可写「见图1」。"
+            placeholder="粘贴反馈文字（会自动保存在本机，关页不丢）。截图请 Ctrl+V 或拖到下方虚线框。多图可写「见图1」。"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
           />
+          {text.trim() || preview ? (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+              <span>正文已自动保存在本机（按项目分开）</span>
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="text-rose-600 underline-offset-2 hover:underline"
+              >
+                清空草稿
+              </button>
+            </div>
+          ) : null}
           <ImageDropZone
             multiple
             disabled={loading}
