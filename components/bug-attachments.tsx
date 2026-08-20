@@ -73,9 +73,14 @@ export function BugAttachmentsBlock({
         multiple
         disabled={pending}
         onFiles={uploadMany}
+        onUriOnlyDrop={() =>
+          setError(
+            "拖进来的是链接，读不到真图。请复制图片后 Ctrl+V，或点虚线框选文件。"
+          )
+        }
         className="py-3 text-center"
       >
-        {pending ? "上传中…" : "拖拽截图到这里，或点击选择（可多张）"}
+        {pending ? "上传中…" : "拖拽截图到这里，或点击选择；也可点此框后 Ctrl+V 粘贴（可多张）"}
       </ImageDropZone>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {attachments.length === 0 ? (

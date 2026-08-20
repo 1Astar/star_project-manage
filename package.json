@@ -1,6 +1,6 @@
 {
   "name": "star-pm",
-  "version": "1.14.2",
+  "version": "1.14.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:check": "tsx --env-file=.env.local scripts/db-check.ts",
+    "seed:bug-feedback": "tsx --env-file=.env.local scripts/seed-bug-feedback-tokens.ts",
     "db:types": "echo 'Run supabase gen types after linking project'",
     "mcp:stdio": "tsx --env-file=.env.local mcp/stdio.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",

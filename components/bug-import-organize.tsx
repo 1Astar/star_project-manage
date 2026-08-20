@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { loadOpenAiSettings } from "@/lib/studio/ai/openai-settings";
 import type { BugFeedbackDraft, BugFeedbackPreview } from "@/lib/bugs/parse-feedback";
 import { matchImagesToDrafts } from "@/lib/bugs/parse-feedback";
 import type { OrganizeBugsPreview } from "@/lib/bugs/organize";
-import { ImageDropZone } from "@/components/image-drop-zone";
+import {
+  ImageDropZone,
+  collectImagesFromClipboard,
+  collectImagesFromDataTransfer,
+  dataTransferLooksLikeUriOnly,
+} from "@/components/image-drop-zone";
 import {
   BUG_SEVERITY_LABELS,
   BUG_TYPE_LABELS,
@@ -56,6 +61,8 @@ export function BugImportOrganizePanel({
   }, [previewUrls]);
 
   function addFiles(list: File[]) {
+    if (!list.length) return;
+    setError(null);
     setFiles((prev) => {
       const names = new Set(prev.map((f) => f.name));
       const next = [...prev, ...list.filter((f) => !names.has(f.name))];
@@ -69,6 +76,50 @@ export function BugImportOrganizePanel({
       }
       return next;
     });
+  }
+
+  function warnUriOnlyDrop() {
+    setError(
+      "拖进来的是链接（如 vscode-file://），浏览器读不到真图。请：① 把图拖到下方虚线框；② 或先复制图片再在正文里 Ctrl+V；③ 或点虚线框选择文件。"
+    );
+  }
+
+  function handleImportPaste(e: ClipboardEvent) {
+    const images = collectImagesFromClipboard(e.clipboardData);
+    if (images.length) {
+      e.preventDefault();
+      addFiles(images);
+      setMessage(`已从剪贴板加入 ${images.length} 张截图`);
+      return;
+    }
+    const plain = e.clipboardData.getData("text/plain")?.trim() ?? "";
+    if (/^vscode-file:\/\//i.test(plain) || /^file:\/\//i.test(plain)) {
+      e.preventDefault();
+      warnUriOnlyDrop();
+    }
+  }
+
+  function handleImportDragOver(e: DragEvent) {
+    if ([...e.dataTransfer.types].some((t) => t === "Files" || t === "text/uri-list")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  }
+
+  function handleImportDrop(e: DragEvent) {
+    const images = collectImagesFromDataTransfer(e.dataTransfer);
+    if (images.length) {
+      e.preventDefault();
+      e.stopPropagation();
+      addFiles(images);
+      setMessage(`已拖入 ${images.length} 张截图`);
+      return;
+    }
+    if (dataTransferLooksLikeUriOnly(e.dataTransfer)) {
+      e.preventDefault();
+      e.stopPropagation();
+      warnUriOnlyDrop();
+    }
   }
 
   function removeFile(name: string) {
@@ -264,15 +315,33 @@ export function BugImportOrganizePanel({
       {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
 
       {tab === "import" ? (
-        <div className="space-y-3">
+        <div
+          className="space-y-3"
+          onPaste={handleImportPaste}
+          onDragOver={handleImportDragOver}
+          onDrop={handleImportDrop}
+        >
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onPaste={handleImportPaste}
+            onDragOver={handleImportDragOver}
+            onDrop={handleImportDrop}
             rows={8}
-            placeholder="粘贴反馈。多图请写「见图1」「见图2」，或按 bug 顺序附上同样张数的图。"
+            placeholder="粘贴反馈文字。截图请 Ctrl+V 粘贴，或拖到下方虚线框（不要只拖进这个文本框）。多图可写「见图1」。"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-300"
           />
-          <ImageDropZone multiple disabled={loading} onFiles={addFiles} />
+          <ImageDropZone
+            multiple
+            disabled={loading}
+            onFiles={addFiles}
+            onUriOnlyDrop={warnUriOnlyDrop}
+            className="py-4 text-center"
+          >
+            {loading
+              ? "处理中…"
+              : "把截图拖到这里 / 点击选择 / 或在上方正文里 Ctrl+V 粘贴剪贴板截图"}
+          </ImageDropZone>
           {files.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {files.map((f) => (
