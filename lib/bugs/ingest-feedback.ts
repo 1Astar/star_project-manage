@@ -1,10 +1,16 @@
-import { createBug, createBugAttachment } from "@/lib/db/local-store";
+import {
+  listRequirementOptionsForProject,
+  upsertActivityLogRow,
+  upsertBugAttachmentRow,
+  upsertBugRow,
+} from "@/lib/db/supabase-store";
 import { resolvePmProjectForFeedback } from "@/lib/bugs/resolve-pm";
 import { resolveStudioProjectIdByToken } from "@/lib/bugs/feedback-token";
 import { matchRequirementForBug } from "@/lib/bugs/match-requirement";
 import { serverOpenAiCredentials } from "@/lib/studio/ai/openai-server-settings";
 import { uploadStudioAssetFile } from "@/lib/studio/asset-storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import type { ActivityLog, Bug, BugAttachment, Project } from "@/lib/types";
 
 export type BugFeedbackIngestInput = {
   token: string;
@@ -48,6 +54,65 @@ function stripDataUrl(base64: string): { mime: string | null; data: string } {
   return { mime: null, data: base64.replace(/\s/g, "") };
 }
 
+function uid(prefix = ""): string {
+  return `${prefix}${crypto.randomUUID()}`;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+/** 不走 readDb/整库写入：公开反馈在 CF Worker 里只能用少量子请求 */
+async function createBugLight(input: {
+  project: Project;
+  requirement_id: string | null;
+  title: string;
+  description: string;
+  repro_steps?: string;
+}): Promise<Bug> {
+  const createdAt = nowIso();
+  const bug: Bug = {
+    id: uid("bug-"),
+    project_id: input.project.id,
+    requirement_id: input.requirement_id,
+    title: input.title,
+    description: input.description,
+    repro_steps: input.repro_steps ?? null,
+    assignee: null,
+    status: "pending",
+    severity: 3,
+    bug_type: "other",
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  if (!isSupabaseConfigured()) {
+    throw new Error("公开反馈需要 Supabase");
+  }
+
+  await upsertBugRow(bug);
+
+  const activity: ActivityLog = {
+    id: uid("log-"),
+    project_id: input.project.id,
+    entity_type: "bug",
+    entity_id: bug.id,
+    field_name: "create",
+    old_value: null,
+    new_value: bug.title,
+    actor_name: "公开反馈",
+    actor_role: "admin",
+    created_at: nowIso(),
+  };
+  try {
+    await upsertActivityLogRow(activity);
+  } catch {
+    // 活动日志失败不阻断建单
+  }
+
+  return bug;
+}
+
 export async function ingestBugFeedback(
   input: BugFeedbackIngestInput
 ): Promise<BugFeedbackIngestResult> {
@@ -62,6 +127,7 @@ export async function ingestBugFeedback(
 
   const { pm } = await resolvePmProjectForFeedback(studioProjectId);
   if (!pm) throw new Error(`找不到 PM 项目：${studioProjectId}`);
+  const project = pm;
 
   const title = (input.title?.trim() || firstLineTitle(description)).slice(0, 120);
 
@@ -75,25 +141,30 @@ export async function ingestBugFeedback(
   const fullDescription = [...contextLines, "", description].filter(Boolean).join("\n").trim();
 
   const credentials = await serverOpenAiCredentials();
+  let requirementOptions: Array<{ id: string; title: string; inPool: boolean }> = [];
+  if (credentials && isSupabaseConfigured()) {
+    try {
+      requirementOptions = await listRequirementOptionsForProject(project.id);
+    } catch {
+      requirementOptions = [];
+    }
+  }
+
   const match = await matchRequirementForBug({
-    pmProjectId: pm.id,
+    pmProjectId: project.id,
     title,
     description: fullDescription,
     pagePath: input.pagePath,
     credentials,
+    requirementOptions,
   });
 
-  const bug = await createBug({
-    project_id: pm.id,
+  const bug = await createBugLight({
+    project,
     requirement_id: match.requirementId,
     title,
     description: fullDescription,
     repro_steps: input.pagePath ? `页面路径：${input.pagePath}` : undefined,
-    severity: 3,
-    bug_type: "other",
-    status: "pending",
-    // 公开反馈不刷通知；且少一次 Cloudflare 子请求
-    notify: false,
   });
 
   let attachmentId: string | null = null;
@@ -108,15 +179,18 @@ export async function ingestBugFeedback(
       if (buffer.length > 0 && buffer.length <= 4 * 1024 * 1024) {
         const blob = new Blob([buffer], { type: mimeType });
         const file = new File([blob], fileName, { type: mimeType });
-        const uploaded = await uploadStudioAssetFile(pm.id, file);
-        const attachment = await createBugAttachment({
-          project_id: pm.id,
+        const uploaded = await uploadStudioAssetFile(project.id, file);
+        const attachment: BugAttachment = {
+          id: uid(),
+          project_id: project.id,
           bug_id: bug.id,
           title: "反馈截图",
           url: uploaded.url,
           storage_path: uploaded.storagePath,
           mime_type: uploaded.mimeType,
-        });
+          created_at: nowIso(),
+        };
+        await upsertBugAttachmentRow(attachment);
         attachmentId = attachment.id;
       }
     } catch {
@@ -127,7 +201,7 @@ export async function ingestBugFeedback(
   return {
     ok: true,
     bugId: bug.id,
-    projectId: pm.id,
+    projectId: project.id,
     studioProjectId,
     requirementId: match.requirementId,
     match: {

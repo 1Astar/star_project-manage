@@ -1,5 +1,7 @@
 import { getStudioSnapshot } from "@/lib/studio/store";
 import { ensurePmProjectForStudio, getProjects } from "@/lib/db/local-store";
+import { findProjectBySlugOrId } from "@/lib/db/supabase-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   getPmSlugForStudioProject,
   resolveProjectRoute,
@@ -19,19 +21,29 @@ export async function resolvePmProject(projectId: string) {
 
 /**
  * 公开 Bug 反馈专用：无登录也要解析真实项目。
- * 不走 resolveProjectRoute / getProjects 的演示沙盘过滤。
+ * 不走 resolveProjectRoute / getProjects / 整库 readDb（Cloudflare 子请求会爆）。
  */
 export async function resolvePmProjectForFeedback(studioProjectId: string) {
   const id = studioProjectId.trim();
   if (!id) return { studio: null, pm: null };
 
+  const slug = getPmSlugForStudioProject({ id });
+
+  if (isSupabaseConfigured()) {
+    const pm =
+      (await findProjectBySlugOrId(slug)) ?? (await findProjectBySlugOrId(id));
+    if (pm) {
+      return { studio: { id }, pm };
+    }
+  }
+
+  // 库中尚无 PM 行时才拉 Studio 快照并 ensure（极少路径）
   const { projects } = await getStudioSnapshot();
   const studio = projects.find((p) => p.id === id) ?? null;
   if (!studio) return { studio: null, pm: null };
 
-  const slug = getPmSlugForStudioProject(studio);
   const pm = await ensurePmProjectForStudio({
-    slug,
+    slug: getPmSlugForStudioProject(studio),
     name: studio.title,
     description: studio.positioning || null,
     demo_url: studio.demoUrl,

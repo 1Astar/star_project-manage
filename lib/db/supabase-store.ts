@@ -55,7 +55,10 @@ async function loadComments(sb: ReturnType<typeof client>) {
     .from("requirement_comments")
     .select("*")
     .order("created_at", { ascending: false });
-  if (result.error?.message.includes("requirement_comments")) {
+  if (
+    result.error?.message.includes("requirement_comments") ||
+    /too many subrequests/i.test(result.error?.message ?? "")
+  ) {
     return [];
   }
   return throwOnError(result, "requirement_comments");
@@ -63,7 +66,10 @@ async function loadComments(sb: ReturnType<typeof client>) {
 
 async function loadOptionalTable(sb: ReturnType<typeof client>, table: string) {
   const result = await sb.from(table).select("*");
-  if (result.error?.message.includes(table)) {
+  if (
+    result.error?.message.includes(table) ||
+    /too many subrequests/i.test(result.error?.message ?? "")
+  ) {
     return [];
   }
   return throwOnError(result, table);
@@ -390,6 +396,37 @@ export async function upsertActivityLogRow(log: import("@/lib/types").ActivityLo
 
 export async function upsertBugRow(bug: import("@/lib/types").Bug): Promise<void> {
   await upsertBugs([bug]);
+}
+
+/** 公开反馈专用：单行查项目，避免整库 readSupabaseDb */
+export async function findProjectBySlugOrId(slugOrId: string): Promise<Project | null> {
+  const key = slugOrId.trim();
+  if (!key) return null;
+  const sb = client();
+  const bySlug = await sb.from("projects").select("*").eq("slug", key).maybeSingle();
+  if (bySlug.error) throw new Error(`projects: ${bySlug.error.message}`);
+  if (bySlug.data) return bySlug.data as Project;
+  const byId = await sb.from("projects").select("*").eq("id", key).maybeSingle();
+  if (byId.error) throw new Error(`projects: ${byId.error.message}`);
+  return (byId.data as Project | null) ?? null;
+}
+
+/** 公开反馈挂需求：只拉该项目需求标题，不读整库 */
+export async function listRequirementOptionsForProject(
+  projectId: string
+): Promise<Array<{ id: string; title: string; inPool: boolean }>> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("requirements")
+    .select("id,title,in_pool")
+    .eq("project_id", projectId)
+    .order("title", { ascending: true });
+  if (error) throw new Error(`requirements: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    title: String(row.title ?? ""),
+    inPool: Boolean(row.in_pool),
+  }));
 }
 
 export async function upsertNotificationRow(

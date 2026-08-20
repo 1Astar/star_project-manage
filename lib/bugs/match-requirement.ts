@@ -31,12 +31,16 @@ export async function matchRequirementForBug(input: {
   description: string;
   pagePath?: string;
   credentials: OpenAiCredentials | null;
+  /** 公开反馈传入轻量列表，避免 readDb 整库 */
+  requirementOptions?: Array<{ id: string; title: string; inPool: boolean }>;
 }): Promise<RequirementMatchResult> {
   if (!input.credentials?.apiKey?.trim()) {
     return { requirementId: null, confidence: 0, reason: "未配置模型", method: "skipped" };
   }
 
-  const options = await listProjectRequirementOptions(input.pmProjectId);
+  const options =
+    input.requirementOptions ??
+    (await listProjectRequirementOptions(input.pmProjectId));
   const open = options.filter((o) => o.inPool !== false).slice(0, 80);
   if (open.length === 0) {
     return { requirementId: null, confidence: 0, reason: "项目无需求可选", method: "none" };
