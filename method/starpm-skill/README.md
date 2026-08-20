@@ -58,9 +58,9 @@ Scripts: [`EXAMPLES.md`](./EXAMPLES.md) · Rules: [`SKILL.md`](./SKILL.md)
 
 ## Install
 
-**Public Skill repo:** https://github.com/1Astar/starpm-method  
+**Public Skill repo:** https://github.com/1Astar/star-pm-skill  
 
-From this folder (or clone of `starpm-method`):
+From this folder (or clone of `star-pm-skill`):
 
 ```powershell
 .\install.ps1

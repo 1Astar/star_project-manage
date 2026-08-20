@@ -10,7 +10,7 @@
 四层：Method → Skill（免费 v0.1）→ MCP Interface（说明公开）→ Core（闭源）。  
 可移植包：[`method/starpm-skill/`](./method/starpm-skill/)（[`README`](./method/starpm-skill/README.md) · [`SKILL`](./method/starpm-skill/SKILL.md) · [`CONNECT_MCP`](./method/starpm-skill/CONNECT_MCP.md) · [`EXAMPLES`](./method/starpm-skill/EXAMPLES.md) · [晨光手记](./method/starpm-skill/DEMO_CHENGGUANG.md) · [MAS](./method/starpm-skill/MAS_HOST.md)）
 
-**定案：** Skill v0.1 可免费公开（独立仓 [starpm-method](https://github.com/1Astar/starpm-method)）；Core + MCP Server 不开源。  
+**定案：** Skill v0.1 可免费公开（独立仓 [star-pm-skill](https://github.com/1Astar/star-pm-skill)）；Core + MCP Server 不开源。  
 父仓镜像：[`method/starpm-skill/`](./method/starpm-skill/)
 
 ## 快速开始

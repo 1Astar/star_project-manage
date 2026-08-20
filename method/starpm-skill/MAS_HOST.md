@@ -6,7 +6,7 @@
 
 | 用途 | 链接 |
 |------|------|
-| **Skill 独立仓（推荐给 MAS 导入）** | https://github.com/1Astar/starpm-method |
+| **Skill 独立仓（推荐给 MAS 导入）** | https://github.com/1Astar/star-pm-skill |
 | Skill 在父仓镜像路径 | https://github.com/1Astar/star_project-manage/tree/main/method/starpm-skill |
 | MAS 官网 / 服务 | https://mas.shuzhiren.com |
 | 浏览器试用（H5） | https://mas.shuzhiren.com/mobile/ |
@@ -39,7 +39,7 @@ MAS「项目管家」
 ### A. 挂 Skill
 
 1. **Git Skill 导入（优先）**  
-   仓库：https://github.com/1Astar/starpm-method （根目录即 `SKILL.md`）  
+   仓库：https://github.com/1Astar/star-pm-skill （根目录即 `SKILL.md`）  
    → MAS **技能 / Skill 库 / Git Skill** → 导入 → 分给「项目管家」。  
    父仓镜像：`method/starpm-skill/`（同内容，整仓偏 Core，不推荐当公开 Skill 源）。
 2. **或粘贴**  
