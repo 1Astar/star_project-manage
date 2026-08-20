@@ -11,6 +11,8 @@ import {
   upsertRequirementRow,
   upsertRequirementAttachmentRow,
   upsertBugAttachmentRow,
+  upsertBugRow,
+  upsertNotificationRow,
   deleteBugAttachmentRow,
   upsertAcceptanceItemRow,
   upsertAcceptanceRecordRow,
@@ -50,6 +52,7 @@ import type {
   LinkEntityType,
   LinkRelationType,
   ModuleNode,
+  NotificationItem,
   PoolColumnDef,
   PoolColumnType,
   Project,
@@ -1148,46 +1151,38 @@ export async function createBug(input: {
     updated_at: createdAt,
   };
   db.bugs.unshift(bug);
-  if (input.notify === false) {
-    await logActivity(db, {
-      project_id: input.project_id,
-      entity_type: "bug",
-      entity_id: bug.id,
-      field_name: "create",
-      old_value: null,
-      new_value: bug.title,
-      actor_name: "产品",
-      actor_role: "admin",
-    });
-    await saveDb(db);
-    return bug;
+
+  let notification: NotificationItem | null = null;
+  if (input.notify !== false) {
+    if (input.assignee?.trim()) {
+      notification = {
+        id: uid("notif-"),
+        project_id: input.project_id,
+        recipient_name: input.assignee.trim(),
+        type: "bug_assigned",
+        title: `指派给你：${input.title}`,
+        body: input.description ?? `请查看 Bug「${input.title}」`,
+        link: bugPathForProject(project, bug.id),
+        is_read: false,
+        created_at: nowIso(),
+      };
+    } else {
+      notification = {
+        id: uid("notif-"),
+        project_id: input.project_id,
+        recipient_name: null,
+        type: "bug_created",
+        title: `新 Bug：${input.title}`,
+        body: input.description ?? null,
+        link: bugPathForProject(project, bug.id),
+        is_read: false,
+        created_at: nowIso(),
+      };
+    }
+    db.notifications.unshift(notification);
   }
-  if (input.assignee?.trim()) {
-    db.notifications.unshift({
-      id: uid("notif-"),
-      project_id: input.project_id,
-      recipient_name: input.assignee.trim(),
-      type: "bug_assigned",
-      title: `指派给你：${input.title}`,
-      body: input.description ?? `请查看 Bug「${input.title}」`,
-      link: bugPathForProject(project, bug.id),
-      is_read: false,
-      created_at: nowIso(),
-    });
-  } else {
-    db.notifications.unshift({
-      id: uid("notif-"),
-      project_id: input.project_id,
-      recipient_name: null,
-      type: "bug_created",
-      title: `新 Bug：${input.title}`,
-      body: input.description ?? null,
-      link: bugPathForProject(project, bug.id),
-      is_read: false,
-      created_at: nowIso(),
-    });
-  }
-  await logActivity(db, {
+
+  const activity = await logActivity(db, {
     project_id: input.project_id,
     entity_type: "bug",
     entity_id: bug.id,
@@ -1197,7 +1192,17 @@ export async function createBug(input: {
     actor_name: "产品",
     actor_role: "admin",
   });
-  await saveDb(db);
+
+  // Cloudflare Worker 子请求有限：禁止整库 writeSupabaseDb
+  if (isSupabaseConfigured()) {
+    await upsertBugRow(bug);
+    if (notification) await upsertNotificationRow(notification);
+    await upsertActivityLogRow(activity);
+    memoryDb = db;
+    return bug;
+  }
+
+  await saveLocalDb(db);
   return bug;
 }
 

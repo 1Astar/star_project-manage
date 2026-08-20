@@ -388,6 +388,16 @@ export async function upsertActivityLogRow(log: import("@/lib/types").ActivityLo
   await upsertRows("activity_logs", [log]);
 }
 
+export async function upsertBugRow(bug: import("@/lib/types").Bug): Promise<void> {
+  await upsertBugs([bug]);
+}
+
+export async function upsertNotificationRow(
+  notification: import("@/lib/types").NotificationItem
+): Promise<void> {
+  await upsertRows("notifications", [notification]);
+}
+
 export async function upsertRequirementAttachmentRow(
   attachment: RequirementAttachment
 ): Promise<void> {

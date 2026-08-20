@@ -92,6 +92,8 @@ export async function ingestBugFeedback(
     severity: 3,
     bug_type: "other",
     status: "pending",
+    // 公开反馈不刷通知；且少一次 Cloudflare 子请求
+    notify: false,
   });
 
   let attachmentId: string | null = null;

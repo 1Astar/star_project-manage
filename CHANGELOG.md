@@ -10,6 +10,17 @@
 
 ---
 
+## v1.14.7 · 2026-08-20
+
+相对 **v1.14.6**：
+
+### 需求任务 · Bug 反馈
+
+- **Cloudflare 建单**：`createBug` 在 Supabase 下改为只 upsert Bug/通知/活动日志，不再整库 `writeSupabaseDb`（修 Worker「Too many subrequests」导致公开反馈失败）
+- **公开反馈关通知**：ingest 传 `notify: false`，少一次子请求且不刷站内通知
+
+---
+
 ## v1.14.6 · 2026-08-20
 
 相对 **v1.14.5**：
