@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-button";
 import { fetchProjectBoard, fetchProjectBugs } from "@/lib/actions";
 import { ProjectBugsClient } from "@/components/project-bugs-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
@@ -30,12 +30,11 @@ export default async function ProjectBugsPage({
         <p className="mt-2 text-sm text-slate-600">
           当前项目「{ctx.studio?.title ?? id}」尚未接入 PM 需求库，暂无 Bug 数据表可写。
         </p>
-        <Link
-          href={`/projects/${ctx.routeId}/tasks`}
+        <BackLink
+          fallback={`/projects/${ctx.routeId}/tasks`}
+          label="← 返回需求与任务"
           className="mt-4 inline-block text-sm text-indigo-600 hover:underline"
-        >
-          ← 返回需求与任务
-        </Link>
+        />
       </div>
     );
   }

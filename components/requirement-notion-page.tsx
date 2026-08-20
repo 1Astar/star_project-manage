@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { BackLink } from "@/components/back-button";
 import { saveRequirementDetailAction } from "@/lib/actions";
 import type { Requirement, TaskStatus } from "@/lib/types";
 import { REQUIREMENT_TYPE_LABELS, TASK_STATUS_LABELS } from "@/lib/types";
@@ -122,9 +123,7 @@ export function RequirementNotionPage({
   return (
     <div className="mx-auto max-w-6xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <a href={backHref} className="text-sm text-indigo-600 hover:underline">
-          ← 返回
-        </a>
+        <BackLink fallback={backHref} />
         <div className="flex items-center gap-2">
           {message ? <span className="text-xs text-slate-500">{message}</span> : null}
           <button

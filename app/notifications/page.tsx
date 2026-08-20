@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackButton } from "@/components/back-button";
 import { readDb } from "@/lib/db/local-store";
 import { WorkbenchShell } from "@/components/workbench-shell";
 
@@ -10,11 +11,7 @@ export default async function NotificationsPage() {
     <WorkbenchShell
       title="通知中心"
       subtitle="任务分配、待测试、测试不通过、待验收等系统内提醒"
-      actions={
-        <Link href="/" className="rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
-          返回工作台
-        </Link>
-      }
+      actions={<BackButton fallback="/" label="返回工作台" />}
     >
       <div className="space-y-3">
         {notifications.length === 0 ? (

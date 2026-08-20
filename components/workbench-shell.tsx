@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { BackButton } from "@/components/back-button";
+import { BackButton, InAppNavTracker } from "@/components/back-button";
 import { AppBrandFooter } from "@/components/app-brand-footer";
 import { LogoutButton } from "@/components/logout-button";
 import { appVersionLabel } from "@/lib/app-meta";
@@ -80,7 +80,9 @@ export function WorkbenchShell({
   );
 
   return (
-    <div className="flex min-h-screen bg-[#F7F8FA]">
+    <>
+      <InAppNavTracker />
+      <div className="flex min-h-screen bg-[#F7F8FA]">
       <PrefsHydrator />
       <aside className="hidden w-56 shrink-0 flex-col border-r border-slate-200 bg-white p-4 md:flex">
         <div className="mb-6 px-2">
@@ -173,5 +175,6 @@ export function WorkbenchShell({
         </div>
       </div>
     </div>
+    </>
   );
 }

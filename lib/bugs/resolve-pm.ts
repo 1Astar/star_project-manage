@@ -4,19 +4,76 @@ import { findProjectBySlugOrId } from "@/lib/db/supabase-store";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import {
   getPmSlugForStudioProject,
+  getStudioIdFromPmSlug,
   resolveProjectRoute,
 } from "@/lib/project-bridge";
+import type { Project } from "@/lib/types";
 
-/** 站内/管理员路径：可走演示沙盘过滤 */
+type ResolveCtx = {
+  studio: { id: string; title?: string } | null;
+  routeId: string;
+  pmSlug: string | null;
+  pmBundle: null;
+};
+
+/**
+ * 站内/管理员路径：解析 PM 项目。
+ * Supabase 下禁止 resolveProjectRoute（会 fetch 整板）+ getProjects（整库 readDb），
+ * 否则 Cloudflare Worker 会 Too many subrequests → 前端只看到 HTTP 500。
+ */
 export async function resolvePmProject(projectId: string) {
-  const ctx = await resolveProjectRoute(projectId);
+  const id = projectId.trim();
+  if (!id) {
+    return {
+      ctx: { studio: null, routeId: id, pmSlug: null, pmBundle: null } satisfies ResolveCtx,
+      pm: null as Project | null,
+    };
+  }
+
+  if (isSupabaseConfigured()) {
+    const keys = new Set<string>();
+    keys.add(id);
+    keys.add(getPmSlugForStudioProject({ id }));
+    const asStudioFromSlug = getStudioIdFromPmSlug(id);
+    if (asStudioFromSlug) {
+      keys.add(id);
+      keys.add(getPmSlugForStudioProject({ id: asStudioFromSlug }));
+    }
+
+    let pm: Project | null = null;
+    for (const key of keys) {
+      pm = await findProjectBySlugOrId(key);
+      if (pm) break;
+    }
+
+    return {
+      ctx: {
+        studio: null,
+        routeId: id,
+        pmSlug: pm?.slug ?? null,
+        pmBundle: null,
+      } satisfies ResolveCtx,
+      pm,
+    };
+  }
+
+  const ctx = await resolveProjectRoute(id);
   const pmAll = await getProjects();
   const pm =
     (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
-    pmAll.find((p) => p.id === projectId) ||
-    pmAll.find((p) => p.slug === projectId) ||
+    pmAll.find((p) => p.id === id) ||
+    pmAll.find((p) => p.slug === id) ||
     (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
-  return { ctx, pm: pm ?? null };
+
+  return {
+    ctx: {
+      studio: ctx.studio,
+      routeId: ctx.routeId,
+      pmSlug: ctx.pmSlug,
+      pmBundle: null,
+    },
+    pm: pm ?? null,
+  };
 }
 
 /**

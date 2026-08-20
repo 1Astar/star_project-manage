@@ -411,6 +411,33 @@ export async function findProjectBySlugOrId(slugOrId: string): Promise<Project |
   return (byId.data as Project | null) ?? null;
 }
 
+/** 单条 Bug，避免整库 readDb */
+export async function findBugById(bugId: string): Promise<Bug | null> {
+  const id = bugId.trim();
+  if (!id) return null;
+  const sb = client();
+  const { data, error } = await sb.from("bugs").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`bugs: ${error.message}`);
+  if (!data) return null;
+  return normalizeBug(data as unknown as Record<string, unknown>);
+}
+
+/** 按项目拉 Bug 列表，避免整库 readDb */
+export async function listBugsForProject(projectId: string): Promise<Bug[]> {
+  const pid = projectId.trim();
+  if (!pid) return [];
+  const sb = client();
+  const { data, error } = await sb
+    .from("bugs")
+    .select("*")
+    .eq("project_id", pid)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`bugs: ${error.message}`);
+  return (data ?? []).map((row) =>
+    normalizeBug(row as unknown as Record<string, unknown>)
+  );
+}
+
 /** 公开反馈挂需求：只拉该项目需求标题，不读整库 */
 export async function listRequirementOptionsForProject(
   projectId: string
@@ -427,6 +454,12 @@ export async function listRequirementOptionsForProject(
     title: String(row.title ?? ""),
     inPool: Boolean(row.in_pool),
   }));
+}
+
+export async function upsertBugCommentRow(
+  comment: import("@/lib/types").BugComment
+): Promise<void> {
+  await upsertRows("bug_comments", [comment]);
 }
 
 export async function upsertNotificationRow(

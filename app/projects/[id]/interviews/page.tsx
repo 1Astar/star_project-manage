@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-button";
 import { fetchProjectBoard } from "@/lib/actions";
 import { InterviewsClient } from "@/components/interviews-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
@@ -25,12 +25,11 @@ export default async function ProjectInterviewsPage({
         <p className="mt-2 text-sm text-slate-600">
           当前项目「{ctx.studio?.title ?? id}」尚未接入 PM 需求库，暂无访谈数据表可写。
         </p>
-        <Link
-          href={`/projects/${ctx.routeId}/tasks`}
+        <BackLink
+          fallback={`/projects/${ctx.routeId}/tasks`}
+          label="← 返回需求与任务"
           className="mt-4 inline-block text-sm text-indigo-600 hover:underline"
-        >
-          ← 返回需求与任务
-        </Link>
+        />
       </div>
     );
   }

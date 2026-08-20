@@ -21,17 +21,17 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAdminSession();
-  if (auth.error) return auth.error;
-
-  const { id } = await params;
-  const { pm, ctx } = await resolvePmProject(id);
-  if (!pm) return studioErr("项目不存在或未接入 PM 需求库", 404);
-
-  const body = (await readStudioBody<OrganizeBody>(request)) ?? {};
-  const mode = body.mode === "commit" ? "commit" : "preview";
-
   try {
+    const auth = await requireAdminSession();
+    if (auth.error) return auth.error;
+
+    const { id } = await params;
+    const { pm, ctx } = await resolvePmProject(id);
+    if (!pm) return studioErr("项目不存在或未接入 PM 需求库", 404);
+
+    const body = (await readStudioBody<OrganizeBody>(request)) ?? {};
+    const mode = body.mode === "commit" ? "commit" : "preview";
+
     const bugs = await listBugsByProject(pm.id);
     const requirements = await listProjectRequirementOptions(pm.id);
     const preview = previewOrganizeBugs({

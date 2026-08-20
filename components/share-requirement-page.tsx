@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { BackLink } from "@/components/back-button";
 import { RequirementCollabPanel } from "@/components/requirement-collab";
 import { canShareRoleUpdateAcceptance, canShareRoleSubmitTest } from "@/lib/share-permissions";
 import type {
@@ -83,9 +83,11 @@ export function ShareRequirementPage({
       actions={<StatusBadge status={requirement.status} />}
     >
       <div className="mb-4">
-        <Link href={`/share/${token}`} className="text-sm text-blue-600">
-          ← 返回看板
-        </Link>
+        <BackLink
+          fallback={`/share/${token}`}
+          label="← 返回看板"
+          className="text-sm text-blue-600 hover:underline"
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

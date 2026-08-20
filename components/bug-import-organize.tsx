@@ -286,6 +286,7 @@ export function BugImportOrganizePanel({
       const rawText = await res.text();
       let data: {
         error?: string;
+        message?: string;
         preview?: BugFeedbackPreview;
         aiError?: string;
       } = {};
@@ -298,7 +299,12 @@ export function BugImportOrganizePanel({
         return;
       }
       if (!res.ok) {
-        setError(data.error ?? `整理失败（HTTP ${res.status}）`);
+        const detail =
+          (typeof data.error === "string" && data.error) ||
+          (typeof data.message === "string" && data.message) ||
+          rawText.slice(0, 180) ||
+          `整理失败（HTTP ${res.status}）`;
+        setError(detail);
         return;
       }
       const next = data.preview as BugFeedbackPreview;
@@ -394,18 +400,37 @@ export function BugImportOrganizePanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "整理失败");
-        return;
-      }
-      setOrgPreview(data.preview as OrganizeBugsPreview);
-      if (mode === "commit") {
-        const r = data.result as {
+      const rawText = await res.text();
+      let data: {
+        error?: string;
+        message?: string;
+        preview?: OrganizeBugsPreview;
+        result?: {
           fillTypes?: number;
           linkRequirements?: number;
           closedDuplicates?: number;
         };
+      } = {};
+      try {
+        data = rawText ? (JSON.parse(rawText) as typeof data) : {};
+      } catch {
+        setError(
+          `整理失败：服务返回非 JSON（HTTP ${res.status}）。可能是 Worker 超时或子请求超限。`
+        );
+        return;
+      }
+      if (!res.ok) {
+        setError(
+          data.error ||
+            data.message ||
+            rawText.slice(0, 180) ||
+            `整理失败（HTTP ${res.status}）`
+        );
+        return;
+      }
+      setOrgPreview(data.preview as OrganizeBugsPreview);
+      if (mode === "commit") {
+        const r = data.result ?? {};
         setMessage(
           `整理完成：补类型 ${r.fillTypes ?? 0} · 挂需求 ${r.linkRequirements ?? 0} · 关重复 ${r.closedDuplicates ?? 0}`
         );

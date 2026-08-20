@@ -27,6 +27,9 @@ export async function readStudioBody<T extends Record<string, unknown>>(request:
 }
 
 export function humanizeDbError(message: string): string {
+  if (/too many subrequests/i.test(message)) {
+    return "数据库请求过多（Cloudflare 子请求上限）。请重试；若反复出现请告诉开发者该接口仍在读整库。";
+  }
   if (/feature_modules/i.test(message) && /schema cache|column/i.test(message)) {
     return "数据库缺少 feature_modules 列。请在 Supabase SQL Editor 执行迁移 028_evolution_modules.sql 后重试。";
   }

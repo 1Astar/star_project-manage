@@ -9,6 +9,7 @@ import {
   updateBugAction,
   updateBugStatusAction,
 } from "@/lib/actions";
+import { BackLink } from "@/components/back-button";
 import { BugAttachmentsBlock } from "@/components/bug-attachments";
 import { assigneeRosterNames, PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
 import type { Bug, BugAttachment, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
@@ -476,12 +477,10 @@ export function BugDetailEditor({
   return (
     <div className="mx-auto max-w-6xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <a
-          href={`/projects/${projectSlug}/bugs`}
-          className="text-sm text-indigo-600 hover:underline"
-        >
-          ← 返回 Bug 列表
-        </a>
+        <BackLink
+          fallback={`/projects/${projectSlug}/bugs`}
+          label="← 返回 Bug 列表"
+        />
         <div className="flex flex-wrap items-center gap-2">
           {message ? <span className="text-xs text-slate-500">{message}</span> : null}
           {copyHint ? <span className="text-xs text-emerald-600">{copyHint}</span> : null}

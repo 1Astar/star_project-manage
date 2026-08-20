@@ -12,6 +12,7 @@ import {
   upsertRequirementAttachmentRow,
   upsertBugAttachmentRow,
   upsertBugRow,
+  upsertBugCommentRow,
   upsertNotificationRow,
   deleteBugAttachmentRow,
   upsertAcceptanceItemRow,
@@ -21,6 +22,10 @@ import {
   upsertRequirementLinkRow,
   deleteRequirementLinkRow,
   deleteRequirementRows,
+  findProjectBySlugOrId,
+  findBugById,
+  listBugsForProject,
+  listRequirementOptionsForProject,
 } from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { assertDurableStorage, isSupabaseConfigured } from "@/lib/supabase/config";
@@ -1072,6 +1077,11 @@ export async function getRequirementDetail(requirementId: string) {
 }
 
 export async function listProjectRequirementOptions(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listRequirementOptionsForProject(project.id);
+  }
   const db = await readDb();
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) return [];
@@ -1132,6 +1142,80 @@ export async function createBug(input: {
   /** 批量导入时关通知，避免刷屏 */
   notify?: boolean;
 }) {
+  // Cloudflare Worker 子请求有限：禁止整库 readDb / writeSupabaseDb
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(input.project_id);
+    if (!project) throw new Error("项目不存在");
+    const createdAt = input.created_at?.trim() || nowIso();
+    const bug: Bug = {
+      id: uid("bug-"),
+      project_id: project.id,
+      requirement_id: input.requirement_id ?? null,
+      title: input.title,
+      description: input.description ?? null,
+      repro_steps: input.repro_steps ?? null,
+      assignee: input.assignee ?? null,
+      status: input.status ?? "pending",
+      severity: input.severity ?? 3,
+      bug_type: input.bug_type ?? "code",
+      created_at: createdAt,
+      updated_at: createdAt,
+    };
+
+    let notification: NotificationItem | null = null;
+    if (input.notify !== false) {
+      notification = input.assignee?.trim()
+        ? {
+            id: uid("notif-"),
+            project_id: project.id,
+            recipient_name: input.assignee.trim(),
+            type: "bug_assigned",
+            title: `指派给你：${input.title}`,
+            body: input.description ?? `请查看 Bug「${input.title}」`,
+            link: bugPathForProject(project, bug.id),
+            is_read: false,
+            created_at: nowIso(),
+          }
+        : {
+            id: uid("notif-"),
+            project_id: project.id,
+            recipient_name: null,
+            type: "bug_created",
+            title: `新 Bug：${input.title}`,
+            body: input.description ?? null,
+            link: bugPathForProject(project, bug.id),
+            is_read: false,
+            created_at: nowIso(),
+          };
+    }
+
+    await upsertBugRow(bug);
+    if (notification) await upsertNotificationRow(notification);
+    try {
+      await upsertActivityLogRow({
+        id: uid("log-"),
+        project_id: project.id,
+        entity_type: "bug",
+        entity_id: bug.id,
+        field_name: "create",
+        old_value: null,
+        new_value: bug.title,
+        actor_name: "产品",
+        actor_role: "admin",
+        created_at: nowIso(),
+      });
+    } catch {
+      /* 活动日志失败不阻断 */
+    }
+    if (memoryDb) {
+      memoryDb.bugs = [bug, ...memoryDb.bugs.filter((b) => b.id !== bug.id)];
+      if (notification) {
+        memoryDb.notifications = [notification, ...(memoryDb.notifications ?? [])];
+      }
+    }
+    return bug;
+  }
+
   const db = await readDb();
   const project = db.projects.find((p) => p.id === input.project_id);
   if (!project) throw new Error("项目不存在");
@@ -1182,7 +1266,7 @@ export async function createBug(input: {
     db.notifications.unshift(notification);
   }
 
-  const activity = await logActivity(db, {
+  await logActivity(db, {
     project_id: input.project_id,
     entity_type: "bug",
     entity_id: bug.id,
@@ -1192,15 +1276,6 @@ export async function createBug(input: {
     actor_name: "产品",
     actor_role: "admin",
   });
-
-  // Cloudflare Worker 子请求有限：禁止整库 writeSupabaseDb
-  if (isSupabaseConfigured()) {
-    await upsertBugRow(bug);
-    if (notification) await upsertNotificationRow(notification);
-    await upsertActivityLogRow(activity);
-    memoryDb = db;
-    return bug;
-  }
 
   await saveLocalDb(db);
   return bug;
@@ -1221,6 +1296,84 @@ export async function updateBug(
     updated_at: string | null;
   }>
 ) {
+  if (isSupabaseConfigured()) {
+    const bug = await findBugById(bugId);
+    if (!bug) throw new Error("Bug 不存在");
+    const project = await findProjectBySlugOrId(bug.project_id);
+    const beforeStatus = bug.status;
+    const beforeAssignee = bug.assignee;
+    if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
+    if (patch.description !== undefined) bug.description = patch.description;
+    if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+    if (patch.assignee !== undefined) bug.assignee = patch.assignee;
+    if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
+    if (patch.status !== undefined) bug.status = patch.status;
+    if (patch.severity !== undefined) bug.severity = patch.severity;
+    if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
+    if (bug.severity == null) bug.severity = 3;
+    if (!bug.bug_type) bug.bug_type = "code";
+    if (patch.created_at !== undefined && patch.created_at?.trim()) {
+      bug.created_at = patch.created_at.trim();
+    }
+    if (patch.updated_at !== undefined && patch.updated_at?.trim()) {
+      bug.updated_at = patch.updated_at.trim();
+    } else {
+      bug.updated_at = nowIso();
+    }
+
+    await upsertBugRow(bug);
+
+    if (patch.status !== undefined && beforeStatus !== bug.status) {
+      try {
+        await upsertActivityLogRow({
+          id: uid("log-"),
+          project_id: bug.project_id,
+          entity_type: "bug",
+          entity_id: bug.id,
+          field_name: "status",
+          old_value: beforeStatus,
+          new_value: bug.status,
+          actor_name: "产品",
+          actor_role: "admin",
+          created_at: nowIso(),
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const nextAssignee = bug.assignee?.trim() || null;
+    const prevAssignee = beforeAssignee?.trim() || null;
+    if (
+      patch.assignee !== undefined &&
+      nextAssignee &&
+      nextAssignee !== prevAssignee &&
+      project
+    ) {
+      try {
+        await upsertNotificationRow({
+          id: uid("notif-"),
+          project_id: bug.project_id,
+          recipient_name: nextAssignee,
+          type: "bug_assigned",
+          title: `指派给你：${bug.title}`,
+          body: `有人把 Bug 指派给你，请处理。`,
+          link: bugPathForProject(project, bug.id),
+          is_read: false,
+          created_at: nowIso(),
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (memoryDb) {
+      const idx = memoryDb.bugs.findIndex((b) => b.id === bug.id);
+      if (idx >= 0) memoryDb.bugs[idx] = bug;
+    }
+    return bug;
+  }
+
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === bugId);
   if (!bug) throw new Error("Bug 不存在");
@@ -1281,7 +1434,7 @@ export async function updateBug(
     });
   }
 
-  await saveDb(db);
+  await saveLocalDb(db);
   return bug;
 }
 
@@ -1326,6 +1479,30 @@ export async function addBugComment(input: {
   const author = input.author_name.trim();
   if (!author) throw new Error("请填写作者");
 
+  if (isSupabaseConfigured()) {
+    const bug = await findBugById(input.bug_id);
+    if (!bug) throw new Error("Bug 不存在");
+    const comment: BugComment = {
+      id: uid("bcmt-"),
+      project_id: bug.project_id,
+      bug_id: bug.id,
+      author_name: author,
+      author_role: input.author_role ?? null,
+      body,
+      created_at: nowIso(),
+    };
+    bug.updated_at = nowIso();
+    await upsertBugCommentRow(comment);
+    await upsertBugRow(bug);
+    if (memoryDb) {
+      if (!memoryDb.bug_comments) memoryDb.bug_comments = [];
+      memoryDb.bug_comments.unshift(comment);
+      const idx = memoryDb.bugs.findIndex((b) => b.id === bug.id);
+      if (idx >= 0) memoryDb.bugs[idx] = bug;
+    }
+    return comment;
+  }
+
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === input.bug_id);
   if (!bug) throw new Error("Bug 不存在");
@@ -1342,11 +1519,16 @@ export async function addBugComment(input: {
   if (!db.bug_comments) db.bug_comments = [];
   db.bug_comments.unshift(comment);
   bug.updated_at = nowIso();
-  await saveDb(db);
+  await saveLocalDb(db);
   return comment;
 }
 
 export async function listBugsByProject(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listBugsForProject(project.id);
+  }
   const project = await getProjectById(projectId);
   if (!project) return [];
   const db = await readDb();
@@ -1370,6 +1552,27 @@ export async function createBugAttachment(input: {
   storage_path?: string | null;
   mime_type?: string | null;
 }) {
+  if (isSupabaseConfigured()) {
+    const bug = await findBugById(input.bug_id);
+    if (!bug) throw new Error("Bug 不存在");
+    const attachment: BugAttachment = {
+      id: uid(),
+      project_id: input.project_id,
+      bug_id: input.bug_id,
+      title: input.title.trim() || "截图",
+      url: input.url,
+      storage_path: input.storage_path ?? null,
+      mime_type: input.mime_type ?? null,
+      created_at: nowIso(),
+    };
+    await upsertBugAttachmentRow(attachment);
+    if (memoryDb) {
+      if (!memoryDb.bug_attachments) memoryDb.bug_attachments = [];
+      memoryDb.bug_attachments.unshift(attachment);
+    }
+    return attachment;
+  }
+
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === input.bug_id);
   if (!bug) throw new Error("Bug 不存在");
@@ -1386,13 +1589,6 @@ export async function createBugAttachment(input: {
 
   if (!db.bug_attachments) db.bug_attachments = [];
   db.bug_attachments.unshift(attachment);
-
-  if (isSupabaseConfigured()) {
-    await upsertBugAttachmentRow(attachment);
-    memoryDb = db;
-    return attachment;
-  }
-
   await saveLocalDb(db);
   return attachment;
 }
@@ -1445,23 +1641,46 @@ export async function importBugs(
     created.push(bug);
   }
   if (created.length) {
-    const db = await readDb();
-    const project = db.projects.find((p) => p.id === projectId);
-    db.notifications.unshift({
-      id: uid("notif-"),
-      project_id: projectId,
-      recipient_name: null,
-      type: "bug_created",
-      title: `导入 ${created.length} 条 Bug`,
-      body: created
-        .slice(0, 8)
-        .map((b) => b.title)
-        .join("；"),
-      link: project ? `/projects/${project.slug}/bugs` : null,
-      is_read: false,
-      created_at: nowIso(),
-    });
-    await saveDb(db);
+    if (isSupabaseConfigured()) {
+      const project = await findProjectBySlugOrId(projectId);
+      const notification: NotificationItem = {
+        id: uid("notif-"),
+        project_id: project?.id ?? projectId,
+        recipient_name: null,
+        type: "bug_created",
+        title: `导入 ${created.length} 条 Bug`,
+        body: created
+          .slice(0, 8)
+          .map((b) => b.title)
+          .join("；"),
+        link: project ? `/projects/${project.slug}/bugs` : null,
+        is_read: false,
+        created_at: nowIso(),
+      };
+      try {
+        await upsertNotificationRow(notification);
+      } catch {
+        /* 汇总通知失败不阻断入库 */
+      }
+    } else {
+      const db = await readDb();
+      const project = db.projects.find((p) => p.id === projectId);
+      db.notifications.unshift({
+        id: uid("notif-"),
+        project_id: projectId,
+        recipient_name: null,
+        type: "bug_created",
+        title: `导入 ${created.length} 条 Bug`,
+        body: created
+          .slice(0, 8)
+          .map((b) => b.title)
+          .join("；"),
+        link: project ? `/projects/${project.slug}/bugs` : null,
+        is_read: false,
+        created_at: nowIso(),
+      });
+      await saveLocalDb(db);
+    }
   }
   return created;
 }
