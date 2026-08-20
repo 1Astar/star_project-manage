@@ -26,6 +26,7 @@
 
 | Skill | 何时用 | 本地路径 |
 |-------|--------|----------|
+| **starpm-method（对外包）** | **给别人复用的 Method v0.1**（非本机私有路径）：三场景 + 原始想法；见仓库 `method/starpm-skill/` | [../../method/starpm-skill/SKILL.md](../../method/starpm-skill/SKILL.md) |
 | **using-star-skills** | **开场 / 行动前**：判断该用哪些 Star skill；**开新项目前先扫 GitHub 复用** | [using-star-skills/SKILL.md](./using-star-skills/SKILL.md) |
 | **doc-delivery-formats** | 文档格式总入口、写作原则、Canvas 限制 | [doc-delivery-formats/SKILL.md](./doc-delivery-formats/SKILL.md) |
 | **star-pm-write-release** | 写 PM、灵感字段、做完勾完成、下一步改 P、发版 | [star-pm-write-release/SKILL.md](./star-pm-write-release/SKILL.md) |
