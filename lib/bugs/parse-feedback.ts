@@ -18,6 +18,8 @@ export type BugFeedbackPreview = {
   summary: string;
   drafts: BugFeedbackDraft[];
   method: "heuristic" | "openai";
+  /** AI 失败时的原因；仍可能返回 heuristic 草稿 */
+  aiError?: string;
 };
 
 const draftSchema = z.object({
@@ -253,9 +255,11 @@ export async function parseBugFeedbackWithOpenAi(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
+    signal: AbortSignal.timeout(25_000),
     body: JSON.stringify({
       model,
       temperature: 0.2,
+      // 部分兼容端（含部分 DeepSeek 模型）不支持 json_object，失败后外层会回退规则拆分
       response_format: { type: "json_object" },
       messages: [
         {
@@ -270,6 +274,56 @@ export async function parseBugFeedbackWithOpenAi(
 
   if (!response.ok) {
     const detail = await response.text();
+    // 不支持 response_format 时去掉再试一次
+    if (/response_format|json_object|not support/i.test(detail)) {
+      const retry = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(25_000),
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Turn messy Chinese bug feedback into a structured bug list. Reply with JSON only, no markdown.",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (!retry.ok) {
+        const detail2 = await retry.text();
+        throw new Error(`OpenAI 请求失败 (${retry.status}): ${detail2.slice(0, 200)}`);
+      }
+      const payloadRetry = (await retry.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const contentRetry = payloadRetry.choices?.[0]?.message?.content;
+      if (!contentRetry) throw new Error("OpenAI 返回为空");
+      const parsedRetry = draftSchema.parse(parseJsonContent(contentRetry));
+      return {
+        summary: (parsedRetry.summary || `整理出 ${parsedRetry.drafts.length} 条 Bug`).slice(
+          0,
+          160
+        ),
+        method: "openai",
+        drafts: parsedRetry.drafts.map((d, i) => ({
+          key: `ai-${i}`,
+          title: d.title.trim().slice(0, 120),
+          description: (d.description ?? "").trim().slice(0, 2000),
+          reproSteps: (d.reproSteps ?? "").trim().slice(0, 2000),
+          severity: (d.severity ?? 3) as BugSeverity,
+          bugType: d.bugType ?? "other",
+          selected: true,
+          imageHints: (d.imageHints ?? []).slice(0, 8),
+        })),
+      };
+    }
     throw new Error(`OpenAI 请求失败 (${response.status}): ${detail.slice(0, 200)}`);
   }
 
@@ -409,8 +463,16 @@ export async function previewBugFeedback(
         credentials: opts.credentials,
         imageFileNames: opts.imageFileNames,
       });
-    } catch {
-      /* fall through */
+    } catch (error) {
+      const aiError =
+        error instanceof Error
+          ? /aborted|TimeoutError|timeout/i.test(error.name) ||
+            /timeout|aborted/i.test(error.message)
+            ? "模型超时（25s），已改用规则拆分"
+            : error.message.slice(0, 180)
+          : "AI 失败";
+      const fallback = parseBugFeedbackHeuristic(raw);
+      return { ...fallback, aiError };
     }
   }
   return parseBugFeedbackHeuristic(raw);

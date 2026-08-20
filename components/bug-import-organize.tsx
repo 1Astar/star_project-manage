@@ -8,6 +8,7 @@ import { matchImagesToDrafts } from "@/lib/bugs/parse-feedback";
 import type { OrganizeBugsPreview } from "@/lib/bugs/organize";
 import {
   ImageDropZone,
+  asFigureFiles,
   collectImagesFromClipboard,
   collectImagesFromDataTransfer,
   dataTransferLooksLikeUriOnly,
@@ -64,8 +65,7 @@ export function BugImportOrganizePanel({
     if (!list.length) return;
     setError(null);
     setFiles((prev) => {
-      const names = new Set(prev.map((f) => f.name));
-      const next = [...prev, ...list.filter((f) => !names.has(f.name))];
+      const next = asFigureFiles([...prev, ...list], 1);
       if (preview) {
         setFileMap(
           matchImagesToDrafts(
@@ -123,11 +123,20 @@ export function BugImportOrganizePanel({
   }
 
   function removeFile(name: string) {
-    setFiles((prev) => prev.filter((f) => f.name !== name));
-    setFileMap((prev) => {
-      const next: Record<string, string[]> = {};
-      for (const [k, names] of Object.entries(prev)) {
-        next[k] = names.filter((n) => n !== name);
+    setFiles((prev) => {
+      const next = asFigureFiles(
+        prev.filter((f) => f.name !== name),
+        1
+      );
+      if (preview) {
+        setFileMap(
+          matchImagesToDrafts(
+            preview.drafts,
+            next.map((f) => f.name)
+          )
+        );
+      } else {
+        setFileMap({});
       }
       return next;
     });
@@ -162,6 +171,10 @@ export function BugImportOrganizePanel({
     setMessage(null);
     try {
       const ai = loadOpenAiSettings();
+      if (preferAi && !ai?.apiKey?.trim()) {
+        setError("已勾选「优先用 AI」，但本机未配置 API Key。请到设置里保存，或取消勾选改用规则拆分。");
+        return;
+      }
       const res = await fetch(`/api/projects/${projectSlug}/bugs/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,20 +188,46 @@ export function BugImportOrganizePanel({
           openAiBaseUrl: preferAi ? ai?.baseUrl : undefined,
         }),
       });
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: {
+        error?: string;
+        preview?: BugFeedbackPreview;
+        aiError?: string;
+      } = {};
+      try {
+        data = rawText ? (JSON.parse(rawText) as typeof data) : {};
+      } catch {
+        setError(
+          `整理失败：服务返回非 JSON（HTTP ${res.status}）。可能是 Worker 超时或网关错误，可取消 AI 勾选再试。`
+        );
+        return;
+      }
       if (!res.ok) {
-        setError(data.error ?? "整理失败");
+        setError(data.error ?? `整理失败（HTTP ${res.status}）`);
         return;
       }
       const next = data.preview as BugFeedbackPreview;
+      if (!next?.drafts) {
+        setError("整理失败：返回结果为空");
+        return;
+      }
       setPreview(next);
       if (files.length) {
         setFileMap(matchImagesToDrafts(next.drafts, files.map((f) => f.name)));
       } else {
         setFileMap({});
       }
-    } catch {
-      setError("网络错误");
+      if (next.aiError) {
+        setMessage(`AI 未成功（${next.aiError}），已用规则拆分，请核对清单`);
+      } else if (next.method === "openai") {
+        setMessage("AI 整理完成，请核对后再入库");
+      }
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? `网络错误：${e.message}`
+          : "网络错误：请求未完成（可能超时）。可取消「优先用 AI」后重试。"
+      );
     } finally {
       setLoading(false);
     }
@@ -344,9 +383,9 @@ export function BugImportOrganizePanel({
           </ImageDropZone>
           {files.length > 0 ? (
             <div className="flex flex-wrap gap-2">
-              {files.map((f) => (
+              {files.map((f, i) => (
                 <div
-                  key={f.name}
+                  key={`${f.name}-${i}`}
                   className="relative w-20 overflow-hidden rounded-md border border-slate-200 bg-white"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -355,6 +394,9 @@ export function BugImportOrganizePanel({
                     alt={f.name}
                     className="h-16 w-full object-cover"
                   />
+                  <span className="absolute left-0.5 top-0.5 rounded bg-indigo-600 px-1 text-[10px] font-medium text-white">
+                    图{i + 1}
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeFile(f.name)}
@@ -397,7 +439,7 @@ export function BugImportOrganizePanel({
           </div>
           {files.length > 0 ? (
             <p className="text-xs text-slate-500">
-              已选 {files.length} 张。AI 会尽量按「见图N」/文件名挂到对应问题；不对就在下面勾缩略图改配。
+              已选 {files.length} 张，已自动编号为 图1…图{files.length}。正文写「见图1」即可对上；不对就在下面勾缩略图改配。
             </p>
           ) : null}
           {preview ? (

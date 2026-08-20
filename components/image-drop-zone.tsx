@@ -6,34 +6,37 @@ function pickImageFiles(list: FileList | File[] | null | undefined): File[] {
   return Array.from(list ?? []).filter((f) => f.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name));
 }
 
-/** 剪贴板/拖放里的图常叫 image.png，多张会撞名 */
-export function uniquifyImageFiles(files: File[]): File[] {
-  const stamp = Date.now();
+function imageExt(file: File): string {
+  if (file.type.includes("jpeg") || file.type.includes("jpg") || /\.jpe?g$/i.test(file.name)) {
+    return "jpg";
+  }
+  if (file.type.includes("webp") || /\.webp$/i.test(file.name)) return "webp";
+  if (file.type.includes("gif") || /\.gif$/i.test(file.name)) return "gif";
+  return "png";
+}
+
+/** 统一编号为 图1.png、图2.jpg…，方便和正文「见图1」匹配 */
+export function asFigureFiles(files: File[], startIndex = 1): File[] {
   return files.map((f, i) => {
-    const base = f.name?.trim() || "";
-    const needsRename =
-      !base ||
-      /^image\.(png|jpe?g|gif|webp)$/i.test(base) ||
-      /^blob$/i.test(base);
-    if (!needsRename) return f;
-    const ext =
-      f.type.includes("jpeg") || f.type.includes("jpg")
-        ? "jpg"
-        : f.type.includes("webp")
-          ? "webp"
-          : f.type.includes("gif")
-            ? "gif"
-            : "png";
-    return new File([f], `paste-${stamp}-${i + 1}.${ext}`, {
+    const n = startIndex + i;
+    const ext = imageExt(f);
+    const name = `图${n}.${ext}`;
+    if (f.name === name) return f;
+    return new File([f], name, {
       type: f.type || `image/${ext === "jpg" ? "jpeg" : ext}`,
     });
   });
 }
 
+/** 剪贴板/拖放临时名 → 仍交给 asFigureFiles 编号 */
+export function uniquifyImageFiles(files: File[]): File[] {
+  return asFigureFiles(files, 1);
+}
+
 export function collectImagesFromDataTransfer(dt: DataTransfer | null | undefined): File[] {
   if (!dt) return [];
   const fromFiles = pickImageFiles(dt.files);
-  if (fromFiles.length) return uniquifyImageFiles(fromFiles);
+  if (fromFiles.length) return fromFiles;
 
   const fromItems: File[] = [];
   for (const item of Array.from(dt.items ?? [])) {
@@ -43,7 +46,7 @@ export function collectImagesFromDataTransfer(dt: DataTransfer | null | undefine
       fromItems.push(file);
     }
   }
-  return uniquifyImageFiles(pickImageFiles(fromItems));
+  return pickImageFiles(fromItems);
 }
 
 export function collectImagesFromClipboard(clipboardData: DataTransfer | null | undefined): File[] {
@@ -79,7 +82,7 @@ export function ImageDropZone({
 
   const take = useCallback(
     (list: FileList | File[] | null | undefined) => {
-      const images = uniquifyImageFiles(pickImageFiles(list));
+      const images = pickImageFiles(list);
       if (!images.length) return;
       onFiles(multiple ? images : images.slice(0, 1));
     },

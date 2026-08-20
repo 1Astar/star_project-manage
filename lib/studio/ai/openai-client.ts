@@ -39,6 +39,7 @@ export async function fetchOpenAiModels(credentials: OpenAiCredentials): Promise
       Authorization: `Bearer ${apiKey}`,
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
@@ -53,4 +54,22 @@ export async function fetchOpenAiModels(credentials: OpenAiCredentials): Promise
   if (ids.length === 0) throw new Error("接口未返回可用模型");
 
   return sortModelIds(ids);
+}
+
+/** 测联通：拉 /models，返回耗时与样例 */
+export async function pingOpenAi(credentials: OpenAiCredentials): Promise<{
+  latencyMs: number;
+  modelsCount: number;
+  sampleModels: string[];
+  baseUrl: string;
+}> {
+  const { baseUrl } = resolveOpenAiCredentials(credentials);
+  const started = Date.now();
+  const models = await fetchOpenAiModels(credentials);
+  return {
+    latencyMs: Date.now() - started,
+    modelsCount: models.length,
+    sampleModels: models.slice(0, 8),
+    baseUrl,
+  };
 }
