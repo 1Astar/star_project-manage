@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-button";
-import { fetchProjectBoard } from "@/lib/actions";
 import { InterviewsClient } from "@/components/interviews-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import { listProjectInterviews } from "@/lib/interviews/store";
@@ -12,11 +11,9 @@ export default async function ProjectInterviewsPage({
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
-  const pmBundle =
-    ctx.pmBundle ?? (ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : null);
-  const project = pmBundle?.project ?? null;
+  const project = ctx.pmProject;
 
   if (!project) {
     return (

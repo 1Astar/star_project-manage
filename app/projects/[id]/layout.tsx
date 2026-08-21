@@ -12,13 +12,15 @@ export default async function ProjectLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // 布局只需标题/导航：禁止默认拉整板（Egress）
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
   const session = await getAdminSession();
   const isAdmin = session?.role === "admin";
-  const title = ctx.studio?.title ?? ctx.pmBundle!.project.name;
-  const subtitle = ctx.studio?.positioning ?? ctx.pmBundle!.project.description ?? undefined;
+  const title = ctx.studio?.title ?? ctx.pmProject?.name ?? ctx.pmSlug ?? id;
+  const subtitle =
+    ctx.studio?.positioning ?? ctx.pmProject?.description ?? undefined;
 
   return (
     <WorkbenchShell

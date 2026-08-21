@@ -398,6 +398,118 @@ export async function upsertBugRow(bug: import("@/lib/types").Bug): Promise<void
   await upsertBugs([bug]);
 }
 
+/** 仅 projects 表，供 getProjects / MCP 列表，禁止整库 */
+export async function listAllProjects(): Promise<Project[]> {
+  const sb = client();
+  // projects 行数很少；select * 可接受，关键是不要连带整库其它表
+  const { data, error } = await sb.from("projects").select("*").order("name", {
+    ascending: true,
+  });
+  if (error) throw new Error(`projects: ${error.message}`);
+  return (data ?? []) as Project[];
+}
+
+/** 需求池作用域：只拉该项目池内需求/模块，禁止整库 */
+export async function loadPoolScopedBundle(
+  project: Project,
+  poolIterationName: string
+): Promise<{
+  project: Project;
+  poolIteration: import("@/lib/types").Iteration;
+  poolRequirements: DatabaseSnapshot["requirements"];
+  poolModules: DatabaseSnapshot["modules"];
+  activeIterations: DatabaseSnapshot["iterations"];
+  project_members: DatabaseSnapshot["project_members"];
+  poolColumnDefs: DatabaseSnapshot["pool_column_defs"];
+  attachments: DatabaseSnapshot["requirement_attachments"];
+  links: DatabaseSnapshot["requirement_links"];
+}> {
+  const sb = client();
+  const pid = project.id;
+
+  let poolIteration = await findPoolIterationRow(pid, poolIterationName);
+  if (!poolIteration) {
+    throw new Error("需求池迭代不存在");
+  }
+
+  const [reqsRes, itersRes, membersRes, colsRes, modsRes, attsRes, linksRes] =
+    await Promise.all([
+      sb
+        .from("requirements")
+        .select("*")
+        .eq("project_id", pid)
+        .eq("in_pool", true)
+        .order("sort_order", { ascending: true }),
+      sb
+        .from("iterations")
+        .select("*")
+        .eq("project_id", pid)
+        .neq("name", poolIterationName)
+        .order("sort_order", { ascending: true }),
+      sb.from("project_members").select("*").eq("project_id", pid),
+      sb
+        .from("pool_column_defs")
+        .select("*")
+        .eq("project_id", pid)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+      sb
+        .from("modules")
+        .select("*")
+        .eq("iteration_id", poolIteration.id)
+        .order("sort_order", { ascending: true }),
+      sb
+        .from("requirement_attachments")
+        .select("*")
+        .eq("project_id", pid)
+        .order("created_at", { ascending: false }),
+      sb
+        .from("requirement_links")
+        .select("*")
+        .eq("project_id", pid)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  const soft = <T,>(
+    result: { data: T | null; error: { message: string } | null },
+    label: string
+  ): T => {
+    if (result.error) {
+      if (/does not exist|schema cache|too many subrequests/i.test(result.error.message)) {
+        return [] as T;
+      }
+      throw new Error(`${label}: ${result.error.message}`);
+    }
+    return (result.data ?? []) as T;
+  };
+
+  return {
+    project,
+    poolIteration,
+    poolRequirements: throwOnError(reqsRes, "requirements") as DatabaseSnapshot["requirements"],
+    poolModules: throwOnError(modsRes, "modules") as DatabaseSnapshot["modules"],
+    activeIterations: throwOnError(itersRes, "iterations") as DatabaseSnapshot["iterations"],
+    project_members: soft(membersRes, "project_members"),
+    poolColumnDefs: soft(colsRes, "pool_column_defs"),
+    attachments: soft(attsRes, "requirement_attachments"),
+    links: soft(linksRes, "requirement_links"),
+  };
+}
+
+/** 项目迭代列表（演进页等） */
+export async function listIterationsForProject(
+  projectId: string
+): Promise<import("@/lib/types").Iteration[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("iterations")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(`iterations: ${error.message}`);
+  return (data ?? []) as import("@/lib/types").Iteration[];
+}
+
 /** 公开反馈专用：单行查项目，避免整库 readSupabaseDb */
 export async function findProjectBySlugOrId(slugOrId: string): Promise<Project | null> {
   const key = slugOrId.trim();
@@ -460,6 +572,214 @@ export async function upsertBugCommentRow(
   comment: import("@/lib/types").BugComment
 ): Promise<void> {
   await upsertRows("bug_comments", [comment]);
+}
+
+/** 项目作用域看板：只拉该项目相关行，禁止整库 readSupabaseDb */
+export async function loadProjectScopedBundle(project: Project): Promise<{
+  project: Project;
+  iterations: DatabaseSnapshot["iterations"];
+  modules: DatabaseSnapshot["modules"];
+  requirements: DatabaseSnapshot["requirements"];
+  role_tasks: DatabaseSnapshot["role_tasks"];
+  acceptance_items: DatabaseSnapshot["acceptance_items"];
+  share_links: DatabaseSnapshot["share_links"];
+  notifications: DatabaseSnapshot["notifications"];
+  prototypes: DatabaseSnapshot["prototypes"];
+  bugs: DatabaseSnapshot["bugs"];
+  comments: DatabaseSnapshot["comments"];
+  git_activities: DatabaseSnapshot["git_activities"];
+  project_members: DatabaseSnapshot["project_members"];
+  pool_column_defs: DatabaseSnapshot["pool_column_defs"];
+  activity_logs: DatabaseSnapshot["activity_logs"];
+}> {
+  const sb = client();
+  const pid = project.id;
+
+  const [
+    iterationsRes,
+    requirementsRes,
+    bugsRes,
+    notificationsRes,
+    prototypesRes,
+    shareLinksRes,
+    membersRes,
+    poolColsRes,
+    gitRes,
+    activityRes,
+    commentsRes,
+  ] = await Promise.all([
+    sb.from("iterations").select("*").eq("project_id", pid),
+    sb.from("requirements").select("*").eq("project_id", pid).eq("in_pool", false),
+    sb.from("bugs").select("*").eq("project_id", pid),
+    sb
+      .from("notifications")
+      .select("id,project_id,recipient_name,type,title,body,link,is_read,created_at")
+      .eq("project_id", pid)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    sb.from("prototypes").select("*").eq("project_id", pid),
+    sb.from("share_links").select("*").eq("project_id", pid),
+    sb.from("project_members").select("*").eq("project_id", pid),
+    sb.from("pool_column_defs").select("*").eq("project_id", pid).eq("is_active", true),
+    sb
+      .from("git_activities")
+      .select("*")
+      .eq("project_id", pid)
+      .order("committed_at", { ascending: false })
+      .limit(40),
+    sb
+      .from("activity_logs")
+      .select("*")
+      .eq("project_id", pid)
+      .order("created_at", { ascending: false })
+      .limit(30),
+    sb.from("comments").select("*").eq("project_id", pid).limit(200),
+  ]);
+
+  const iterations = throwOnError(iterationsRes, "iterations") as DatabaseSnapshot["iterations"];
+  const iterIds = iterations.map((i) => i.id);
+  let modules: DatabaseSnapshot["modules"] = [];
+  if (iterIds.length) {
+    const mod = await sb.from("modules").select("*").in("iteration_id", iterIds);
+    modules = throwOnError(mod, "modules");
+  }
+
+  const requirements = throwOnError(
+    requirementsRes,
+    "requirements"
+  ) as DatabaseSnapshot["requirements"];
+  const reqIds = requirements.map((r) => r.id);
+  let role_tasks: DatabaseSnapshot["role_tasks"] = [];
+  let acceptance_items: DatabaseSnapshot["acceptance_items"] = [];
+  if (reqIds.length) {
+    const [roles, items] = await Promise.all([
+      sb.from("role_tasks").select("*").in("requirement_id", reqIds),
+      sb.from("acceptance_items").select("*").in("requirement_id", reqIds),
+    ]);
+    role_tasks = throwOnError(roles, "role_tasks");
+    acceptance_items = throwOnError(items, "acceptance_items");
+  }
+
+  const soft = <T,>(
+    result: { data: T | null; error: { message: string } | null },
+    label: string
+  ): T => {
+    if (result.error) {
+      if (/too many subrequests|schema cache|does not exist/i.test(result.error.message)) {
+        return [] as T;
+      }
+      throw new Error(`${label}: ${result.error.message}`);
+    }
+    return (result.data ?? []) as T;
+  };
+
+  return {
+    project,
+    iterations,
+    modules,
+    requirements,
+    role_tasks,
+    acceptance_items,
+    share_links: soft(shareLinksRes, "share_links"),
+    notifications: soft(notificationsRes, "notifications"),
+    prototypes: soft(prototypesRes, "prototypes"),
+    bugs: throwOnError(bugsRes, "bugs").map((row) =>
+      normalizeBug(row as unknown as Record<string, unknown>)
+    ),
+    comments: soft(commentsRes, "comments"),
+    git_activities: soft(gitRes, "git_activities"),
+    project_members: soft(membersRes, "project_members"),
+    pool_column_defs: soft(poolColsRes, "pool_column_defs"),
+    activity_logs: soft(activityRes, "activity_logs"),
+  };
+}
+
+export async function listRecentNotifications(limit = 50): Promise<
+  import("@/lib/types").NotificationItem[]
+> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("notifications")
+    .select("id,project_id,recipient_name,type,title,body,link,is_read,created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`notifications: ${error.message}`);
+  return (data ?? []) as import("@/lib/types").NotificationItem[];
+}
+
+export async function listMembersForProject(
+  projectId: string
+): Promise<import("@/lib/types").ProjectMember[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("project_members")
+    .select("id,project_id,name,role,is_active,created_at")
+    .eq("project_id", projectId)
+    .order("name", { ascending: true });
+  if (error) {
+    if (/does not exist|schema cache/i.test(error.message)) return [];
+    throw new Error(`project_members: ${error.message}`);
+  }
+  return (data ?? []) as import("@/lib/types").ProjectMember[];
+}
+
+export async function listBugCommentsForBug(
+  bugId: string
+): Promise<import("@/lib/types").BugComment[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("bug_comments")
+    .select("*")
+    .eq("bug_id", bugId)
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (/does not exist|schema cache|too many subrequests/i.test(error.message)) return [];
+    throw new Error(`bug_comments: ${error.message}`);
+  }
+  return (data ?? []) as import("@/lib/types").BugComment[];
+}
+
+export async function listBugAttachmentsForBug(bugId: string): Promise<BugAttachment[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("bug_attachments")
+    .select("*")
+    .eq("bug_id", bugId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (/does not exist|schema cache|too many subrequests/i.test(error.message)) return [];
+    throw new Error(`bug_attachments: ${error.message}`);
+  }
+  return (data ?? []) as BugAttachment[];
+}
+
+export async function findRequirementTitleById(
+  requirementId: string
+): Promise<{ id: string; title: string } | null> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("requirements")
+    .select("id,title")
+    .eq("id", requirementId)
+    .maybeSingle();
+  if (error) throw new Error(`requirements: ${error.message}`);
+  if (!data) return null;
+  return { id: String(data.id), title: String(data.title ?? "") };
+}
+
+export async function findPoolIterationRow(
+  projectId: string,
+  name: string
+): Promise<import("@/lib/types").Iteration | null> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("iterations")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("name", name)
+    .maybeSingle();
+  if (error) throw new Error(`iterations: ${error.message}`);
+  return (data as import("@/lib/types").Iteration | null) ?? null;
 }
 
 export async function upsertNotificationRow(

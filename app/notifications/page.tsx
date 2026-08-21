@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { BackButton } from "@/components/back-button";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { listRecentNotifications } from "@/lib/db/supabase-store";
 import { readDb } from "@/lib/db/local-store";
 import { WorkbenchShell } from "@/components/workbench-shell";
 
 export default async function NotificationsPage() {
-  const db = await readDb();
-  const notifications = db.notifications.slice(0, 50);
+  const notifications = isSupabaseConfigured()
+    ? await listRecentNotifications(50)
+    : (await readDb()).notifications.slice(0, 50);
 
   return (
     <WorkbenchShell

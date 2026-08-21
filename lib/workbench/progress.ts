@@ -1,9 +1,8 @@
-import { getProjects, getProjectBundle } from "@/lib/db/local-store";
+import { readWorkbenchDb, getProjects } from "@/lib/db/local-store";
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { getStudioIdFromPmSlug } from "@/lib/project-bridge";
 import { TASK_STATUS_LABELS as STUDIO_TASK_STATUS_LABELS } from "@/lib/studio/types";
 import {
-  ROLE_LABELS,
   TASK_STATUS_LABELS as PM_TASK_STATUS_LABELS,
   type TaskStatus as PmTaskStatus,
 } from "@/lib/types";
@@ -57,40 +56,35 @@ function daysAgoIso(days: number): string {
 
 /**
  * 各项目进行中的需求：
- * - PM：已入迭代（非池）且 status ∈ 开发中/待联调/待测试/待验收
- * - Studio：任务 status = in_progress
+ * 用 readWorkbenchDb（裁剪列 + 近期/待验切片），禁止对每个项目 getProjectBundle。
  */
 export async function getActiveRequirementsAcrossProjects(): Promise<ActiveWorkGroup[]> {
   const studioSnap = await getScopedStudioSnapshot();
   const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
   const items: ActiveWorkItem[] = [];
 
-  const pmProjects = await getProjects();
-  await Promise.all(
-    pmProjects.map(async (pmProject) => {
-      const bundle = await getProjectBundle(pmProject.id);
-      if (!bundle) return;
-      const routeId = routeIdForPmSlug(pmProject.slug);
-      const projectTitle =
-        studioById.get(routeId)?.title ?? pmProject.name;
+  const [wb, pmProjects] = await Promise.all([readWorkbenchDb(), getProjects()]);
+  const pmById = new Map(pmProjects.map((p) => [p.id, p]));
 
-      for (const req of bundle.requirements) {
-        if (req.in_pool) continue;
-        if (!ACTIVE_PM_STATUSES.has(req.status)) continue;
-        items.push({
-          id: req.id,
-          title: req.title,
-          status: req.status,
-          statusLabel: PM_TASK_STATUS_LABELS[req.status],
-          priority: req.priority,
-          source: "pm",
-          projectId: routeId,
-          projectTitle,
-          href: `/projects/${routeId}/tasks?req=${req.id}`,
-        });
-      }
-    })
-  );
+  for (const req of wb.requirements) {
+    if (req.in_pool) continue;
+    if (!ACTIVE_PM_STATUSES.has(req.status)) continue;
+    const pmProject = pmById.get(req.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
+    items.push({
+      id: req.id,
+      title: req.title,
+      status: req.status,
+      statusLabel: PM_TASK_STATUS_LABELS[req.status] ?? req.status,
+      priority: req.priority,
+      source: "pm",
+      projectId: routeId,
+      projectTitle,
+      href: `/projects/${routeId}/tasks?req=${req.id}`,
+    });
+  }
 
   for (const task of studioSnap.tasks) {
     if (task.status !== "in_progress") continue;
@@ -143,7 +137,7 @@ export async function getActiveRequirementsAcrossProjects(): Promise<ActiveWorkG
   );
 }
 
-/** 近 N 天已完成：PM role_tasks + Studio tasks */
+/** 近 N 天已完成：优先 Studio；PM 侧用工作台切片需求 completed_at（不再扫全板 role_tasks） */
 export async function getRecentlyCompletedWork(
   limit = 20,
   days = 14
@@ -153,35 +147,25 @@ export async function getRecentlyCompletedWork(
   const studioById = new Map(studioSnap.projects.map((p) => [p.id, p]));
   const items: CompletedWorkItem[] = [];
 
-  const pmProjects = await getProjects();
-  await Promise.all(
-    pmProjects.map(async (pmProject) => {
-      const bundle = await getProjectBundle(pmProject.id);
-      if (!bundle) return;
-      const routeId = routeIdForPmSlug(pmProject.slug);
-      const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
-      const reqTitle = new Map(bundle.requirements.map((r) => [r.id, r.title]));
+  const [wb, pmProjects] = await Promise.all([readWorkbenchDb(), getProjects()]);
+  const pmById = new Map(pmProjects.map((p) => [p.id, p]));
 
-      for (const task of bundle.role_tasks) {
-        if (task.status !== "done") continue;
-        const completedAt = task.updated_at;
-        if (completedAt < since) continue;
-        const parentTitle = reqTitle.get(task.requirement_id);
-        items.push({
-          id: task.id,
-          title: parentTitle
-            ? `${parentTitle} · ${ROLE_LABELS[task.role]}`
-            : ROLE_LABELS[task.role],
-
-          source: "pm",
-          projectId: routeId,
-          projectTitle,
-          completedAt,
-          href: `/projects/${routeId}/tasks?req=${task.requirement_id}`,
-        });
-      }
-    })
-  );
+  for (const req of wb.requirements) {
+    const completedAt = req.completed_at;
+    if (!completedAt || completedAt < since) continue;
+    const pmProject = pmById.get(req.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    items.push({
+      id: req.id,
+      title: req.title,
+      source: "pm",
+      projectId: routeId,
+      projectTitle: studioById.get(routeId)?.title ?? pmProject.name,
+      completedAt,
+      href: `/projects/${routeId}/tasks?req=${req.id}`,
+    });
+  }
 
   for (const task of studioSnap.tasks) {
     if (task.status !== "done") continue;
@@ -204,7 +188,7 @@ export async function getRecentlyCompletedWork(
   return items.slice(0, limit);
 }
 
-/** 近 N 天完成的需求（池+板 completed_at），供改进日历每日总结 */
+/** 近 N 天完成的需求：工作台切片 + 本地/Supabase 轻量，禁止每项目双 bundle */
 export async function getCompletedRequirementsForCalendar(
   days = 60
 ): Promise<
@@ -227,36 +211,24 @@ export async function getCompletedRequirementsForCalendar(
     completedAt: string;
   }> = [];
 
-  const { getPoolBundle } = await import("@/lib/db/local-store");
-  const pmProjects = await getProjects();
-  await Promise.all(
-    pmProjects.map(async (pmProject) => {
-      const [bundle, pool] = await Promise.all([
-        getProjectBundle(pmProject.id),
-        getPoolBundle(pmProject.id).catch(() => null),
-      ]);
-      const routeId = routeIdForPmSlug(pmProject.slug);
-      const projectTitle = studioById.get(routeId)?.title ?? pmProject.name;
-      const reqs = [
-        ...(bundle?.requirements ?? []),
-        ...(pool?.poolRequirements ?? []),
-      ];
-      const seen = new Set<string>();
-      for (const req of reqs) {
-        if (seen.has(req.id)) continue;
-        seen.add(req.id);
-        const when = req.completed_at;
-        if (!when || when < since) continue;
-        out.push({
-          id: req.id,
-          title: req.title,
-          projectId: routeId,
-          projectTitle,
-          completedAt: when,
-        });
-      }
-    })
-  );
+  const [wb, pmProjects] = await Promise.all([readWorkbenchDb(), getProjects()]);
+  const pmById = new Map(pmProjects.map((p) => [p.id, p]));
 
+  for (const req of wb.requirements) {
+    const completedAt = req.completed_at;
+    if (!completedAt || completedAt < since) continue;
+    const pmProject = pmById.get(req.project_id);
+    if (!pmProject) continue;
+    const routeId = routeIdForPmSlug(pmProject.slug);
+    out.push({
+      id: req.id,
+      title: req.title,
+      projectId: routeId,
+      projectTitle: studioById.get(routeId)?.title ?? pmProject.name,
+      completedAt,
+    });
+  }
+
+  out.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
   return out;
 }

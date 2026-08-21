@@ -1,4 +1,8 @@
 import { getScopedStudioSnapshot } from "@/lib/demo/ensure-showcase";
+import {
+  getStudioProjectBundle,
+  getStudioProjectRow,
+} from "@/lib/studio/project-scoped-read";
 import type { Idea } from "@/lib/studio/types";
 
 export async function getStudioData() {
@@ -32,8 +36,7 @@ export async function getAllChangeSessions() {
 }
 
 export async function getProjectById(id: string) {
-  const { projects } = await getScopedStudioSnapshot();
-  return projects.find((p) => p.id === id) ?? null;
+  return getStudioProjectRow(id);
 }
 
 export async function getIdeasByStatus(status: Idea["status"]) {
@@ -42,18 +45,18 @@ export async function getIdeasByStatus(status: Idea["status"]) {
 }
 
 export async function getProjectIdeas(projectId: string) {
-  const { ideas } = await getScopedStudioSnapshot();
-  return ideas.filter((i) => i.relatedProjectId === projectId);
+  const { ideas } = await getStudioProjectBundle(projectId);
+  return ideas;
 }
 
 export async function getProjectTasks(projectId: string) {
-  const { tasks } = await getScopedStudioSnapshot();
-  return tasks.filter((t) => t.projectId === projectId);
+  const { tasks } = await getStudioProjectBundle(projectId);
+  return tasks;
 }
 
 export async function getProjectAssets(projectId: string) {
-  const { assets } = await getScopedStudioSnapshot();
-  return assets.filter((a) => a.projectId === projectId);
+  const { assets } = await getStudioProjectBundle(projectId);
+  return assets;
 }
 
 export async function getAssetById(id: string) {
@@ -62,23 +65,21 @@ export async function getAssetById(id: string) {
 }
 
 export async function getProjectReleases(projectId: string) {
-  const { releases } = await getScopedStudioSnapshot();
-  return (releases ?? [])
-    .filter((r) => r.projectId === projectId)
-    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+  const { releases } = await getStudioProjectBundle(projectId);
+  return [...releases].sort((a, b) =>
+    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "")
+  );
 }
 
 export async function getProjectEvolution(projectId: string) {
-  const { evolutionLogs } = await getScopedStudioSnapshot();
-  return evolutionLogs
-    .filter((e) => e.projectId === projectId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const { evolutionLogs } = await getStudioProjectBundle(projectId);
+  return [...evolutionLogs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function getProjectChangeSessions(projectId: string, day?: string) {
-  const { changeSessions } = await getScopedStudioSnapshot();
-  return (changeSessions ?? [])
-    .filter((c) => c.projectId === projectId && (!day || c.day === day))
+  const { changeSessions } = await getStudioProjectBundle(projectId);
+  return changeSessions
+    .filter((c) => !day || c.day === day)
     .sort(
       (a, b) =>
         b.day.localeCompare(a.day) || b.createdAt.localeCompare(a.createdAt)
@@ -129,8 +130,8 @@ export async function getParkedProjects() {
 }
 
 export async function getProjectTitle(id: string) {
-  const { projects } = await getScopedStudioSnapshot();
-  return projects.find((p) => p.id === id)?.title ?? "未知项目";
+  const project = await getStudioProjectRow(id);
+  return project?.title ?? "未知项目";
 }
 
 export async function getActiveProjects() {

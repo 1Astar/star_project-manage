@@ -14,13 +14,13 @@ export default async function ProjectResourcesPage({
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
   const assets = ctx.studio ? await getProjectAssets(ctx.studio.id) : [];
   const releases = ctx.studio ? await getProjectReleases(ctx.studio.id) : [];
   const ideas = ctx.studio ? await getProjectIdeas(ctx.studio.id) : [];
   const reqAttachments = ctx.pmSlug
-    ? await listProjectAttachments(ctx.pmBundle?.project.id ?? ctx.pmSlug)
+    ? await listProjectAttachments(ctx.pmProject?.id ?? ctx.pmSlug)
     : [];
 
   return (

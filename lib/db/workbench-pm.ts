@@ -7,7 +7,7 @@
 import { emptyPmSnapshot } from "@/lib/db/empty-snapshot";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Bug, BugSeverity, BugType, Requirement } from "@/lib/types";
+import type { Bug, BugSeverity, BugType, Project, Requirement } from "@/lib/types";
 import { BUG_TYPE_LABELS } from "@/lib/types";
 
 /** 工作台验收 / 明日清单用到的列（避免 detail 大字段与自定义字段拖垮 Worker） */
@@ -162,14 +162,48 @@ function mergeRequirementsById(batches: Requirement[][]): Requirement[] {
   return [...byId.values()];
 }
 
+const WORKBENCH_PROJECT_COLUMNS =
+  "id,slug,name,description,parent_id,demo_url,created_at";
+const WORKBENCH_BUG_COLUMNS =
+  "id,project_id,requirement_id,title,status,severity,bug_type,created_at,updated_at";
+
+function rowToWorkbenchProject(row: Record<string, unknown>): Project {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    slug: String(row.slug ?? ""),
+    description: clipText(row.description, 160),
+    parent_id: (row.parent_id as string | null) ?? null,
+    pool_tag_options: [],
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    repo_full_name: null,
+    repo_branch: null,
+    repo_url: null,
+    last_commit_sha: null,
+    last_commit_message: null,
+    last_commit_at: null,
+    last_git_synced_at: null,
+    vercel_project_id: null,
+    vercel_deployment_url: null,
+    last_deploy_status: null,
+    demo_url: (row.demo_url as string | null) ?? null,
+    local_run_guide: null,
+    code_path: null,
+  };
+}
+
 /** 演示沙盘：只拉 demo-showcase 对应 PM 项目行 */
 export async function readDemoWorkbenchPmDb(pmProjectId: string): Promise<DatabaseSnapshot> {
   const sb = client();
   const [projects, iterations, requirements, bugs] = await Promise.all([
-    sb.from("projects").select("*").eq("id", pmProjectId),
+    sb.from("projects").select(WORKBENCH_PROJECT_COLUMNS).eq("id", pmProjectId),
     sb.from("iterations").select("*").eq("project_id", pmProjectId),
     sb.from("requirements").select(WORKBENCH_REQ_COLUMNS).eq("project_id", pmProjectId),
-    sb.from("bugs").select("*").eq("project_id", pmProjectId).neq("status", "done"),
+    sb
+      .from("bugs")
+      .select(WORKBENCH_BUG_COLUMNS)
+      .eq("project_id", pmProjectId)
+      .neq("status", "done"),
   ]);
 
   const iters = throwOnError(iterations, "iterations") as Array<{ id: string }>;
@@ -194,14 +228,12 @@ export async function readDemoWorkbenchPmDb(pmProjectId: string): Promise<Databa
   }
 
   return emptyPmSnapshot({
-    projects: throwOnError(projects, "projects"),
+    projects: asRows(throwOnError(projects, "projects")).map(rowToWorkbenchProject),
     iterations: iters as DatabaseSnapshot["iterations"],
     modules,
     requirements: reqs,
     acceptance_records: acceptance,
-    bugs: throwOnError(bugs, "bugs").map((row) =>
-      normalizeBug(row as unknown as Record<string, unknown>)
-    ),
+    bugs: asRows(throwOnError(bugs, "bugs")).map(normalizeBug),
   });
 }
 
@@ -217,8 +249,8 @@ export async function readWorkbenchSupabaseDb(): Promise<DatabaseSnapshot> {
 
   const [projects, bugs, recentOpen, byStatusAcceptance, dueTomorrow] =
     await Promise.all([
-      sb.from("projects").select("*"),
-      sb.from("bugs").select("*").neq("status", "done"),
+      sb.from("projects").select(WORKBENCH_PROJECT_COLUMNS),
+      sb.from("bugs").select(WORKBENCH_BUG_COLUMNS).neq("status", "done").limit(200),
       // 近 14 天有更新的未完成需求（覆盖昨日变更 + 多数待验）；列已裁剪
       sb
         .from("requirements")
@@ -293,7 +325,7 @@ export async function readWorkbenchSupabaseDb(): Promise<DatabaseSnapshot> {
   }
 
   return emptyPmSnapshot({
-    projects: throwOnError(projects, "projects"),
+    projects: asRows(throwOnError(projects, "projects")).map(rowToWorkbenchProject),
     iterations: [],
     modules,
     requirements,
@@ -301,8 +333,6 @@ export async function readWorkbenchSupabaseDb(): Promise<DatabaseSnapshot> {
       acceptanceRes,
       "acceptance_records"
     ) as DatabaseSnapshot["acceptance_records"],
-    bugs: throwOnError(bugs, "bugs").map((row) =>
-      normalizeBug(row as unknown as Record<string, unknown>)
-    ),
+    bugs: asRows(throwOnError(bugs, "bugs")).map(normalizeBug),
   });
 }

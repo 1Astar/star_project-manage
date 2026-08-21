@@ -15,13 +15,13 @@ export default async function ProjectTasksPage({
   const { id } = await params;
   await searchParams;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
   const pmSlug = ctx.pmSlug ?? null;
   const ideas = ctx.studio ? await getProjectIdeas(ctx.studio.id) : [];
   const evolutions = ctx.studio ? await getProjectEvolution(ctx.studio.id) : [];
   const [pmBundle, poolSync, studioTasks] = await Promise.all([
-    pmSlug ? fetchProjectBoard(pmSlug) : Promise.resolve(ctx.pmBundle),
+    pmSlug ? fetchProjectBoard(pmSlug) : Promise.resolve(null),
     pmSlug
       ? fetchPoolDataWithIdeaSync(
           pmSlug,

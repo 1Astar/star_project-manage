@@ -10,6 +10,43 @@
 
 ---
 
+## v1.14.13 · 2026-08-21
+
+相对 **v1.14.12**：
+
+### 运行时 · 瘦 SSR + 分段加载
+
+- **首页工作台**：SSR 只出壳；正文分 `hero / today / library / star` 客户端顺序加载（`/api/workbench/home?part=`），单次 Worker 不再塞整页；失败可单块重试
+- **项目详情禁止全量 Studio**：`getProjectById` / Tasks / Ideas / Evolution / Sessions / Assets / Releases 改为按项目查（`project-scoped-read`），同页多次调用请求内 memo
+
+---
+
+## v1.14.12 · 2026-08-21
+
+相对 **v1.14.11**：
+
+### 运行时 · 缓解 Cloudflare 1102（CPU/内存）
+
+- **工作台 Studio 列裁剪**：灵感/演进/会话/任务/项目不再 `select *`；去掉 `raw_input`、`ai_ops`、`body` 等大字段，并截断展示文本
+- **未完成任务/灵感/会话条数再收紧**：降低首页 SSR 解析与渲染体积
+- **工作台 PM bugs/projects 轻量列**：列表不拉 description 全文；项目只取 id/slug/name 等必要列
+- **Slim 失败兜底**：优先「仅项目行」，避免回退全库 `getStudioSnapshot` 二次爆内存
+
+---
+
+## v1.14.11 · 2026-08-21
+
+相对 **v1.14.10**：
+
+### 数据访问 · 砍整库读（Egress）
+
+- **项目路由默认不拉整板**：`resolveProjectRoute` 只解析 studio/pm 行；layout/导航不再 `fetchProjectBoard`
+- **看板/需求池按项目查**：`getProjectBundle` / `getPoolBundle` 改为项目作用域查询，不再 `readDb` 整库
+- **Bug/通知/成员/迭代轻量**：详情、列表、通知中心、演进迭代列表走单表/按行查询
+- **progress 不再扫全板**：进行中/已完成汇总改用 `readWorkbenchDb` 切片
+
+---
+
 ## v1.14.10 · 2026-08-20
 
 相对 **v1.14.9**：

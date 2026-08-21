@@ -1,6 +1,6 @@
 {
   "name": "star-pm",
-  "version": "1.14.10",
+  "version": "1.14.13",
   "private": true,
   "scripts": {
     "dev": "next dev",

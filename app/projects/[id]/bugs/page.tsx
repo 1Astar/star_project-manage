@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-button";
-import { fetchProjectBoard, fetchProjectBugs } from "@/lib/actions";
 import { ProjectBugsClient } from "@/components/project-bugs-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import {
   getProjectMembers,
+  listBugsByProject,
   listProjectRequirementOptions,
 } from "@/lib/db/local-store";
 
@@ -18,12 +18,10 @@ export default async function ProjectBugsPage({
   const { id } = await params;
   const sp = await searchParams;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
-  const pmBundle =
-    ctx.pmBundle ?? (ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : null);
-
-  if (!pmBundle) {
+  const pm = ctx.pmProject;
+  if (!pm) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-8">
         <h2 className="text-base font-semibold text-slate-900">Bug 反馈</h2>
@@ -39,13 +37,15 @@ export default async function ProjectBugsPage({
     );
   }
 
-  const bugs = await fetchProjectBugs(pmBundle.project.id);
-  const members = await getProjectMembers(pmBundle.project.id);
-  const requirements = await listProjectRequirementOptions(pmBundle.project.id);
+  const [bugs, members, requirements] = await Promise.all([
+    listBugsByProject(pm.id),
+    getProjectMembers(pm.id),
+    listProjectRequirementOptions(pm.id),
+  ]);
 
   return (
     <ProjectBugsClient
-      projectId={pmBundle.project.id}
+      projectId={pm.id}
       projectSlug={ctx.routeId}
       bugs={bugs}
       members={members.map((m) => ({ name: m.name }))}

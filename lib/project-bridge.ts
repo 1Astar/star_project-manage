@@ -1,7 +1,10 @@
 import { fetchProjectBoard } from "@/lib/actions";
 import { ensurePmProjectForStudio } from "@/lib/db/local-store";
+import { findProjectBySlugOrId } from "@/lib/db/supabase-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getProjectById as getStudioProjectById, getAllProjects } from "@/lib/studio/data";
 import type { Project as StudioProject } from "@/lib/studio/types";
+import type { Project as PmProject } from "@/lib/types";
 
 /** Studio 项目 id → Star PM 看板 slug（硬编码优先） */
 const STUDIO_TO_PM_SLUG: Record<string, string> = {
@@ -59,7 +62,26 @@ export function findPmProjectForStudio<T extends { id: string; slug: string }>(
   return undefined;
 }
 
-export async function resolveProjectRoute(id: string) {
+export type ResolveProjectRouteResult = {
+  studio: StudioProject | null;
+  routeId: string;
+  pmSlug: string | null;
+  /** 轻量：单行项目；layout / 导航用，避免整板 */
+  pmProject: PmProject | null;
+  /** 仅 includeBoard 时填充；默认 null */
+  pmBundle: Awaited<ReturnType<typeof fetchProjectBoard>> | null;
+};
+
+/**
+ * 解析项目路由。
+ * 默认不拉整板（省 Egress）；需要看板数据时传 `{ includeBoard: true }`，
+ * 或页面自行 `fetchProjectBoard(pmSlug)`。
+ */
+export async function resolveProjectRoute(
+  id: string,
+  opts?: { includeBoard?: boolean }
+): Promise<ResolveProjectRouteResult> {
+  const includeBoard = opts?.includeBoard === true;
   const studioById = await getStudioProjectById(id);
   const studioIdFromSlug = getStudioIdFromPmSlug(id);
   const studio =
@@ -77,6 +99,7 @@ export async function resolveProjectRoute(id: string) {
           studio: null,
           routeId: id,
           pmSlug: null,
+          pmProject: null,
           pmBundle: null,
         };
       }
@@ -91,7 +114,27 @@ export async function resolveProjectRoute(id: string) {
       ? id
       : null;
 
-  if (studio && pmSlug) {
+  let pmProject: PmProject | null = null;
+
+  if (pmSlug && isSupabaseConfigured()) {
+    pmProject = await findProjectBySlugOrId(pmSlug);
+    if (!pmProject && studio) {
+      pmProject = await ensurePmProjectForStudio({
+        slug: pmSlug,
+        name: studio.title,
+        description: studio.positioning || null,
+        demo_url: studio.demoUrl,
+        local_run_guide: studio.localRunGuide,
+        code_path: studio.codePath,
+        repo_full_name: studio.githubRepo,
+        repo_branch: studio.githubBranch || null,
+        repo_url: studio.githubRepo
+          ? `https://github.com/${studio.githubRepo}`
+          : null,
+      });
+    }
+    if (pmProject) pmSlug = pmProject.slug;
+  } else if (studio && pmSlug) {
     const ensured = await ensurePmProjectForStudio({
       slug: pmSlug,
       name: studio.title,
@@ -106,16 +149,23 @@ export async function resolveProjectRoute(id: string) {
         : null,
     });
     pmSlug = ensured.slug;
+    pmProject = ensured;
+  } else if (pmSlug) {
+    // 纯 PM slug 路径（本地）
+    const { getProjectById } = await import("@/lib/db/local-store");
+    pmProject = await getProjectById(pmSlug);
   }
 
-  const pmBundle = pmSlug ? await fetchProjectBoard(pmSlug) : null;
+  const pmBundle =
+    includeBoard && pmSlug ? await fetchProjectBoard(pmSlug) : null;
 
   const routeId = studio?.id ?? studioIdFromSlug ?? id;
 
   return {
     studio,
     routeId,
-    pmSlug: pmSlug ?? pmBundle?.project.slug ?? null,
+    pmSlug: pmSlug ?? pmBundle?.project.slug ?? pmProject?.slug ?? null,
+    pmProject: pmProject ?? pmBundle?.project ?? null,
     pmBundle,
   };
 }

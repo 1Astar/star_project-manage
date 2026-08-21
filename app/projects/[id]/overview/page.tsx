@@ -53,13 +53,13 @@ export default async function ProjectOverviewPage({
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
   const slug = ctx.pmSlug ?? id;
-  const pmProjectId = ctx.pmBundle?.project.id ?? ctx.pmSlug ?? null;
+  const pmProjectId = ctx.pmProject?.id ?? ctx.pmSlug ?? null;
 
   const [pmBundle, poolBundle, modules] = await Promise.all([
-    ctx.pmSlug ? fetchProjectBoard(slug) : Promise.resolve(ctx.pmBundle),
+    ctx.pmSlug ? fetchProjectBoard(slug) : Promise.resolve(null),
     ctx.pmSlug ? fetchPoolData(slug) : Promise.resolve(null),
     pmProjectId ? listProjectModules(pmProjectId) : Promise.resolve([]),
   ]);

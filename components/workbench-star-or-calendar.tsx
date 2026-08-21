@@ -16,7 +16,7 @@ export function WorkbenchStarOrCalendar({ layout, improvementByDay }: Props) {
   const [mode, setMode] = useState<"stars" | "calendar">("stars");
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" id="star-calendar">
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
@@ -43,11 +43,13 @@ export function WorkbenchStarOrCalendar({ layout, improvementByDay }: Props) {
           日历
         </button>
         <span className="ml-1 text-[11px] text-slate-400">
-          {mode === "stars" ? "灵感星空" : "每天改了哪些项目 / 板块"}
+          {mode === "stars"
+            ? "节点图 · 今日/全部 · 点开一层"
+            : "每天改了哪些项目 / 板块"}
         </span>
       </div>
       {mode === "stars" ? (
-        <IdeaStarMap layout={layout} />
+        <IdeaStarMap layout={layout} onOpenCalendar={() => setMode("calendar")} />
       ) : (
         <ImprovementCalendarView byDay={improvementByDay} />
       )}

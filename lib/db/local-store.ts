@@ -26,6 +26,16 @@ import {
   findBugById,
   listBugsForProject,
   listRequirementOptionsForProject,
+  loadProjectScopedBundle,
+  loadPoolScopedBundle,
+  listRecentNotifications,
+  listMembersForProject,
+  listBugCommentsForBug,
+  listBugAttachmentsForBug,
+  findRequirementTitleById,
+  findPoolIterationRow,
+  listAllProjects,
+  listIterationsForProject,
 } from "@/lib/db/supabase-store";
 import type { DatabaseSnapshot } from "@/lib/db/types";
 import { assertDurableStorage, isSupabaseConfigured } from "@/lib/supabase/config";
@@ -509,8 +519,13 @@ export async function getAllRequirementsBoard(): Promise<{
 }
 
 export async function getProjects(): Promise<Project[]> {
-  const db = await readDb();
-  let list = db.projects;
+  let list: Project[];
+  if (isSupabaseConfigured()) {
+    list = await listAllProjects();
+  } else {
+    const db = await readDb();
+    list = db.projects;
+  }
   try {
     const { isDemoPublicScope } = await import("@/lib/demo/scope");
     const { filterPmProjectsForDemo } = await import("@/lib/demo/showcase");
@@ -524,6 +539,23 @@ export async function getProjects(): Promise<Project[]> {
 }
 
 export async function getProjectById(id: string): Promise<Project | null> {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(id);
+    if (!project) return null;
+    try {
+      const { isDemoPublicScope } = await import("@/lib/demo/scope");
+      const { isDemoShowcaseId } = await import("@/lib/demo/showcase");
+      if (await isDemoPublicScope()) {
+        if (!isDemoShowcaseId(project.slug) && !isDemoShowcaseId(project.id)) {
+          return null;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return project;
+  }
+
   const db = await readDb();
   const project = db.projects.find((p) => p.id === id || p.slug === id) ?? null;
   if (!project) return null;
@@ -544,6 +576,16 @@ export async function getProjectById(id: string): Promise<Project | null> {
 export async function getProjectBundle(projectId: string) {
   const project = await getProjectById(projectId);
   if (!project) return null;
+
+  if (isSupabaseConfigured()) {
+    const scoped = await loadProjectScopedBundle(project);
+    return {
+      ...scoped,
+      tagOptions: project.pool_tag_options?.length
+        ? project.pool_tag_options
+        : ["硬件", "软件", "体验"],
+    };
+  }
 
   const db = await readDb();
   const iterations = db.iterations.filter((i) => i.project_id === project.id);
@@ -1100,6 +1142,40 @@ function bugPathForProject(project: Project, bugId: string) {
 }
 
 export async function getBugById(bugId: string) {
+  if (isSupabaseConfigured()) {
+    const bug = await findBugById(bugId);
+    if (!bug) return null;
+    const project = await findProjectBySlugOrId(bug.project_id);
+    if (!project) return null;
+    try {
+      const { isDemoPublicScope } = await import("@/lib/demo/scope");
+      const { isDemoShowcaseId } = await import("@/lib/demo/showcase");
+      if (await isDemoPublicScope()) {
+        if (!isDemoShowcaseId(project.slug) && !isDemoShowcaseId(project.id)) {
+          return null;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    const requirement = bug.requirement_id
+      ? await findRequirementTitleById(bug.requirement_id)
+      : null;
+    const [comments, attachments] = await Promise.all([
+      listBugCommentsForBug(bugId),
+      listBugAttachmentsForBug(bugId),
+    ]);
+    return {
+      bug,
+      project,
+      requirement: requirement
+        ? ({ id: requirement.id, title: requirement.title } as Requirement)
+        : null,
+      comments,
+      attachments,
+    };
+  }
+
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === bugId);
   if (!bug) return null;
@@ -1538,6 +1614,9 @@ export async function listBugsByProject(projectId: string) {
 }
 
 export async function listBugAttachments(bugId: string) {
+  if (isSupabaseConfigured()) {
+    return listBugAttachmentsForBug(bugId);
+  }
   const db = await readDb();
   return (db.bug_attachments ?? [])
     .filter((a) => a.bug_id === bugId)
@@ -1986,13 +2065,23 @@ export async function ensurePmProjectForStudio(input: {
   repo_branch?: string | null;
   repo_url?: string | null;
 }): Promise<Project> {
-  // 全量库查找：公开反馈无登录时 getProjectById 会被演示沙盘挡掉
-  const dbExisting = await readDb();
-  const existing =
-    dbExisting.projects.find((p) => p.slug === input.slug || p.id === input.slug) ?? null;
-  if (existing) {
-    await ensurePoolIteration(existing.id);
-    return existing;
+  // 优先单行查，禁止为「是否存在」整库 readDb
+  if (isSupabaseConfigured()) {
+    const existing =
+      (await findProjectBySlugOrId(input.slug)) ??
+      (await findProjectBySlugOrId(input.slug.trim()));
+    if (existing) {
+      await ensurePoolIteration(existing.id);
+      return existing;
+    }
+  } else {
+    const dbExisting = await readDb();
+    const existing =
+      dbExisting.projects.find((p) => p.slug === input.slug || p.id === input.slug) ?? null;
+    if (existing) {
+      await ensurePoolIteration(existing.id);
+      return existing;
+    }
   }
 
   const project: Project = {
@@ -2022,10 +2111,6 @@ export async function ensurePmProjectForStudio(input: {
     await upsertProjectRow(project);
     if (memoryDb) {
       memoryDb.projects = [...memoryDb.projects, project];
-    } else {
-      const db = await readDb();
-      db.projects.push(project);
-      memoryDb = db;
     }
   } else {
     const db = await readDb();
@@ -2038,6 +2123,27 @@ export async function ensurePmProjectForStudio(input: {
 }
 
 export async function ensurePoolIteration(projectId: string): Promise<Iteration> {
+  if (isSupabaseConfigured()) {
+    const existing = await findPoolIterationRow(projectId, POOL_ITERATION_NAME);
+    if (existing) return existing;
+
+    const iteration: Iteration = {
+      id: uid("iter-"),
+      project_id: projectId,
+      name: POOL_ITERATION_NAME,
+      sort_order: -1,
+      created_at: nowIso(),
+      start_date: null,
+      end_date: null,
+      release_tag: null,
+    };
+    await upsertIterationRow(iteration);
+    if (memoryDb) {
+      memoryDb.iterations = [...memoryDb.iterations, iteration];
+    }
+    return iteration;
+  }
+
   const db = await readDb();
   let iteration = db.iterations.find(
     (i) => i.project_id === projectId && i.name === POOL_ITERATION_NAME
@@ -2054,18 +2160,6 @@ export async function ensurePoolIteration(projectId: string): Promise<Iteration>
     end_date: null,
     release_tag: null,
   };
-
-  // 只插一条 iteration，禁止走 writeSupabaseDb 全量 upsert（缺列/脏字段会炸整页）
-  if (isSupabaseConfigured()) {
-    await upsertIterationRow(iteration);
-    if (memoryDb) {
-      memoryDb.iterations = [...memoryDb.iterations, iteration];
-    } else {
-      db.iterations.push(iteration);
-      memoryDb = db;
-    }
-    return iteration;
-  }
 
   db.iterations.push(iteration);
   await saveLocalDb(db);
@@ -2166,6 +2260,19 @@ export async function updatePlanningIteration(
 }
 
 export async function getPoolBundle(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return null;
+    await ensurePoolIteration(project.id);
+    const scoped = await loadPoolScopedBundle(project, POOL_ITERATION_NAME);
+    return {
+      ...scoped,
+      tagOptions: project.pool_tag_options?.length
+        ? project.pool_tag_options
+        : ["硬件", "软件", "体验"],
+    };
+  }
+
   const db = await readDb();
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) return null;
@@ -2968,6 +3075,11 @@ export async function migratePoolRequirements(input: {
 }
 
 export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listMembersForProject(project.id);
+  }
   const db = await readDb();
   return (db.project_members ?? [])
     .filter((m) => m.project_id === projectId)

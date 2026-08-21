@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { ProjectEvolutionTimeline } from "@/components/project-evolution-timeline";
 import { resolveProjectRoute } from "@/lib/project-bridge";
+import { listIterationsForProject } from "@/lib/db/supabase-store";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getProjectBundle } from "@/lib/db/local-store";
 import {
   getProjectChangeSessions,
   getProjectEvolution,
@@ -24,7 +27,14 @@ export default async function ProjectEvolutionPage({
     getProjectChangeSessions(ctx.studio.id),
   ]);
 
-  const iterations = ctx.pmBundle?.iterations ?? [];
+  let iterations =
+    ctx.pmProject && isSupabaseConfigured()
+      ? await listIterationsForProject(ctx.pmProject.id)
+      : [];
+  if (!iterations.length && ctx.pmSlug) {
+    const bundle = await getProjectBundle(ctx.pmSlug);
+    iterations = bundle?.iterations ?? [];
+  }
 
   return (
     <ProjectEvolutionTimeline

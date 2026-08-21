@@ -7,6 +7,7 @@ import {
 } from "@/components/studio/shell";
 import { ProjectGitPanel } from "@/components/project-git-panel";
 import { StudioGitPanel } from "@/components/studio/studio-git-panel";
+import { fetchProjectBoard } from "@/lib/actions";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import { getStudioProjectGitPreview } from "@/lib/studio/project-git";
 import { getStudioGitActivities } from "@/lib/studio/git-sync";
@@ -19,10 +20,12 @@ export default async function ProjectRecoveryPage({
 }) {
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio && !ctx.pmBundle) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
   const gitPreview = ctx.studio ? await getStudioProjectGitPreview(ctx.studio) : null;
   const studioGitActivities = ctx.studio ? await getStudioGitActivities(ctx.studio.id) : [];
+  const pmBundle =
+    !ctx.studio && ctx.pmSlug ? await fetchProjectBoard(ctx.pmSlug) : null;
 
   return (
     <div className="space-y-6">
@@ -39,7 +42,14 @@ export default async function ProjectRecoveryPage({
                 </StudioBadge>
               }
             />
-            <PropertyRow label="优先级" value={<StudioBadge tone={ctx.studio.priority === "P0" ? "p0" : "default"}>{ctx.studio.priority}</StudioBadge>} />
+            <PropertyRow
+              label="优先级"
+              value={
+                <StudioBadge tone={ctx.studio.priority === "P0" ? "p0" : "default"}>
+                  {ctx.studio.priority}
+                </StudioBadge>
+              }
+            />
             <PropertyRow label="当前阶段" value={ctx.studio.currentStage} />
             <PropertyRow label="目标用户" value={ctx.studio.targetUser} />
             <PropertyRow label="作品集价值" value={ctx.studio.portfolioValue} />
@@ -58,8 +68,8 @@ export default async function ProjectRecoveryPage({
 
       {ctx.studio ? (
         <StudioGitPanel project={ctx.studio} activities={studioGitActivities} />
-      ) : ctx.pmBundle ? (
-        <ProjectGitPanel project={ctx.pmBundle.project} activities={ctx.pmBundle.git_activities} />
+      ) : pmBundle ? (
+        <ProjectGitPanel project={pmBundle.project} activities={pmBundle.git_activities} />
       ) : null}
     </div>
   );
