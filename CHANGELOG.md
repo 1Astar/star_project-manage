@@ -10,6 +10,16 @@
 
 ---
 
+## v1.14.10 · 2026-08-20
+
+相对 **v1.14.9**：
+
+### 需求任务 · Bug 反馈
+
+- **公开反馈建单 UUID**：轻量 ingest 的 Bug/活动日志 id 改为纯 uuid（去掉 `bug-`/`log-` 前缀），修 `bugs upsert: invalid input syntax for type uuid`
+
+---
+
 ## v1.14.9 · 2026-08-20
 
 相对 **v1.14.8**：

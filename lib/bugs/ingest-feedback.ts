@@ -54,8 +54,9 @@ function stripDataUrl(base64: string): { mime: string | null; data: string } {
   return { mime: null, data: base64.replace(/\s/g, "") };
 }
 
-function uid(prefix = ""): string {
-  return `${prefix}${crypto.randomUUID()}`;
+function uid(_prefix = ""): string {
+  // Supabase PM 表主键为 uuid，禁止带 bug-/log- 前缀
+  return crypto.randomUUID();
 }
 
 function nowIso(): string {
