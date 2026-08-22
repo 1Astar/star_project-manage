@@ -373,7 +373,7 @@ Release:
 
 ## 5. MCP 接入与速查
 
-**端点（生产）**：`https://star-project-manage.vercel.app/api/mcp`  
+**端点（生产）**：`https://pm.starry-studio.cn/api/mcp`  
 鉴权：HTTP Header `Authorization: Bearer <token>`（管理员作用域；无 Bearer → 演示沙盘，**禁止写真实私域**）。  
 **密钥只放本机配置 / 环境变量，禁止写入 skill、仓库、聊天记录。**
 
@@ -383,7 +383,7 @@ Release:
 {
   "mcpServers": {
     "star-pm": {
-      "url": "https://star-project-manage.vercel.app/api/mcp",
+      "url": "https://pm.starry-studio.cn/api/mcp",
       "headers": {
         "Authorization": "Bearer <YOUR_TOKEN>"
       }
@@ -399,14 +399,14 @@ Cursor 里服务器名常显示为 `user-star-pm` / `star-pm`。仓库模板：`
 用环境变量挂 Bearer（推荐名 `STAR_PM_MCP_TOKEN`）：
 
 ```bash
-codex mcp add star-pm --url https://star-project-manage.vercel.app/api/mcp --bearer-token-env-var STAR_PM_MCP_TOKEN
+codex mcp add star-pm --url https://pm.starry-studio.cn/api/mcp --bearer-token-env-var STAR_PM_MCP_TOKEN
 ```
 
 等价 TOML：
 
 ```toml
 [mcp_servers.star-pm]
-url = "https://star-project-manage.vercel.app/api/mcp"
+url = "https://pm.starry-studio.cn/api/mcp"
 bearer_token_env_var = "STAR_PM_MCP_TOKEN"
 ```
 
