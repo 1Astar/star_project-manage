@@ -11,10 +11,10 @@
 
 | 机制 | 作用 |
 |------|------|
-| `C:\Users\l1397\.cursor\skills\<name>` → 本目录 junction | **任意 Cursor 窗口**的 Agent 都能加载这些 skill |
-| `E:\文档\star\.cursor\skills\` → 同上 | 本仓库窗口也能从项目路径发现 |
-| `E:\文档\star\.cursor\rules\skill-first.mdc`（alwaysApply） | **行动前**强制先查 skill |
-| `C:\Users\l1397\.cursor\rules\skill-first.mdc` | 其它项目窗口同样提示先查 |
+| `C:\Users\16148\.cursor\skills\<name>` → 本目录 junction | **任意 Cursor 窗口**的 Agent 都能加载这些 skill |
+| `d:\thing\项目\.cursor\skills\` | 本工作区项目路径发现 |
+| `d:\thing\项目\star-pm\.cursor\skills\` | star-pm 仓内同步副本 |
+| `C:\Users\16148\.cursor\rules\skill-first.mdc`（若存在） | **行动前**强制先查 skill |
 
 **Agent 硬规则：** 动手前先扫 skills；Star 交付类任务先读本 README，再 Read 对应 `SKILL.md`。
 
@@ -50,14 +50,14 @@
 
 | Skill | 用途 | 绝对路径 |
 |-------|------|----------|
-| brainstorming | 创意前对齐 | `C:\Users\l1397\.codex\skills\brainstorming\SKILL.md` |
-| writing-plans / executing-plans | 实现计划 | `C:\Users\l1397\.codex\skills\writing-plans\SKILL.md` |
-| verification-before-completion | 完成前验证 | `C:\Users\l1397\.codex\skills\verification-before-completion\SKILL.md` |
-| using-superpowers | 开场检查该用哪些 skill | `C:\Users\l1397\.codex\skills\using-superpowers\SKILL.md` |
-| guizang-ppt-skill | 横向翻页网页 PPT | `C:\Users\l1397\.codex\skills\guizang-ppt-skill\SKILL.md` |
-| ppt-master | 文档→SVG→PPTX | `C:\Users\l1397\.codex\skills\ppt-master\SKILL.md` |
-| canvas | Cursor Canvas SDK | `C:\Users\l1397\.cursor\skills-cursor\canvas\SKILL.md` |
-| create-skill | 编写 Cursor skill | `C:\Users\l1397\.cursor\skills-cursor\create-skill\SKILL.md` |
+| brainstorming | 创意前对齐 | `C:\Users\16148\.codex\skills\brainstorming\SKILL.md` |
+| writing-plans / executing-plans | 实现计划 | `C:\Users\16148\.codex\skills\writing-plans\SKILL.md` |
+| verification-before-completion | 完成前验证 | `C:\Users\16148\.codex\skills\verification-before-completion\SKILL.md` |
+| using-superpowers | 开场检查该用哪些 skill | `C:\Users\16148\.codex\skills\using-superpowers\SKILL.md` |
+| guizang-ppt-skill | 横向翻页网页 PPT | `C:\Users\16148\.codex\skills\guizang-ppt-skill\SKILL.md` |
+| ppt-master | 文档→SVG→PPTX | `C:\Users\16148\.codex\skills\ppt-master\SKILL.md` |
+| canvas | Cursor Canvas SDK | `C:\Users\16148\.cursor\skills-cursor\canvas\SKILL.md` |
+| create-skill | 编写 Cursor skill | `C:\Users\16148\.cursor\skills-cursor\create-skill\SKILL.md` |
 
 咨询风商业 PPT 优先用本库 **`ppt-consulting-visual`**；杂志风/多页 SVG 再用 guizang / ppt-master。
 
