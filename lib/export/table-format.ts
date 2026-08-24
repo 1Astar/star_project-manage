@@ -1,5 +1,3 @@
-import ExcelJS from "exceljs";
-
 export type ExportCell = string | number | boolean | null | undefined;
 
 export type ExportSheet = {
@@ -21,7 +19,9 @@ export function sheetToCsv(sheet: ExportSheet): string {
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
+/** 动态加载 exceljs，避免 Workers 顶层 import 直接炸掉整条 /api/export */
 export async function sheetsToXlsx(sheets: ExportSheet[]): Promise<ArrayBuffer> {
+  const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
   for (const sheet of sheets) {
     const name = sheet.name.replace(/[\\/?*[\]]/g, " ").slice(0, 31) || "Sheet";
