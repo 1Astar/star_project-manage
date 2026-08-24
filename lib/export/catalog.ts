@@ -5,8 +5,11 @@ import { requirementLifecycleStatus } from "@/lib/requirement-status";
 import { buildHoursTables } from "@/lib/export/hours-stats";
 import type { ExportSheet } from "@/lib/export/table-format";
 import {
+  catalogToLabelMap,
+} from "@/lib/bugs/bug-type-catalog";
+import { loadBugTypeCatalog } from "@/lib/bugs/bug-type-catalog.server";
+import {
   BUG_SEVERITY_LABELS,
-  BUG_TYPE_LABELS,
   INTERVIEW_HYPOTHESIS_STATUS_LABELS,
   REQUIREMENT_TYPE_LABELS,
   TASK_STATUS_LABELS,
@@ -303,7 +306,11 @@ export async function loadExportSheets(opts: {
 
   if (kind === "bugs") {
     if (!pm) throw new Error("项目未接入需求库");
-    const bugs = await listBugsByProject(pm.id);
+    const [bugs, bugTypeCatalog] = await Promise.all([
+      listBugsByProject(pm.id),
+      loadBugTypeCatalog(),
+    ]);
+    const bugTypeLabels = catalogToLabelMap(bugTypeCatalog);
     return {
       filenameBase: `${pm.name}-Bug`,
       sheets: [
@@ -313,7 +320,7 @@ export async function loadExportSheets(opts: {
           rows: bugs.map((b) => [
             b.title,
             BUG_SEVERITY_LABELS[(b.severity ?? 3) as BugSeverity],
-            BUG_TYPE_LABELS[b.bug_type] ?? b.bug_type,
+            bugTypeLabels[b.bug_type] ?? b.bug_type,
             TASK_STATUS_LABELS[b.status],
             b.assignee,
             b.description,

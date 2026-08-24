@@ -21,6 +21,7 @@ import type {
   ProjectStatus,
 } from "@/lib/studio/types";
 import { logAiAction } from "@/lib/mcp/action-log";
+import { isBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import { linkItem } from "@/lib/mcp/link-item";
 import { mcpError, mcpJson } from "@/lib/mcp/response";
 import {
@@ -29,7 +30,14 @@ import {
   summarizeProject,
 } from "@/lib/mcp/summarize";
 import { StudioDuplicateError } from "@/lib/studio/entity-dedupe";
-import type { Requirement } from "@/lib/types";
+import type { BugType, Requirement } from "@/lib/types";
+
+/** MCP：内置类型或 `custom:*` 自定义 key */
+const bugTypeInputSchema = z
+  .string()
+  .refine((v): v is BugType => isBugTypeKey(v), {
+    message: "bugType 须为内置类型或 custom: 开头的自定义 key",
+  });
 
 const projectStatusSchema = z.enum(["mainline", "active", "demo", "parking", "archived"]);
 const projectPrioritySchema = z.enum(["P0", "P1", "P2", "P3"]);
@@ -1707,9 +1715,7 @@ export function registerWorkspaceTools(server: McpServer) {
         description: z.string().optional(),
         reproSteps: z.string().optional(),
         severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微，默认 3"),
-        bugType: z
-          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
-          .optional(),
+        bugType: bugTypeInputSchema.optional(),
         requirementId: z.string().nullable().optional(),
         assignee: z.string().optional(),
         status: z
@@ -1828,18 +1834,7 @@ export function registerWorkspaceTools(server: McpServer) {
               description: z.string().optional(),
               reproSteps: z.string().optional(),
               severity: z.number().int().min(1).max(4).optional(),
-              bugType: z
-                .enum([
-                  "code",
-                  "ui",
-                  "performance",
-                  "security",
-                  "design",
-                  "config",
-                  "install",
-                  "other",
-                ])
-                .optional(),
+              bugType: bugTypeInputSchema.optional(),
               requirementId: z.string().nullable().optional(),
               assignee: z.string().optional(),
               createdAt: z.string().nullable().optional(),
@@ -2055,9 +2050,7 @@ export function registerWorkspaceTools(server: McpServer) {
         assignee: z.string().nullable().optional(),
         requirementId: z.string().nullable().optional(),
         severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微"),
-        bugType: z
-          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
-          .optional(),
+        bugType: bugTypeInputSchema.optional(),
         status: z
           .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
           .optional(),
@@ -2250,9 +2243,7 @@ export function registerWorkspaceTools(server: McpServer) {
         assignee: z.string().nullable().optional(),
         requirementId: z.string().nullable().optional(),
         severity: z.number().int().min(1).max(4).optional(),
-        bugType: z
-          .enum(["code", "ui", "performance", "security", "design", "config", "install", "other"])
-          .optional(),
+        bugType: bugTypeInputSchema.optional(),
         status: z
           .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
           .optional(),

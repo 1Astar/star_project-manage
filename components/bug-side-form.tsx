@@ -12,10 +12,10 @@ import {
 import { BackLink } from "@/components/back-button";
 import { BugAttachmentsBlock } from "@/components/bug-attachments";
 import { assigneeRosterNames, PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
+import { BugTypeSelect } from "@/components/bug-type-select";
 import type { Bug, BugAttachment, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
 import {
   BUG_SEVERITY_LABELS,
-  BUG_TYPE_LABELS,
   TASK_STATUS_LABELS,
 } from "@/lib/types";
 
@@ -29,7 +29,6 @@ const STATUS_OPTIONS: TaskStatus[] = [
 ];
 
 const SEVERITIES = [1, 2, 3, 4] as BugSeverity[];
-const BUG_TYPES = Object.keys(BUG_TYPE_LABELS) as BugType[];
 
 export type BugFormOption = { id: string; title: string; inPool?: boolean };
 export type MemberOption = { name: string };
@@ -181,17 +180,10 @@ function MetaSelects({
         </label>
         <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">Bug 类型</span>
-          <select
+          <BugTypeSelect
             value={value.bugType}
-            onChange={(e) => onChange({ bugType: e.target.value as BugType })}
-            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
-          >
-            {BUG_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {BUG_TYPE_LABELS[t]}
-              </option>
-            ))}
-          </select>
+            onChange={(bugType) => onChange({ bugType: bugType as BugType })}
+          />
         </label>
         <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">指派</span>

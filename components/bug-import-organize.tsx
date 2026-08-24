@@ -17,15 +17,15 @@ import {
   collectImagesFromDataTransfer,
   dataTransferLooksLikeUriOnly,
 } from "@/components/image-drop-zone";
+import { bugTypeLabel } from "@/lib/bugs/bug-type-catalog";
+import { BugTypeSelect } from "@/components/bug-type-select";
 import {
   BUG_SEVERITY_LABELS,
-  BUG_TYPE_LABELS,
   type BugSeverity,
   type BugType,
 } from "@/lib/types";
 
 const SEVERITIES = [1, 2, 3, 4] as BugSeverity[];
-const BUG_TYPES = Object.keys(BUG_TYPE_LABELS) as BugType[];
 
 type BugImportDraftStore = {
   text: string;
@@ -679,19 +679,13 @@ export function BugImportOrganizePanel({
                       ))}
                     </select>
                     {(d.kind ?? "bug") === "bug" ? (
-                      <select
+                      <BugTypeSelect
                         value={d.bugType}
-                        onChange={(e) =>
-                          updateDraft(d.key, { bugType: e.target.value as BugType })
+                        onChange={(bugType) =>
+                          updateDraft(d.key, { bugType: bugType as BugType })
                         }
-                        className="rounded border border-slate-200 px-2 py-1 text-xs"
-                      >
-                        {BUG_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {BUG_TYPE_LABELS[t]}
-                          </option>
-                        ))}
-                      </select>
+                        selectClassName="rounded border border-slate-200 px-2 py-1 text-xs"
+                      />
                     ) : null}
                   </div>
                   <textarea
@@ -777,7 +771,7 @@ export function BugImportOrganizePanel({
               </p>
               {orgPreview.fillTypes.slice(0, 12).map((r) => (
                 <div key={r.bugId}>
-                  「{r.title}」{BUG_TYPE_LABELS[r.from]} → {BUG_TYPE_LABELS[r.to]}
+                  「{r.title}」{bugTypeLabel(r.from)} → {bugTypeLabel(r.to)}
                 </div>
               ))}
               {orgPreview.linkRequirements.slice(0, 12).map((r) => (

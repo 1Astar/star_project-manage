@@ -10,6 +10,22 @@
 
 ---
 
+## v1.14.15 · 2026-08-24
+
+相对 **v1.14.14**：
+
+### Bug 类型
+
+- **全站自定义类型**：Bug 类型下拉支持「＋ 添加类型…」，存入 `studio_app_settings`，全项目共用
+- **展示与导出**：列表、整理预览、Excel/CSV 导出均识别 `custom:*` 自定义标签
+- **MCP**：`create_bug` / `import_bugs` / `update_bug(s)` 的 `bugType` 支持自定义 key
+
+### 部署
+
+- **Wrangler minify**：Worker gzip 贴近免费档 3MiB 上限，deploy 默认 `--minify`
+
+---
+
 ## v1.14.14 · 2026-08-24
 
 相对 **v1.14.13**：

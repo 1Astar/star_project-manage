@@ -11,10 +11,10 @@ import { StudioBadge } from "@/components/studio/shell";
 import type { Bug, TaskStatus } from "@/lib/types";
 import {
   BUG_SEVERITY_LABELS,
-  BUG_TYPE_LABELS,
   TASK_STATUS_LABELS,
   type BugSeverity,
 } from "@/lib/types";
+import { BugTypeLabel } from "@/components/bug-type-label";
 
 const OPEN_STATUSES: TaskStatus[] = ["pending", "in_progress", "testing", "blocked"];
 const RESOLVED: TaskStatus[] = ["done", "acceptance"];
@@ -145,7 +145,7 @@ export function ProjectBugsClient({
                       {BUG_SEVERITY_LABELS[severity] ?? severity}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-600">
-                      {BUG_TYPE_LABELS[bug.bug_type] ?? bug.bug_type ?? "—"}
+                      <BugTypeLabel typeKey={bug.bug_type ?? "code"} />
                     </td>
                     <td className="px-3 py-2.5">
                       <StudioBadge

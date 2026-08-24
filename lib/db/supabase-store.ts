@@ -16,12 +16,13 @@ import type {
   RequirementLink,
 } from "@/lib/types";
 import { BUG_TYPE_LABELS } from "@/lib/types";
+import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 
 function normalizeBug(row: Record<string, unknown>): Bug {
   const severityRaw = Number(row.severity);
   const severity = ([1, 2, 3, 4].includes(severityRaw) ? severityRaw : 3) as BugSeverity;
   const typeRaw = String(row.bug_type ?? "code");
-  const bug_type = (typeRaw in BUG_TYPE_LABELS ? typeRaw : "code") as BugType;
+  const bug_type = normalizeBugTypeKey(typeRaw) as BugType;
   return {
     id: String(row.id),
     project_id: String(row.project_id),

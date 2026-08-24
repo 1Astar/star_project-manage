@@ -1,6 +1,6 @@
 {
   "name": "star-pm",
-  "version": "1.14.14",
+  "version": "1.14.15",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,7 @@
     "db:types": "echo 'Run supabase gen types after linking project'",
     "mcp:stdio": "tsx --env-file=.env.local mcp/stdio.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --keep-vars",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy -- --keep-vars --minify",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {

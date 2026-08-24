@@ -331,7 +331,7 @@ export interface AcceptanceRecord {
 /** 严重程度：1 最高 … 4 最低（对齐禅道） */
 export type BugSeverity = 1 | 2 | 3 | 4;
 
-export type BugType =
+export type BuiltinBugType =
   | "code"
   | "ui"
   | "performance"
@@ -341,6 +341,8 @@ export type BugType =
   | "install"
   | "other";
 
+export type BugType = BuiltinBugType | `custom:${string}`;
+
 export const BUG_SEVERITY_LABELS: Record<BugSeverity, string> = {
   1: "1 · 致命",
   2: "2 · 严重",
@@ -348,7 +350,7 @@ export const BUG_SEVERITY_LABELS: Record<BugSeverity, string> = {
   4: "4 · 轻微",
 };
 
-export const BUG_TYPE_LABELS: Record<BugType, string> = {
+export const BUG_TYPE_LABELS: Record<BuiltinBugType, string> = {
   code: "代码错误",
   ui: "界面优化",
   performance: "性能问题",

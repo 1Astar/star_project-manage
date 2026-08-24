@@ -42,6 +42,7 @@ import { assertDurableStorage, isSupabaseConfigured } from "@/lib/supabase/confi
 import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
 import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { normalizeGithubRepoFullName } from "@/lib/github/client";
+import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import {
   AGENT_ACTOR_NAME,
   encodeAgentActivityNote,
@@ -178,7 +179,7 @@ function normalizeBugRow(bug: Bug): Bug {
   const severityRaw = Number(bug.severity);
   const severity = ([1, 2, 3, 4].includes(severityRaw) ? severityRaw : 3) as BugSeverity;
   const typeRaw = String(bug.bug_type ?? "code");
-  const bug_type = (typeRaw in BUG_TYPE_LABELS ? typeRaw : "code") as BugType;
+  const bug_type = normalizeBugTypeKey(typeRaw) as BugType;
   return {
     ...bug,
     requirement_id: bug.requirement_id ?? null,
