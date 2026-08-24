@@ -18,7 +18,7 @@ const child = spawn(
   {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, STAR_PM_MCP_STDIO: '1' },
+    env: { ...process.env, STAR_PM_MCP_STDIO: "1", MCP_DISK_DYNAMIC_TOOLS: "1" },
   },
 )
 child.on('exit', (code, signal) => {

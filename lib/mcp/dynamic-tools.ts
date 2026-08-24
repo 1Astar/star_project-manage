@@ -357,12 +357,18 @@ async function loadHandlerModule(handlerPath: string): Promise<HandlerMod> {
 
 /**
  * 启动时注册已启用的动态工具。
+ * 默认不走磁盘（Cloudflare / OpenNext 上 fs.mkdir 会挂死 MCP initialize → ChatGPT 无工具）。
+ * 仅本地 stdio 显式打开：MCP_DISK_DYNAMIC_TOOLS=1
  */
 export async function registerDynamicMcpTools(server: McpServer): Promise<{
   loaded: string[];
   skipped: string[];
   errors: Array<{ name: string; error: string }>;
 }> {
+  if (process.env.MCP_DISK_DYNAMIC_TOOLS !== "1") {
+    return { loaded: [], skipped: ["__disk_dynamic_tools_disabled__"], errors: [] };
+  }
+
   ensureRoot();
   const reg = readDynamicRegistry();
   const loaded: string[] = [];

@@ -10,6 +10,19 @@
 
 ---
 
+## v1.14.16 · 2026-08-24
+
+相对 **v1.14.15**：
+
+### MCP · ChatGPT / Cloudflare
+
+- **修复「已连接但无工具」**：CF Workers 弃用 `mcp-handler` Node `ServerResponse` 适配器（鉴权后 `initialize` 挂死）；改用 Web Standard Streamable HTTP + `enableJsonResponse`
+- **无状态会话**：Workers 每请求新建 transport（`sessionIdGenerator: undefined`）
+- **动态工具**：线上默认不落盘；本地 stdio 设 `MCP_DISK_DYNAMIC_TOOLS=1`
+- **OAuth AS path-aware**：`/.well-known/oauth-authorization-server/*` 不再 404
+
+---
+
 ## v1.14.15 · 2026-08-24
 
 相对 **v1.14.14**：

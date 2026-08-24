@@ -6,6 +6,8 @@
  * Upstash REST (`KV_REST_API_*`) is still used for OAuth token storage.
  */
 export function getMcpRedisUrl(): string | undefined {
+  // Workers 无 TCP Redis；误配 redis:// 会导致 MCP POST 挂死、工具列表为空
+  if (process.env.NEXT_PUBLIC_CF_WORKER === "1") return undefined;
   const url =
     process.env.REDIS_URL?.trim() ||
     process.env.KV_URL?.trim() ||

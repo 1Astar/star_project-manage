@@ -6,4 +6,4 @@ export const MCP_SERVER_NAME = "star-pm";
 export const MCP_OAUTH_SERVER_NAME = "star-pm-gpt";
 
 /** 当前 MCP 能力版本（Bearer / OAuth / stdio 共用） */
-export const MCP_SERVER_VERSION = "1.4.0";
+export const MCP_SERVER_VERSION = "1.4.1";

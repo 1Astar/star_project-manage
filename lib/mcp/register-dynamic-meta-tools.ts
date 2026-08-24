@@ -28,6 +28,15 @@ const jsonSchemaLite = z
 
 /** 套娃元工具：给 MCP 自己落盘新工具（重启后生效） */
 export function registerDynamicMetaTools(server: McpServer) {
+  async function rejectOnEdge() {
+    if (process.env.MCP_DISK_DYNAMIC_TOOLS !== "1") {
+      return mcpError(
+        "动态工具落盘仅本地 mcp:stdio（MCP_DISK_DYNAMIC_TOOLS=1）可用；线上请用内置工具"
+      );
+    }
+    return null;
+  }
+
   server.registerTool(
     "add_mcp_tool",
     {
@@ -60,6 +69,8 @@ export function registerDynamicMetaTools(server: McpServer) {
     },
     async (input) => {
       try {
+        const blocked = await rejectOnEdge();
+        if (blocked) return blocked;
         const result = addMcpToolToDisk({
           name: input.name,
           title: input.title,
@@ -96,6 +107,8 @@ export function registerDynamicMetaTools(server: McpServer) {
     },
     async () => {
       try {
+        const blocked = await rejectOnEdge();
+        if (blocked) return blocked;
         const tools = listDynamicMcpToolsFromDisk();
         return mcpJson({
           ok: true,
@@ -127,6 +140,8 @@ export function registerDynamicMetaTools(server: McpServer) {
     },
     async (input) => {
       try {
+        const blocked = await rejectOnEdge();
+        if (blocked) return blocked;
         const meta = disableMcpToolOnDisk(
           input.name,
           input.enabled === true
