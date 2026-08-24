@@ -1,6 +1,6 @@
-import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import { getProjectBundle } from "@/lib/db/local-store";
+import { downloadHeaders, sheetsToXlsx } from "@/lib/export/table-format";
 import { ROLE_LABELS, TASK_STATUS_LABELS, type ModuleNode, type Requirement } from "@/lib/types";
 
 function modulePathForReq(
@@ -11,7 +11,6 @@ function modulePathForReq(
   if (!leafId) return ["", "", ""];
   const chain: string[] = [];
   let cur = modulesById.get(leafId);
-  // 若叶子能走到根，用完整祖先链；否则回退到 l1 名称
   while (cur) {
     chain.unshift(cur.name);
     cur = cur.parent_id ? modulesById.get(cur.parent_id) : undefined;
@@ -32,10 +31,7 @@ export async function GET(
   if (!bundle) return new NextResponse("项目不存在", { status: 404 });
 
   const modulesById = new Map(bundle.modules.map((m) => [m.id, m]));
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(bundle.iterations[0]?.name ?? "导出");
-
-  ws.addRow([
+  const headers = [
     "迭代",
     "一级模块",
     "二级模块",
@@ -51,43 +47,31 @@ export async function GET(
     "预估工时",
     "开始时间",
     "结束时间",
-  ]);
+  ];
+  const rows: Array<Array<string | number | null>> = [];
 
   for (const req of bundle.requirements) {
     const [l1, l2, l3] = modulePathForReq(req, modulesById);
     const tasks = bundle.role_tasks.filter((t) => t.requirement_id === req.id);
+    const base = [
+      bundle.iterations.find((i) => i.id === req.iteration_id)?.name ?? "",
+      l1,
+      l2,
+      l3,
+      req.title,
+      req.sub_function ?? "",
+      req.acceptance_criteria ?? "",
+      req.priority ?? "",
+      TASK_STATUS_LABELS[req.status],
+      req.blocker_reason ?? "",
+    ];
     if (tasks.length === 0) {
-      ws.addRow([
-        bundle.iterations.find((i) => i.id === req.iteration_id)?.name ?? "",
-        l1,
-        l2,
-        l3,
-        req.title,
-        req.sub_function ?? "",
-        req.acceptance_criteria ?? "",
-        req.priority ?? "",
-        TASK_STATUS_LABELS[req.status],
-        req.blocker_reason ?? "",
-        "",
-        "",
-        "",
-        "",
-        "",
-      ]);
+      rows.push([...base, "", "", "", "", ""]);
       continue;
     }
     for (const t of tasks) {
-      ws.addRow([
-        bundle.iterations.find((i) => i.id === req.iteration_id)?.name ?? "",
-        l1,
-        l2,
-        l3,
-        req.title,
-        req.sub_function ?? "",
-        req.acceptance_criteria ?? "",
-        req.priority ?? "",
-        TASK_STATUS_LABELS[req.status],
-        req.blocker_reason ?? "",
+      rows.push([
+        ...base,
         ROLE_LABELS[t.role],
         t.assignee ?? "",
         t.estimate_hours ?? "",
@@ -97,12 +81,15 @@ export async function GET(
     }
   }
 
-  const buffer = await wb.xlsx.writeBuffer();
-  const filename = encodeURIComponent(`${bundle.project.name}-导出.xlsx`);
-  return new NextResponse(buffer, {
-    headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename*=UTF-8''${filename}`,
+  const buf = await sheetsToXlsx([
+    {
+      name: bundle.iterations[0]?.name ?? "导出",
+      headers,
+      rows,
     },
+  ]);
+  const filename = `${bundle.project.name}-导出.xlsx`;
+  return new NextResponse(new Uint8Array(buf), {
+    headers: downloadHeaders(filename, "xlsx"),
   });
 }
