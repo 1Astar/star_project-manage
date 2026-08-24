@@ -35,7 +35,12 @@ const LEGACY_PM_SLUG_TO_STUDIO: Record<string, string> = {
 export function getPmSlugForStudioProject(
   studioProject: Pick<StudioProject, "id">
 ): string {
-  return STUDIO_TO_PM_SLUG[studioProject.id] ?? `studio-${studioProject.id}`;
+  const id = studioProject.id.trim();
+  if (!id) return id;
+  if (STUDIO_TO_PM_SLUG[id]) return STUDIO_TO_PM_SLUG[id];
+  // 已是 PM slug（studio-proj-xxx）时勿再套一层 → 避免 studio-studio-proj-xxx
+  if (id.startsWith("studio-")) return id;
+  return `studio-${id}`;
 }
 
 export function getStudioIdFromPmSlug(slug: string): string | null {

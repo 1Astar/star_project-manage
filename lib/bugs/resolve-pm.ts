@@ -31,13 +31,14 @@ export async function resolvePmProject(projectId: string) {
   }
 
   if (isSupabaseConfigured()) {
-    const keys = new Set<string>();
-    keys.add(id);
-    keys.add(getPmSlugForStudioProject({ id }));
+    // 先试映射后的 PM slug，再试原值；findProjectBySlugOrId 内部也会兜 Studio id
+    const keys: string[] = [];
+    const mapped = getPmSlugForStudioProject({ id });
+    if (mapped !== id) keys.push(mapped);
+    keys.push(id);
     const asStudioFromSlug = getStudioIdFromPmSlug(id);
     if (asStudioFromSlug) {
-      keys.add(id);
-      keys.add(getPmSlugForStudioProject({ id: asStudioFromSlug }));
+      keys.push(getPmSlugForStudioProject({ id: asStudioFromSlug }));
     }
 
     let pm: Project | null = null;
@@ -87,6 +88,7 @@ export async function resolvePmProjectForFeedback(studioProjectId: string) {
   const slug = getPmSlugForStudioProject({ id });
 
   if (isSupabaseConfigured()) {
+    // slug 优先；findProjectBySlugOrId 已能吃 Studio id，不再因 uuid 语法炸
     const pm =
       (await findProjectBySlugOrId(slug)) ?? (await findProjectBySlugOrId(id));
     if (pm) {

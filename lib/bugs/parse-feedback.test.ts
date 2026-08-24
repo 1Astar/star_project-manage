@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import {
+  detectFeedbackSectionKind,
   inferBugSeverity,
   inferBugType,
+  inferFeedbackKind,
   matchImagesToDrafts,
   parseBugFeedbackHeuristic,
 } from "./parse-feedback";
@@ -27,6 +29,36 @@ assert.equal(preview.drafts[0].bugType, "ui");
 assert.ok(preview.drafts[0].imageHints.length >= 1);
 assert.equal(preview.drafts[1].bugType, "performance");
 assert.equal(preview.drafts[2].severity, 4);
+assert.equal(preview.drafts[0].kind, "bug");
+
+assert.equal(detectFeedbackSectionKind("## 一、Bug清单（12项）"), "bug");
+assert.equal(detectFeedbackSectionKind("## 二、需求清单（5项）"), "requirement");
+assert.equal(inferFeedbackKind("希望提供 Web 端访问链接"), "requirement");
+assert.equal(inferFeedbackKind("知识库内有内容但显示为0"), "bug");
+
+const mixed = parseBugFeedbackHeuristic(`MAS反馈
+## 一、Bug清单
+1. 知识库显示异常：内容有但显示为0
+2. 回复会中断
+## 二、需求清单
+1. 希望提供 Web 端访问链接
+2. 创建员工时智能分类分部门`);
+assert.ok(mixed.drafts.length >= 4);
+const kinds = mixed.drafts.map((d) => d.kind);
+assert.ok(kinds.filter((k) => k === "bug").length >= 2);
+assert.ok(kinds.filter((k) => k === "requirement").length >= 2);
+
+// 结构小标题（复现/出现/失效原因）不应拆成多条
+const structured = parseBugFeedbackHeuristic(`节点管理反馈
+### 复现步骤
+datahub-node 不可用
+### 出现步骤
+打开 MAS 节点管理页
+### 失效原因分析
+| 工具 | 说明 |
+| mas_collab_ask | 未启用 |`);
+assert.equal(structured.drafts.length, 1);
+assert.match(structured.drafts[0].title, /节点|datahub|反馈/);
 
 const bugs: Bug[] = [
   {

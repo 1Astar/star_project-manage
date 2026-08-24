@@ -510,16 +510,57 @@ export async function listIterationsForProject(
   return (data ?? []) as import("@/lib/types").Iteration[];
 }
 
-/** 公开反馈专用：单行查项目，避免整库 readSupabaseDb */
+/** 是否像 Postgres uuid（PM projects.id）；Studio id（proj-…）不是 uuid */
+function looksLikeUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+/**
+ * 单行查 PM 项目。接受：
+ * - PM slug（含 studio-proj-xxx）
+ * - PM uuid
+ * - Studio id（proj-xxx）→ 自动再试 studio-{id} / 硬编码映射
+ * 禁止把非 uuid 丢进 projects.id（会报 invalid input syntax for type uuid）。
+ */
 export async function findProjectBySlugOrId(slugOrId: string): Promise<Project | null> {
   const key = slugOrId.trim();
   if (!key) return null;
   const sb = client();
-  const bySlug = await sb.from("projects").select("*").eq("slug", key).maybeSingle();
-  if (bySlug.error) throw new Error(`projects: ${bySlug.error.message}`);
-  if (bySlug.data) return bySlug.data as Project;
+
+  const slugCandidates = new Set<string>([key]);
+  // Studio 建的项目：对外常用 proj-xxx，PM 行 slug 多为 studio-proj-xxx
+  if (key.startsWith("proj-") && !key.startsWith("studio-")) {
+    slugCandidates.add(`studio-${key}`);
+  }
+  try {
+    const { getPmSlugForStudioProject } = await import("@/lib/project-bridge");
+    const mapped = getPmSlugForStudioProject({ id: key });
+    if (mapped && mapped !== key) slugCandidates.add(mapped);
+    // 传入 studio-proj-xxx 时，也接受裸 Studio id 的映射结果（通常仍是同一 slug）
+    if (key.startsWith("studio-") && key.length > "studio-".length) {
+      const fromRest = getPmSlugForStudioProject({ id: key.slice("studio-".length) });
+      if (fromRest) slugCandidates.add(fromRest);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  for (const slug of slugCandidates) {
+    const bySlug = await sb.from("projects").select("*").eq("slug", slug).maybeSingle();
+    if (bySlug.error) throw new Error(`projects: ${bySlug.error.message}`);
+    if (bySlug.data) return bySlug.data as Project;
+  }
+
+  if (!looksLikeUuid(key)) return null;
+
   const byId = await sb.from("projects").select("*").eq("id", key).maybeSingle();
-  if (byId.error) throw new Error(`projects: ${byId.error.message}`);
+  if (byId.error) {
+    // 仍可能被 PostgREST 判坏 uuid；当找不到处理，勿把 Studio id 当硬错误
+    if (/uuid/i.test(byId.error.message)) return null;
+    throw new Error(`projects: ${byId.error.message}`);
+  }
   return (byId.data as Project | null) ?? null;
 }
 

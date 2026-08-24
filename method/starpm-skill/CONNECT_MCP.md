@@ -26,6 +26,15 @@ Replace `<YOUR_STARPM_ORIGIN>` with your deployed origin (example shape: `https:
 
 Without Bearer on `/api/mcp`, many deployments fall back to a **demo sandbox** (read/write demo only — do not treat as your private projects).
 
+### ChatGPT「未知 client_id」
+
+常见原因：Connector 缓存了旧的 DCR `client_id`，服务端 Redis/冷启动已丢登记。
+
+1. **已修**：授权页会对 `gpt_*` / `cursor_*` 自动恢复登记（需部署含 `ensureDcrClient` 的版本）。部署后**再点一次连接授权**即可，不必先删。  
+2. 仍失败：在 ChatGPT 里**删除**该连接器 → 重新添加 MCP（走 DCR `/oauth/register`）。  
+3. 备选：手动 OAuth 客户端填固定 `client_id` = `star-pm-gpt`（或环境变量 `STAR_PM_OAUTH_CLIENT_ID`）。  
+4. 生产务必配置 Upstash/`KV_REST_API_*`，否则 serverless 内存登记会丢。
+
 ---
 
 ## Cursor (`~/.cursor/mcp.json`)

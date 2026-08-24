@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState, type ClipboardEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { loadOpenAiSettings } from "@/lib/studio/ai/openai-settings";
-import type { BugFeedbackDraft, BugFeedbackPreview } from "@/lib/bugs/parse-feedback";
+import type {
+  BugFeedbackDraft,
+  BugFeedbackPreview,
+  FeedbackItemKind,
+} from "@/lib/bugs/parse-feedback";
 import { matchImagesToDrafts } from "@/lib/bugs/parse-feedback";
 import type { OrganizeBugsPreview } from "@/lib/bugs/organize";
 import {
@@ -42,11 +46,21 @@ function loadImportDraft(projectId: string): BugImportDraftStore | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<BugImportDraftStore>;
     if (typeof parsed.text !== "string") return null;
+    const preview =
+      parsed.preview && Array.isArray(parsed.preview.drafts)
+        ? ({
+            ...parsed.preview,
+            drafts: parsed.preview.drafts.map((d) => ({
+              ...d,
+              kind: (d.kind === "requirement" ? "requirement" : "bug") as FeedbackItemKind,
+            })),
+          } as BugFeedbackPreview)
+        : null;
     return {
       text: parsed.text,
       preferAi: parsed.preferAi !== false,
       tab: parsed.tab === "import" || parsed.tab === "organize" ? parsed.tab : null,
-      preview: parsed.preview && Array.isArray(parsed.preview.drafts) ? parsed.preview : null,
+      preview,
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
     };
   } catch {
@@ -103,6 +117,15 @@ export function BugImportOrganizePanel({
 
   const selectedCount = useMemo(
     () => preview?.drafts.filter((d) => d.selected).length ?? 0,
+    [preview]
+  );
+  const selectedBugCount = useMemo(
+    () => preview?.drafts.filter((d) => d.selected && (d.kind ?? "bug") === "bug").length ?? 0,
+    [preview]
+  );
+  const selectedReqCount = useMemo(
+    () =>
+      preview?.drafts.filter((d) => d.selected && d.kind === "requirement").length ?? 0,
     [preview]
   );
 
@@ -354,11 +377,15 @@ export function BugImportOrganizePanel({
         return;
       }
       const bugs = (data.bugs ?? []) as Array<{ id: string; title: string }>;
-      const selectedDrafts = preview.drafts.filter((d) => d.selected && d.title.trim());
+      const reqs = (data.requirements ?? []) as Array<{ id: string; title: string }>;
+      // 截图只挂到 Bug；与入库顺序对齐：仅勾选的 Bug 草稿
+      const selectedBugDrafts = preview.drafts.filter(
+        (d) => d.selected && d.title.trim() && (d.kind ?? "bug") === "bug"
+      );
       let uploaded = 0;
       for (let i = 0; i < bugs.length; i++) {
         const bug = bugs[i];
-        const draft = selectedDrafts[i];
+        const draft = selectedBugDrafts[i];
         const names = draft ? fileMap[draft.key] ?? [] : [];
         for (const name of names) {
           const file = files.find((f) => f.name === name);
@@ -375,7 +402,12 @@ export function BugImportOrganizePanel({
           if (up.ok) uploaded += 1;
         }
       }
-      setMessage(`已导入 ${bugs.length} 条 Bug` + (uploaded ? `，上传 ${uploaded} 张图` : ""));
+      const parts = [
+        bugs.length ? `Bug ${bugs.length}` : "",
+        reqs.length ? `需求 ${reqs.length}` : "",
+        uploaded ? `图 ${uploaded}` : "",
+      ].filter(Boolean);
+      setMessage(`已入库：${parts.join(" · ") || "0 条"}`);
       setPreview(null);
       setText("");
       setFiles([]);
@@ -468,7 +500,7 @@ export function BugImportOrganizePanel({
           整理现有
         </button>
         <p className="text-xs text-slate-500">
-          粘贴反馈 + 拖入截图 → AI/规则整理成可改清单 → 你确认匹配后再入库。正文会自动保存在本机。
+          粘贴反馈 + 拖入截图 → 整理成清单（可改 Bug/需求）→ 一键分别入库。正文会自动保存在本机。
         </p>
       </div>
 
@@ -579,7 +611,9 @@ export function BugImportOrganizePanel({
                 onClick={() => void commitImport()}
                 className="rounded-lg bg-indigo-600 px-3 py-1.5 text-white disabled:opacity-50"
               >
-                确认入库 {selectedCount} 条
+                {selectedReqCount > 0
+                  ? `一键入库 ${selectedCount} 条（Bug ${selectedBugCount} · 需求 ${selectedReqCount}）`
+                  : `确认入库 ${selectedCount} 条 Bug`}
               </button>
             ) : null}
           </div>
@@ -596,7 +630,11 @@ export function BugImportOrganizePanel({
               {preview.drafts.map((d) => (
                 <div
                   key={d.key}
-                  className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 p-3"
+                  className={`space-y-2 rounded-lg border p-3 ${
+                    (d.kind ?? "bug") === "requirement"
+                      ? "border-sky-200 bg-sky-50/50"
+                      : "border-slate-100 bg-slate-50/60"
+                  }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <input
@@ -604,6 +642,23 @@ export function BugImportOrganizePanel({
                       checked={d.selected}
                       onChange={(e) => updateDraft(d.key, { selected: e.target.checked })}
                     />
+                    <select
+                      value={d.kind ?? "bug"}
+                      onChange={(e) =>
+                        updateDraft(d.key, {
+                          kind: e.target.value as FeedbackItemKind,
+                        })
+                      }
+                      className={`rounded border px-2 py-1 text-xs font-medium ${
+                        (d.kind ?? "bug") === "requirement"
+                          ? "border-sky-300 bg-white text-sky-800"
+                          : "border-rose-200 bg-white text-rose-800"
+                      }`}
+                      title="入库类型"
+                    >
+                      <option value="bug">🐛 Bug</option>
+                      <option value="requirement">✨ 需求</option>
+                    </select>
                     <input
                       value={d.title}
                       onChange={(e) => updateDraft(d.key, { title: e.target.value })}
@@ -615,6 +670,7 @@ export function BugImportOrganizePanel({
                         updateDraft(d.key, { severity: Number(e.target.value) as BugSeverity })
                       }
                       className="rounded border border-slate-200 px-2 py-1 text-xs"
+                      title={(d.kind ?? "bug") === "requirement" ? "映射需求优先级" : "严重程度"}
                     >
                       {SEVERITIES.map((s) => (
                         <option key={s} value={s}>
@@ -622,17 +678,21 @@ export function BugImportOrganizePanel({
                         </option>
                       ))}
                     </select>
-                    <select
-                      value={d.bugType}
-                      onChange={(e) => updateDraft(d.key, { bugType: e.target.value as BugType })}
-                      className="rounded border border-slate-200 px-2 py-1 text-xs"
-                    >
-                      {BUG_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {BUG_TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
+                    {(d.kind ?? "bug") === "bug" ? (
+                      <select
+                        value={d.bugType}
+                        onChange={(e) =>
+                          updateDraft(d.key, { bugType: e.target.value as BugType })
+                        }
+                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                      >
+                        {BUG_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {BUG_TYPE_LABELS[t]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                   </div>
                   <textarea
                     value={d.reproSteps}

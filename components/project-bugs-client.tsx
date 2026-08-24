@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { updateBugStatusAction } from "@/lib/actions";
 import { BugCreateForm, type BugFormOption, type MemberOption } from "@/components/bug-side-form";
 import { BugImportOrganizePanel } from "@/components/bug-import-organize";
+import { TableExportButtons } from "@/components/table-export-buttons";
 import { StudioBadge } from "@/components/studio/shell";
 import type { Bug, TaskStatus } from "@/lib/types";
 import {
@@ -65,6 +66,7 @@ export function ProjectBugsClient({
           <p className="text-xs text-slate-500">共 {initialBugs.length} 项</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <TableExportButtons kind="bugs" project={projectSlug} label="导出 Bug" />
           <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-sm">
             <button
               type="button"

@@ -1534,21 +1534,15 @@ export function registerWorkspaceTools(server: McpServer) {
     },
     async (input) => {
       try {
-        const { resolveProjectRoute } = await import("@/lib/project-bridge");
-        const { createPoolRequirement, getProjects } = await import("@/lib/db/local-store");
+        const { resolvePmProject } = await import("@/lib/bugs/resolve-pm");
+        const { createPoolRequirement } = await import("@/lib/db/local-store");
         const { applyLifecycleStatus, requirementLifecycleStatus } = await import(
           "@/lib/requirement-status"
         );
         const { AGENT_ACTOR_NAME } = await import("@/lib/cursor-actor");
         const { requirementIsDone } = await import("@/lib/types");
 
-        const ctx = await resolveProjectRoute(input.projectId);
-        const pmAll = await getProjects();
-        const pm =
-          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
-          pmAll.find((p) => p.id === input.projectId) ||
-          pmAll.find((p) => p.slug === input.projectId) ||
-          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        const { pm } = await resolvePmProject(input.projectId);
         if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
 
         const status_tags = applyLifecycleStatus([], input.lifecycle?.trim() || "想法");
@@ -2017,15 +2011,9 @@ export function registerWorkspaceTools(server: McpServer) {
     },
     async (input) => {
       try {
-        const { resolveProjectRoute } = await import("@/lib/project-bridge");
-        const { getProjects, listBugsByProject } = await import("@/lib/db/local-store");
-        const ctx = await resolveProjectRoute(input.projectId);
-        const pmAll = await getProjects();
-        const pm =
-          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
-          pmAll.find((p) => p.id === input.projectId) ||
-          pmAll.find((p) => p.slug === input.projectId) ||
-          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        const { resolvePmProject } = await import("@/lib/bugs/resolve-pm");
+        const { listBugsByProject } = await import("@/lib/db/local-store");
+        const { pm } = await resolvePmProject(input.projectId);
         if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
 
         let bugs = await listBugsByProject(pm.id);

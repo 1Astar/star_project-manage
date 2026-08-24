@@ -72,7 +72,8 @@ export function mcpOAuthResourceUrl(origin: string) {
 export async function saveClient(client: OAuthClient) {
   const r = redis();
   if (r) {
-    await r.set(key(["client", client.client_id]), client, { ex: 60 * 60 * 24 * 90 });
+    // ChatGPT caches client_id indefinitely; keep DCR clients ≥1y
+    await r.set(key(["client", client.client_id]), client, { ex: 60 * 60 * 24 * 400 });
     return;
   }
   memory.clients.set(client.client_id, client);
@@ -100,6 +101,41 @@ export async function getClient(clientId: string): Promise<OAuthClient | null> {
     return (await r.get<OAuthClient>(key(["client", clientId]))) ?? null;
   }
   return memory.clients.get(clientId) ?? null;
+}
+
+/**
+ * ChatGPT 会缓存 DCR 的 client_id，且常跳过重新 register。
+ * Redis 过期 / 无 KV 冷启动丢失后，用 gpt_/cursor_ 前缀 + 合法 redirect 自动恢复登记。
+ */
+export async function ensureDcrClient(
+  clientId: string,
+  redirectUri: string,
+): Promise<OAuthClient | null> {
+  const existing = await getClient(clientId);
+  if (existing) {
+    if (!isAllowedRedirect(redirectUri)) return null;
+    if (
+      existing.client_id !== staticGptClient().client_id &&
+      !existing.redirect_uris.includes(redirectUri)
+    ) {
+      existing.redirect_uris = [...existing.redirect_uris, redirectUri];
+      await saveClient(existing);
+    }
+    return existing;
+  }
+  if (!clientId.startsWith("gpt_") && !clientId.startsWith("cursor_")) return null;
+  if (!isAllowedRedirect(redirectUri)) return null;
+  const client: OAuthClient = {
+    client_id: clientId,
+    redirect_uris: [redirectUri],
+    token_endpoint_auth_method: "none",
+    client_name: "Recovered MCP client",
+    grant_types: ["authorization_code"],
+    response_types: ["code"],
+    scope: "star-pm:read star-pm:write",
+  };
+  await saveClient(client);
+  return client;
 }
 
 export function clientAcceptsRedirect(client: OAuthClient, redirectUri: string) {

@@ -11,6 +11,7 @@ import { RequirementStatusKanban } from "@/components/requirement-status-kanban"
 import { RequirementCalendar } from "@/components/requirement-calendar";
 import { RequirementGantt } from "@/components/requirement-gantt";
 import { ProjectTaskBoard } from "@/components/studio/project-task-board";
+import { TableExportButtons } from "@/components/table-export-buttons";
 import { cn } from "@/lib/utils";
 import type {
   Iteration,
@@ -159,22 +160,25 @@ export function ProjectTasksViews({
         releases={studioReleases ?? []}
       />
 
-      <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setView(item.id)}
-            className={cn(
-              "rounded-lg px-4 py-1.5 text-sm font-medium transition",
-              view === item.id
-                ? "bg-white text-indigo-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setView(item.id)}
+              className={cn(
+                "rounded-lg px-4 py-1.5 text-sm font-medium transition",
+                view === item.id
+                  ? "bg-white text-indigo-700 shadow-sm"
+                  : "text-slate-600 hover:text-slate-800"
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <TableExportButtons kind="requirements" project={routeId} label="导出需求" />
       </div>
 
       {view === "pool" ? (

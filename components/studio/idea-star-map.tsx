@@ -1,394 +1,461 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { StarMapAnchor, StarMapLayout, StarMapNode } from "@/lib/studio/idea-star-map";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
+import {
+  tickForceLayout,
+  visibleSubgraph,
+  type GraphNode,
+  type StarMapLayout,
+} from "@/lib/studio/idea-star-map";
+import { cn } from "@/lib/utils";
 
-type IdeaStarMapProps = {
+type Props = {
   layout: StarMapLayout;
+  onOpenCalendar?: () => void;
 };
 
-type HoverTarget =
-  | { type: "node"; node: StarMapNode; x: number; y: number }
-  | { type: "anchor"; anchor: StarMapAnchor; x: number; y: number };
+type FilterMode = "today" | "all";
 
-const STAT_LINKS = [
-  {
-    key: "today" as const,
-    href: "/stream?date=today",
-    label: (n: number) => `今日 +${n}`,
-  },
-  {
-    key: "star" as const,
-    href: "/stream?kind=star",
-    label: (n: number) => `${n} 颗星`,
-  },
-  {
-    key: "planet" as const,
-    href: "/stream?kind=planet",
-    label: (n: number) => `${n} 颗星球`,
-  },
-  {
-    key: "projects" as const,
-    href: "/projects",
-    label: (n: number) => `${n} 个项目引力场`,
-  },
-];
+type ViewTransform = { scale: number; tx: number; ty: number };
 
-export function IdeaStarMap({ layout }: IdeaStarMapProps) {
+type DragState =
+  | { mode: "node"; id: string; moved: boolean }
+  | { mode: "pan"; moved: boolean }
+  | null;
+
+function kindLabel(kind: GraphNode["kind"]) {
+  if (kind === "idea") return "灵感";
+  if (kind === "project") return "项目";
+  return "板块";
+}
+
+const MIN_SCALE = 0.45;
+const MAX_SCALE = 2.6;
+const CLICK_MOVE_PX = 5;
+
+export function IdeaStarMap({ layout }: Props) {
   const router = useRouter();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<HoverTarget | null>(null);
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
+  const [filter, setFilter] = useState<FilterMode>("today");
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const [view, setView] = useState<ViewTransform>({ scale: 1, tx: 0, ty: 0 });
+  const [pinned, setPinned] = useState<Set<string>>(() => new Set());
 
-  const legend = useMemo(
-    () => [
-      { label: "灵感星", color: "#818cf8", href: "/stream?kind=star" },
-      { label: "已落地星球", color: "#6366f1", href: "/stream?kind=planet" },
-      { label: "废弃流星", color: "#94a3b8", href: "/stream?kind=meteor" },
-    ],
-    []
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 800, h: 480 });
+  const positionsRef = useRef(new Map<string, { x: number; y: number }>());
+  const dragRef = useRef<DragState>(null);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const [, bump] = useState(0);
+
+  const { nodes, edges } = useMemo(
+    () => visibleSubgraph(layout.graph, filter, expanded),
+    [layout.graph, filter, expanded]
   );
 
-  const statValues = {
-    today: layout.stats.todayCount,
-    star: layout.stats.starCount,
-    planet: layout.stats.planetCount,
-    projects: layout.stats.activeProjects,
-  };
+  const selected = selectedId ? nodes.find((n) => n.id === selectedId) : null;
+  const hovered = hoverId ? nodes.find((n) => n.id === hoverId) : null;
+  const focus = hovered ?? selected;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return;
-
-    const FRAME_MS = 1000 / 18;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    let frame = 0;
-    let raf = 0;
-    let lastPaint = 0;
-    let running = false;
-    let inView = true;
-    let pageVisible = document.visibilityState === "visible";
-    let drawW = 0;
-    let drawH = 0;
-    let bgGradient: CanvasGradient | null = null;
-
-    function resize() {
-      const rect = container!.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      drawW = rect.width;
-      drawH = rect.height;
-      canvas!.width = Math.floor(drawW * dpr);
-      canvas!.height = Math.floor(drawH * dpr);
-      canvas!.style.width = `${drawW}px`;
-      canvas!.style.height = `${drawH}px`;
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      bgGradient = ctx!.createRadialGradient(
-        drawW * 0.5,
-        drawH * 0.45,
-        0,
-        drawW * 0.5,
-        drawH * 0.5,
-        drawW * 0.65
-      );
-      bgGradient.addColorStop(0, "#1e1b4b");
-      bgGradient.addColorStop(0.55, "#0f172a");
-      bgGradient.addColorStop(1, "#020617");
-    }
-
-    function drawBackground(t: number) {
-      ctx!.fillStyle = bgGradient ?? "#0f172a";
-      ctx!.fillRect(0, 0, drawW, drawH);
-
-      for (let i = 0; i < 20; i++) {
-        const sx = ((i * 73) % 1000) / 1000;
-        const sy = ((i * 131) % 1000) / 1000;
-        const blink = reduceMotion ? 0.35 : 0.25 + Math.sin(t * 0.02 + i) * 0.15;
-        ctx!.fillStyle = `rgba(255,255,255,${blink})`;
-        ctx!.fillRect(sx * drawW, sy * drawH, i % 5 === 0 ? 1.5 : 1, i % 5 === 0 ? 1.5 : 1);
-      }
-    }
-
-    function drawAnchor(x: number, y: number, radius: number, color: string, title: string) {
-      ctx!.globalAlpha = 0.35;
-      ctx!.fillStyle = color;
-      ctx!.beginPath();
-      ctx!.arc(x, y, radius * 2.6, 0, Math.PI * 2);
-      ctx!.fill();
-      ctx!.globalAlpha = 1;
-
-      ctx!.strokeStyle = `${color}88`;
-      ctx!.lineWidth = 1;
-      ctx!.beginPath();
-      ctx!.arc(x, y, radius * 1.8, 0, Math.PI * 2);
-      ctx!.stroke();
-
-      ctx!.fillStyle = color;
-      ctx!.beginPath();
-      ctx!.arc(x, y, radius, 0, Math.PI * 2);
-      ctx!.fill();
-
-      ctx!.fillStyle = "rgba(255,255,255,0.75)";
-      ctx!.font = "11px system-ui, sans-serif";
-      ctx!.textAlign = "center";
-      ctx!.fillText(title.length > 10 ? `${title.slice(0, 10)}…` : title, x, y + radius + 14);
-    }
-
-    function drawNode(node: StarMapNode, t: number) {
-      const x = node.x * drawW;
-      const y = node.y * drawH;
-
-      if (node.kind === "meteor") {
-        const progress = reduceMotion ? 0.35 : (t * 0.004 + node.twinklePhase) % 1;
-        const mx = x + progress * drawW * 0.25;
-        const my = y + progress * drawH * 0.12;
-        ctx!.strokeStyle = "rgba(148,163,184,0.7)";
-        ctx!.lineWidth = 1.5;
-        ctx!.beginPath();
-        ctx!.moveTo(mx - 18, my - 8);
-        ctx!.lineTo(mx, my);
-        ctx!.stroke();
-        ctx!.fillStyle = "rgba(203,213,225,0.9)";
-        ctx!.beginPath();
-        ctx!.arc(mx, my, node.radius, 0, Math.PI * 2);
-        ctx!.fill();
-        return;
-      }
-
-      const pulse = reduceMotion
-        ? 1
-        : node.kind === "star"
-          ? 0.7 + Math.sin(t * 0.05 + node.twinklePhase) * 0.3
-          : 1;
-      const haloR = node.radius * (node.kind === "planet" ? 3.2 : 2.4);
-      ctx!.globalAlpha = node.kind === "planet" ? 0.35 : 0.22 * pulse;
-      ctx!.fillStyle = node.glow;
-      ctx!.beginPath();
-      ctx!.arc(x, y, haloR, 0, Math.PI * 2);
-      ctx!.fill();
-
-      ctx!.globalAlpha = pulse;
-      ctx!.fillStyle = node.color;
-      ctx!.beginPath();
-      ctx!.arc(x, y, node.radius, 0, Math.PI * 2);
-      ctx!.fill();
-      ctx!.globalAlpha = 1;
-
-      if (node.kind === "planet") {
-        ctx!.strokeStyle = "rgba(255,255,255,0.35)";
-        ctx!.lineWidth = 1;
-        ctx!.beginPath();
-        ctx!.ellipse(x, y, node.radius * 2.1, node.radius * 0.75, 0.4, 0, Math.PI * 2);
-        ctx!.stroke();
-      }
-    }
-
-    function paint() {
-      if (drawW <= 0 || drawH <= 0) return;
-      drawBackground(frame);
-
-      for (const anchor of layoutRef.current.anchors) {
-        drawAnchor(anchor.x * drawW, anchor.y * drawH, 7, anchor.color, anchor.title);
-      }
-
-      const nodes = layoutRef.current.nodes;
-      for (const node of nodes) {
-        if (node.kind !== "meteor") drawNode(node, frame);
-      }
-      for (const node of nodes) {
-        if (node.kind === "meteor") drawNode(node, frame);
-      }
-      frame += 1;
-    }
-
-    function tick(now: number) {
-      raf = 0;
-      if (!running) return;
-      if (now - lastPaint >= FRAME_MS) {
-        lastPaint = now;
-        paint();
-      }
-      raf = window.requestAnimationFrame(tick);
-    }
-
-    function startLoop() {
-      if (running || reduceMotion) return;
-      if (!inView || !pageVisible) return;
-      running = true;
-      lastPaint = 0;
-      raf = window.requestAnimationFrame(tick);
-    }
-
-    function stopLoop() {
-      running = false;
-      if (raf) {
-        window.cancelAnimationFrame(raf);
-        raf = 0;
-      }
-    }
-
-    function onVisibility() {
-      pageVisible = document.visibilityState === "visible";
-      if (pageVisible) startLoop();
-      else stopLoop();
-    }
-
-    resize();
-    paint();
-    if (!reduceMotion) startLoop();
-
-    const resizeObserver = new ResizeObserver(() => {
-      resize();
-      paint();
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setSize({ w: Math.max(320, r.width), h: Math.max(360, r.height) });
     });
-    resizeObserver.observe(container);
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        inView = entry?.isIntersecting ?? false;
-        if (inView) startLoop();
-        else stopLoop();
-      },
-      { threshold: 0.05 }
-    );
-    io.observe(container);
-    document.addEventListener("visibilitychange", onVisibility);
-
-    return () => {
-      stopLoop();
-      resizeObserver.disconnect();
-      io.disconnect();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
-  function hitTest(clientX: number, clientY: number): HoverTarget | null {
-    const container = containerRef.current;
-    if (!container) return null;
-
-    const rect = container.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    let bestNode: StarMapNode | null = null;
-    let bestNodeDist = Infinity;
-    let bestAnchor: StarMapAnchor | null = null;
-    let bestAnchorDist = Infinity;
-
-    for (const node of layout.nodes) {
-      const nx = node.x * rect.width;
-      const ny = node.y * rect.height;
-      const dist = Math.hypot(nx - x, ny - y);
-      const threshold = node.kind === "planet" ? 14 : 10;
-      if (dist < threshold && dist < bestNodeDist) {
-        bestNodeDist = dist;
-        bestNode = node;
+  useEffect(() => {
+    const pos = positionsRef.current;
+    for (const n of nodes) {
+      if (pos.has(n.id)) continue;
+      const parentEdge = edges.find((e) => e.to === n.id && pos.has(e.from));
+      if (parentEdge) {
+        const p = pos.get(parentEdge.from)!;
+        const a = Math.random() * Math.PI * 2;
+        pos.set(n.id, {
+          x: p.x + Math.cos(a) * 70,
+          y: p.y + Math.sin(a) * 70,
+        });
+      } else {
+        pos.set(n.id, {
+          x: size.w * (0.3 + Math.random() * 0.4),
+          y: size.h * (0.3 + Math.random() * 0.4),
+        });
       }
     }
+  }, [nodes, edges, size.w, size.h]);
 
-    for (const anchor of layout.anchors) {
-      const ax = anchor.x * rect.width;
-      const ay = anchor.y * rect.height;
-      const dist = Math.hypot(ax - x, ay - y);
-      if (dist < 22 && dist < bestAnchorDist) {
-        bestAnchorDist = dist;
-        bestAnchor = anchor;
+  useEffect(() => {
+    let raf = 0;
+    let alive = true;
+    let frames = 0;
+    const maxFrames = 90;
+
+    function loop() {
+      if (!alive) return;
+      if (!dragRef.current || dragRef.current.mode === "pan") {
+        tickForceLayout(
+          positionsRef.current,
+          nodes,
+          edges,
+          size.w,
+          size.h,
+          pinned
+        );
+        frames += 1;
+        bump((x) => x + 1);
+      }
+      if (frames < maxFrames && nodes.length > 0) {
+        raf = requestAnimationFrame(loop);
       }
     }
+    raf = requestAnimationFrame(loop);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [nodes, edges, size.w, size.h, expanded, filter, pinned]);
 
-    if (bestNode && (!bestAnchor || bestNodeDist <= bestAnchorDist)) {
-      return { type: "node", node: bestNode, x, y };
+  function screenToWorld(clientX: number, clientY: number) {
+    const el = containerRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const r = el.getBoundingClientRect();
+    const sx = clientX - r.left;
+    const sy = clientY - r.top;
+    return {
+      x: (sx - view.tx) / view.scale,
+      y: (sy - view.ty) / view.scale,
+    };
+  }
+
+  function resetExpand() {
+    setExpanded(new Set());
+    setSelectedId(null);
+  }
+
+  function resetView() {
+    setView({ scale: 1, tx: 0, ty: 0 });
+  }
+
+  function toggleExpand(node: GraphNode) {
+    setSelectedId(node.id);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(node.id)) next.delete(node.id);
+      else next.add(node.id);
+      return next;
+    });
+  }
+
+  function onNodePointerDown(node: GraphNode, e: ReactPointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    dragRef.current = { mode: "node", id: node.id, moved: false };
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    setSelectedId(node.id);
+    setPinned((prev) => new Set(prev).add(node.id));
+  }
+
+  function onBackgroundPointerDown(e: ReactPointerEvent) {
+    if (e.button !== 0 && e.button !== 1) return;
+    dragRef.current = { mode: "pan", moved: false };
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+  }
+
+  function onPointerMove(e: ReactPointerEvent) {
+    const drag = dragRef.current;
+    const last = lastPointerRef.current;
+    if (!drag || !last) return;
+
+    const dx = e.clientX - last.x;
+    const dy = e.clientY - last.y;
+    if (Math.hypot(dx, dy) > CLICK_MOVE_PX) drag.moved = true;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+
+    if (drag.mode === "pan") {
+      setView((v) => ({ ...v, tx: v.tx + dx, ty: v.ty + dy }));
+      return;
     }
-    if (bestAnchor) {
-      return { type: "anchor", anchor: bestAnchor, x, y };
+
+    const world = screenToWorld(e.clientX, e.clientY);
+    const p = positionsRef.current.get(drag.id);
+    if (p) {
+      p.x = world.x;
+      p.y = world.y;
+      bump((x) => x + 1);
     }
-    return null;
+  }
+
+  function onPointerUp(e: ReactPointerEvent) {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    lastPointerRef.current = null;
+
+    if (!drag) return;
+
+    if (drag.mode === "pan") {
+      if (!drag.moved) setSelectedId(null);
+      return;
+    }
+
+    const node = nodes.find((n) => n.id === drag.id);
+    if (!node) return;
+
+    if (!drag.moved) {
+      if (e.detail >= 2 && node.href) {
+        router.push(node.href);
+        return;
+      }
+      if (node.childCount > 0) toggleExpand(node);
+      else if (node.href) router.push(node.href);
+    }
+  }
+
+  function onWheel(e: ReactWheelEvent) {
+    e.preventDefault();
+    const el = containerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    setView((v) => {
+      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor));
+      const ratio = nextScale / v.scale;
+      // 以光标为缩放中心
+      return {
+        scale: nextScale,
+        tx: mx - (mx - v.tx) * ratio,
+        ty: my - (my - v.ty) * ratio,
+      };
+    });
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-lg">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 px-5 py-4">
+    <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0b0d12] shadow-lg">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
         <div>
-          <h2 className="text-base font-semibold text-white">我的创造宇宙</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            灵感是星 · 落地成星球 · 废弃化作流星
+          <h2 className="text-sm font-semibold text-white">创造星图</h2>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            拖节点 · 滚轮缩放 · 拖空白平移 · 单击展开 · 双击打开
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-          {STAT_LINKS.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className="rounded-full bg-white/10 px-2.5 py-1 transition hover:bg-white/20 hover:text-white"
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex rounded-full border border-white/10 bg-black/40 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setFilter("today");
+                resetExpand();
+              }}
+              className={cn(
+                "rounded-full px-3 py-1.5 transition",
+                filter === "today"
+                  ? "bg-white/15 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
             >
-              {item.label(statValues[item.key])}
-            </Link>
-          ))}
+              今日
+              <span className="ml-1 tabular-nums text-slate-500">
+                {layout.stats.todayCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFilter("all");
+                resetExpand();
+              }}
+              className={cn(
+                "rounded-full px-3 py-1.5 transition",
+                filter === "all"
+                  ? "bg-white/15 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              全部
+              <span className="ml-1 tabular-nums text-slate-500">
+                {layout.stats.activeProjects}
+              </span>
+            </button>
+          </div>
+          {expanded.size > 0 ? (
+            <button
+              type="button"
+              onClick={resetExpand}
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-400 hover:text-white"
+            >
+              收起全部
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={resetView}
+            className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-slate-400 hover:text-white"
+          >
+            复位视图 {Math.round(view.scale * 100)}%
+          </button>
         </div>
       </div>
 
       <div
         ref={containerRef}
-        className={`relative h-[360px] w-full md:h-[420px] ${hover ? "cursor-pointer" : "cursor-crosshair"}`}
-        onMouseMove={(e) => {
-          setHover(hitTest(e.clientX, e.clientY));
-        }}
-        onMouseLeave={() => setHover(null)}
-        onClick={(e) => {
-          const target = hitTest(e.clientX, e.clientY);
-          if (!target) return;
-          if (target.type === "node") router.push(target.node.href);
-          else router.push(target.anchor.href);
-        }}
+        className="relative h-[440px] w-full touch-none md:h-[520px]"
+        onPointerDown={onBackgroundPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onWheel={onWheel}
       >
-        <canvas ref={canvasRef} className="absolute inset-0" />
-        {hover ? (
-          <div
-            className="pointer-events-none absolute z-10 max-w-[220px] rounded-lg border border-white/15 bg-slate-900/95 px-3 py-2 text-xs text-slate-100 shadow-xl"
-            style={{ left: hover.x + 12, top: hover.y + 12 }}
-          >
-            {hover.type === "node" ? (
-              <>
-                <div className="font-medium">{hover.node.label}</div>
-                <div className="mt-1 text-slate-400">
-                  {hover.node.kind === "planet"
-                    ? hover.node.status === "done"
-                      ? "已完成 · 点击进入项目"
-                      : "已转项目 · 点击进入项目"
-                    : hover.node.kind === "meteor"
-                      ? "已归档 · 点击查看"
-                      : "灵感星 · 点击查看"}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 50% 45%, #151822 0%, #0b0d12 55%, #07080c 100%)",
+          }}
+        />
+
+        <svg className="absolute inset-0 h-full w-full" width={size.w} height={size.h}>
+          <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+            {edges.map((e) => {
+              const a = positionsRef.current.get(e.from);
+              const b = positionsRef.current.get(e.to);
+              if (!a || !b) return null;
+              return (
+                <line
+                  key={`${e.from}-${e.to}`}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke="rgba(148,163,184,0.35)"
+                  strokeWidth={1 / view.scale}
+                />
+              );
+            })}
+
+            {nodes.map((n) => {
+              const p = positionsRef.current.get(n.id);
+              if (!p) return null;
+              const isOpen = expanded.has(n.id);
+              const isFocus = focus?.id === n.id;
+              const r = n.radius + (isFocus ? 2 : 0) + (isOpen ? 1 : 0);
+              return (
+                <g
+                  key={n.id}
+                  transform={`translate(${p.x},${p.y})`}
+                  className="cursor-grab active:cursor-grabbing"
+                  onPointerDown={(ev) => onNodePointerDown(n, ev)}
+                  onMouseEnter={() => setHoverId(n.id)}
+                  onMouseLeave={() => setHoverId(null)}
+                >
+                  {n.childCount > 0 ? (
+                    <circle
+                      r={r + 5}
+                      fill="none"
+                      stroke={
+                        isOpen ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.12)"
+                      }
+                      strokeWidth={1 / view.scale}
+                      strokeDasharray={isOpen ? undefined : "2 3"}
+                    />
+                  ) : null}
+                  <circle
+                    r={r}
+                    fill={n.color}
+                    opacity={0.95}
+                    style={{
+                      filter: isFocus ? `drop-shadow(0 0 8px ${n.color})` : undefined,
+                    }}
+                  />
+                  {n.childCount > 0 && !isOpen ? (
+                    <circle cx={r * 0.65} cy={-r * 0.65} r={3.2} fill="#f43f5e" />
+                  ) : null}
+                  <text
+                    y={r + 14}
+                    textAnchor="middle"
+                    className="pointer-events-none select-none"
+                    fill={isFocus ? "#f8fafc" : "#94a3b8"}
+                    fontSize={11}
+                    fontFamily="system-ui,sans-serif"
+                  >
+                    {n.label.length > 10 ? `${n.label.slice(0, 10)}…` : n.label}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+
+        {nodes.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
+            {filter === "today" ? "今天还没有灵感节点" : "暂无项目节点"}
+          </div>
+        ) : null}
+
+        {focus ? (
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 md:left-auto md:right-3 md:w-72">
+            <div className="rounded-xl border border-white/10 bg-slate-950/90 px-3 py-2.5 shadow-xl backdrop-blur">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ background: focus.color }}
+                />
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                  {kindLabel(focus.kind)}
+                </span>
+                {expanded.has(focus.id) ? (
+                  <span className="text-[10px] text-emerald-400/90">已展开</span>
+                ) : focus.childCount > 0 ? (
+                  <span className="text-[10px] text-rose-400/90">
+                    可展开 {focus.childCount}
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-1 text-sm font-medium text-white">{focus.label}</div>
+              {focus.detail ? (
+                <div className="mt-0.5 text-xs leading-relaxed text-slate-400">
+                  {focus.detail}
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="font-medium">{hover.anchor.title}</div>
-                <div className="mt-1 text-slate-400">项目引力场 · 点击进入</div>
-              </>
-            )}
+              ) : null}
+              <div className="mt-1.5 text-[10px] text-slate-600">
+                拖动摆位置 · 滚轮缩放 · 空白处拖动画布
+              </div>
+            </div>
           </div>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-4 border-t border-white/10 px-5 py-3 text-xs text-slate-400">
-        {legend.map((item) => (
-          <Link
-            key={item.label}
-            href={item.href}
-            className="inline-flex items-center gap-1.5 transition hover:text-slate-200"
-          >
-            <span className="inline-block h-2 w-2 rounded-full" style={{ background: item.color }} />
-            {item.label}
-          </Link>
-        ))}
-        <span className="ml-auto text-slate-500">悬停查看 · 点击跳转</span>
+      <div className="flex flex-wrap gap-4 border-t border-white/10 px-4 py-2.5 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-indigo-400" /> 项目
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-slate-400" /> 板块
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-violet-300" /> 灵感
+        </span>
+        <span className="ml-auto text-slate-600">
+          {filter === "today"
+            ? "今日：灵感 → 项目 → 板块"
+            : "全部：项目 → 板块 → 灵感"}
+        </span>
       </div>
     </section>
   );

@@ -39,6 +39,7 @@ description: >-
 | 咨询风 PPT | `ppt-consulting-visual` |
 | 产品方案书 | `product-scheme-design` |
 | 删文件 | `safe-file-delete` |
+| **做/改项目库·需求池·灵感等表格或文件夹树** | `star-table-folder`（通用排序筛选移动删除父子；**当场要求优先**） |
 | 记灵感 / 勾完成 / 改下一步 P / 发版 | `star-pm-write-release` |
 | **做完后续接什么 / 插队归队 / 防双盲** | `star-pm-write-release` §1.5（下一步必写必说） |
 | **本期不做 / 后期再做 / 定稿「不做」清单** | `defer-scope-record`（写清详情）→ 再 `star-pm-write-release` 落 PM |

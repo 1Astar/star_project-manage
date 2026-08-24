@@ -523,7 +523,7 @@ export async function getProjects(): Promise<Project[]> {
   if (isSupabaseConfigured()) {
     list = await listAllProjects();
   } else {
-    const db = await readDb();
+  const db = await readDb();
     list = db.projects;
   }
   try {
@@ -1314,31 +1314,31 @@ export async function createBug(input: {
 
   let notification: NotificationItem | null = null;
   if (input.notify !== false) {
-    if (input.assignee?.trim()) {
+  if (input.assignee?.trim()) {
       notification = {
-        id: uid("notif-"),
-        project_id: input.project_id,
-        recipient_name: input.assignee.trim(),
-        type: "bug_assigned",
-        title: `指派给你：${input.title}`,
-        body: input.description ?? `请查看 Bug「${input.title}」`,
-        link: bugPathForProject(project, bug.id),
-        is_read: false,
-        created_at: nowIso(),
+      id: uid("notif-"),
+      project_id: input.project_id,
+      recipient_name: input.assignee.trim(),
+      type: "bug_assigned",
+      title: `指派给你：${input.title}`,
+      body: input.description ?? `请查看 Bug「${input.title}」`,
+      link: bugPathForProject(project, bug.id),
+      is_read: false,
+      created_at: nowIso(),
       };
-    } else {
+  } else {
       notification = {
-        id: uid("notif-"),
-        project_id: input.project_id,
-        recipient_name: null,
-        type: "bug_created",
-        title: `新 Bug：${input.title}`,
-        body: input.description ?? null,
-        link: bugPathForProject(project, bug.id),
-        is_read: false,
-        created_at: nowIso(),
+      id: uid("notif-"),
+      project_id: input.project_id,
+      recipient_name: null,
+      type: "bug_created",
+      title: `新 Bug：${input.title}`,
+      body: input.description ?? null,
+      link: bugPathForProject(project, bug.id),
+      is_read: false,
+      created_at: nowIso(),
       };
-    }
+  }
     db.notifications.unshift(notification);
   }
 
@@ -2070,9 +2070,9 @@ export async function ensurePmProjectForStudio(input: {
     const existing =
       (await findProjectBySlugOrId(input.slug)) ??
       (await findProjectBySlugOrId(input.slug.trim()));
-    if (existing) {
-      await ensurePoolIteration(existing.id);
-      return existing;
+  if (existing) {
+    await ensurePoolIteration(existing.id);
+    return existing;
     }
   } else {
     const dbExisting = await readDb();

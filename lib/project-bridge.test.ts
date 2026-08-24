@@ -6,6 +6,11 @@ import {
 } from "@/lib/project-bridge";
 
 assert.equal(getPmSlugForStudioProject({ id: "proj-moonpie" }), "studio-proj-moonpie");
+assert.equal(
+  getPmSlugForStudioProject({ id: "studio-proj-22b2cf88" }),
+  "studio-proj-22b2cf88"
+);
+assert.equal(getPmSlugForStudioProject({ id: "proj-22b2cf88" }), "studio-proj-22b2cf88");
 assert.equal(getStudioIdFromPmSlug("studio-proj-moonpie"), "proj-moonpie");
 assert.equal(getStudioIdFromPmSlug("moonpie"), "proj-moonpie");
 assert.equal(getStudioIdFromPmSlug("star-pm"), "proj-star-pm");

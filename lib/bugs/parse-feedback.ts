@@ -3,6 +3,9 @@ import { resolveOpenAiCredentials, type OpenAiCredentials } from "@/lib/studio/a
 import type { BugSeverity, BugType } from "@/lib/types";
 import { BUG_TYPE_LABELS } from "@/lib/types";
 
+/** 整理反馈时每条可进 Bug 表或需求池 */
+export type FeedbackItemKind = "bug" | "requirement";
+
 export type BugFeedbackDraft = {
   key: string;
   title: string;
@@ -10,6 +13,8 @@ export type BugFeedbackDraft = {
   reproSteps: string;
   severity: BugSeverity;
   bugType: BugType;
+  /** bug → Bug 表；requirement → 需求池 */
+  kind: FeedbackItemKind;
   selected: boolean;
   imageHints: string[];
 };
@@ -44,6 +49,7 @@ const draftSchema = z.object({
           ])
           .optional()
           .default("other"),
+        kind: z.enum(["bug", "requirement"]).optional().default("bug"),
         imageHints: z.array(z.string()).optional().default([]),
       })
     )
@@ -72,7 +78,13 @@ function sectionTitle(body: string, index: number): string {
     body
       .split(/\n/)
       .map((s) => s.trim())
-      .find(Boolean) ?? `问题 ${index + 1}`;
+      .filter(Boolean)
+      .find((s) => !isStructuralBugSectionTitle(s)) ??
+    body
+      .split(/\n/)
+      .map((s) => s.trim())
+      .find(Boolean) ??
+    `问题 ${index + 1}`;
   return line
     .replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/, "")
     .replace(/^\d+[\.、．)]\s*/, "")
@@ -99,6 +111,52 @@ export function inferBugType(text: string): BugType {
   if (/界面|按钮|样式|布局|字体|颜色|对齐|遮挡|滚动/.test(text)) return "ui";
   if (/报错|exception|500|接口|空指针|undefined/.test(text)) return "code";
   return "other";
+}
+
+/** 大章节标题：Bug 清单 / 需求清单 → 后续条目默认 kind */
+export function detectFeedbackSectionKind(line: string): FeedbackItemKind | null {
+  const t = line.replace(/^#+\s*/, "").trim();
+  if (!t) return null;
+  if (/需求清单|功能清单|新需求|功能需求|改进建议/.test(t) && !/bug|缺陷|问题清单/i.test(t)) {
+    return "requirement";
+  }
+  if (/bug\s*清单|缺陷清单|问题清单|缺陷列表/i.test(t)) return "bug";
+  if (/^[一二三四五六七八九十\d]+[、.．]\s*.*需求/.test(t) && !/bug|缺陷|问题/.test(t)) {
+    return "requirement";
+  }
+  if (/^[一二三四五六七八九十\d]+[、.．]\s*.*(bug|缺陷|问题)/i.test(t)) return "bug";
+  return null;
+}
+
+/**
+ * 单条归类：章节提示优先；否则看显式标签 / 愿望语气 vs 缺陷语气。
+ * 默认 bug（反馈导入历史以缺陷为主）。
+ */
+export function inferFeedbackKind(
+  text: string,
+  sectionHint?: FeedbackItemKind | null
+): FeedbackItemKind {
+  if (sectionHint === "bug" || sectionHint === "requirement") return sectionHint;
+  const t = text.trim();
+  if (/【\s*需求\s*】|^(✨\s*)?(需求|功能|feature)\s*[:：]/im.test(t)) return "requirement";
+  if (/【\s*(bug|缺陷|问题)\s*】|^(🐛\s*)?(bug|缺陷|问题)\s*[:：]/im.test(t)) return "bug";
+  const hasRepro = /复现|重现|步骤|实际[：:]|期望[：:]|出现步骤|失效原因/.test(t);
+  const wish =
+    /希望|想要|能否|可以增加|建议增加|新增|支持|提供|需要一[个种]|做成|接入/.test(t);
+  const broken =
+    /报错|崩溃|白屏|无法|打不开|异常|失效|错误|泄漏|卡住|显示为\s*0|进不了|看不到|中断/.test(
+      t
+    );
+  if (wish && !hasRepro && !broken) return "requirement";
+  if (broken || hasRepro) return "bug";
+  return "bug";
+}
+
+/** Bug 严重度 → 需求优先级 */
+export function severityToRequirementPriority(severity: BugSeverity): string {
+  if (severity <= 2) return "P0";
+  if (severity === 3) return "P1";
+  return "P2";
 }
 
 const CN_NUM: Record<string, number> = {
@@ -162,8 +220,38 @@ function splitReproAndRest(body: string): { reproSteps: string; description: str
   return { reproSteps, description };
 }
 
+/** 单条 Bug 内部的结构小标题：切段时不要当成新 Bug */
+export function isStructuralBugSectionTitle(raw: string): boolean {
+  const t = raw
+    .trim()
+    .replace(/^#+\s*/, "")
+    .replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/, "")
+    .replace(/^\d+[\.、．)]\s*/, "")
+    .replace(/^[-*•]\s*/, "")
+    .replace(/[:：].*$/, "")
+    .trim();
+  if (!t) return false;
+  return /^(复现|重现|出现|期望|实际|描述|步骤|操作步骤|复现步骤|出现步骤|重现步骤|环境|备注|附件|截图|失效原因|原因分析|现象|结果|补充)/i.test(
+    t
+  );
+}
+
+function lineStartsNewBug(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s/.test(t)) return true;
+  if (/^(?:bug|问题|缺陷)[:：]\s/i.test(t)) return true;
+  if (/^\d+[\.、．)]\s+\S/.test(t)) return true;
+  if (/^#{1,3}\s+\S/.test(t)) {
+    return !isStructuralBugSectionTitle(t);
+  }
+  // 列表项常是复现步骤，不当作新 Bug（避免把操作步骤拆碎）
+  return false;
+}
+
 /**
- * 无 AI：按 ①② / 1. / ## / 「问题：」切段，适合聊天里丢一堆反馈。
+ * 无 AI：按 ①② / 1. / 非结构 ## / 「问题：」切段；
+ * 不把「复现步骤 / 期望 / 实际」等结构标题切成多条。
  */
 export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
   const text = raw.replace(/\r\n/g, "\n").trim();
@@ -171,29 +259,61 @@ export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
     return { summary: "", drafts: [], method: "heuristic" };
   }
 
-  const marker =
-    /(?:^|\n)(?=(?:[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s)|(?:#{1,3}\s+\S)|(?:\d+[\.、．)]\s+\S)|(?:[-*•]\s+\S)|(?:(?:bug|问题|缺陷)[:：]\s))/gi;
-  const parts = text.split(marker).map((p) => p.trim()).filter(Boolean);
+  const lines = text.split("\n");
+  const chunks: Array<{ body: string; sectionKind: FeedbackItemKind | null }> = [];
+  let current: string[] = [];
+  let sectionKind: FeedbackItemKind | null = null;
+  let currentSectionKind: FeedbackItemKind | null = null;
+
+  function flushChunk() {
+    const body = current.join("\n").trim();
+    if (body) chunks.push({ body, sectionKind: currentSectionKind });
+    current = [];
+  }
+
+  for (const line of lines) {
+    const section = detectFeedbackSectionKind(line);
+    if (section) {
+      flushChunk();
+      sectionKind = section;
+      currentSectionKind = section;
+      continue;
+    }
+    if (current.length === 0) currentSectionKind = sectionKind;
+    if (current.length > 0 && lineStartsNewBug(line)) {
+      flushChunk();
+      currentSectionKind = sectionKind;
+      current = [line];
+    } else {
+      current.push(line);
+    }
+  }
+  flushChunk();
+
+  const parts = chunks.map((c) => c.body);
+  const kindsFromChunks = chunks.map((c) => c.sectionKind);
 
   let intro = "";
   let sections = parts;
+  let sectionKinds = kindsFromChunks;
   if (
     parts.length > 1 &&
-    !/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]|^#{1,3}\s|^\d+[\.、．)]\s|^[-*•]\s|^(?:bug|问题|缺陷)[:：]/i.test(
-      parts[0]
-    )
+    !lineStartsNewBug(parts[0].split("\n").find((l) => l.trim()) ?? "")
   ) {
     intro = parts[0];
     sections = parts.slice(1);
+    sectionKinds = kindsFromChunks.slice(1);
   }
 
   if (sections.length === 0) {
     sections = [text];
     intro = "";
+    sectionKinds = [null];
   }
 
   const drafts: BugFeedbackDraft[] = sections.map((body, i) => {
     const { reproSteps, description } = splitReproAndRest(body);
+    const kind = inferFeedbackKind(body, sectionKinds[i] ?? null);
     return {
       key: `h-${i}`,
       title: sectionTitle(body, i),
@@ -201,13 +321,21 @@ export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
       reproSteps,
       severity: inferBugSeverity(body),
       bugType: inferBugType(body),
+      kind,
       selected: true,
       imageHints: extractImageHints(body),
     };
   });
 
+  const bugN = drafts.filter((d) => d.kind === "bug").length;
+  const reqN = drafts.filter((d) => d.kind === "requirement").length;
+  const mix =
+    reqN > 0
+      ? `整理出 ${drafts.length} 条（Bug ${bugN} · 需求 ${reqN}）`
+      : `整理出 ${drafts.length} 条 Bug`;
+
   return {
-    summary: firstLineTitle(intro || text, `整理出 ${drafts.length} 条 Bug`),
+    summary: firstLineTitle(intro || text, mix),
     drafts,
     method: "heuristic",
   };
@@ -225,23 +353,45 @@ export async function parseBugFeedbackWithOpenAi(
   const text = raw.trim();
   if (!text) return parseBugFeedbackHeuristic(raw);
 
+  const mapAi = (drafts: z.infer<typeof draftSchema>["drafts"]): BugFeedbackDraft[] =>
+    drafts.map((d, i) => ({
+      key: `ai-${i}`,
+      title: d.title.trim().slice(0, 120),
+      description: (d.description ?? "").trim().slice(0, 2000),
+      reproSteps: (d.reproSteps ?? "").trim().slice(0, 2000),
+      severity: (d.severity ?? 3) as BugSeverity,
+      bugType: d.bugType ?? "other",
+      kind: (d.kind === "requirement" ? "requirement" : "bug") as FeedbackItemKind,
+      selected: true,
+      imageHints: (d.imageHints ?? []).slice(0, 8),
+    }));
+
+  const summarize = (drafts: BugFeedbackDraft[]) => {
+    const bugN = drafts.filter((d) => d.kind === "bug").length;
+    const reqN = drafts.filter((d) => d.kind === "requirement").length;
+    return reqN > 0
+      ? `整理出 ${drafts.length} 条（Bug ${bugN} · 需求 ${reqN}）`
+      : `整理出 ${drafts.length} 条 Bug`;
+  };
+
   const { apiKey, model, baseUrl } = resolveOpenAiCredentials(opts.credentials);
   const types = Object.keys(BUG_TYPE_LABELS).join("/");
   const names = (opts.imageFileNames ?? []).filter(Boolean).slice(0, 40);
 
   const prompt = [
-    "你是测试/产品助手。把下面这段中文反馈（可能含聊天记录、多条问题、截图说明）整理成 Bug 清单。",
+    "你是测试/产品助手。把下面这段中文反馈整理成清单：每条标成 Bug（缺陷）或 需求（新功能/改进）。",
     opts.projectTitle ? `关联项目：${opts.projectTitle}` : "",
     names.length
       ? `用户已准备这些截图文件（按上传顺序）：\n${names.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
       : "",
     "",
     "规则：",
-    "- 一条独立问题一条 Bug，不要把整段糊成一条",
-    "- title 短、可扫读；reproSteps 写怎么点出来；description 写期望 vs 实际",
-    `- severity 1致命 2严重 3一般 4轻微；bugType 只能是 ${types}`,
+    "- 一条独立事项一条；若原文有「Bug清单 / 需求清单」分区，严格按分区标 kind",
+    "- kind 只能是 bug 或 requirement：已坏/异常/复现 → bug；希望新增能力/改进且非现有缺陷 → requirement",
+    "- title 短、可扫读；Bug 写 reproSteps；需求可把说明放 description，reproSteps 可空",
+    `- severity 1致命 2严重 3一般 4轻微（需求也可用，映射优先级）；bugType 只能是 ${types}（需求可填 other）`,
     "- imageHints：优先填上面对应的**完整文件名**；若只能推断图序则写 图1 / 图2；不要瞎编不存在的文件名",
-    "- 输出 JSON：{ summary, drafts:[{ title, description, reproSteps, severity, bugType, imageHints }] }",
+    "- 输出 JSON：{ summary, drafts:[{ title, description, reproSteps, severity, bugType, kind, imageHints }] }",
     "",
     "【反馈原文】",
     text.slice(0, 14000),
@@ -255,7 +405,7 @@ export async function parseBugFeedbackWithOpenAi(
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
-    signal: AbortSignal.timeout(25_000),
+    signal: AbortSignal.timeout(60_000),
     body: JSON.stringify({
       model,
       temperature: 0.2,
@@ -265,7 +415,7 @@ export async function parseBugFeedbackWithOpenAi(
         {
           role: "system",
           content:
-            "Turn messy Chinese bug feedback into a structured bug list. JSON only.",
+            "Turn messy Chinese product feedback into bugs and requirements. JSON only.",
         },
         { role: "user", content: prompt },
       ],
@@ -282,7 +432,7 @@ export async function parseBugFeedbackWithOpenAi(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(25_000),
+        signal: AbortSignal.timeout(60_000),
         body: JSON.stringify({
           model,
           temperature: 0.2,
@@ -290,7 +440,7 @@ export async function parseBugFeedbackWithOpenAi(
             {
               role: "system",
               content:
-                "Turn messy Chinese bug feedback into a structured bug list. Reply with JSON only, no markdown.",
+                "Turn messy Chinese product feedback into bugs and requirements. Reply with JSON only, no markdown.",
             },
             { role: "user", content: prompt },
           ],
@@ -306,22 +456,11 @@ export async function parseBugFeedbackWithOpenAi(
       const contentRetry = payloadRetry.choices?.[0]?.message?.content;
       if (!contentRetry) throw new Error("OpenAI 返回为空");
       const parsedRetry = draftSchema.parse(parseJsonContent(contentRetry));
+      const draftsRetry = mapAi(parsedRetry.drafts);
       return {
-        summary: (parsedRetry.summary || `整理出 ${parsedRetry.drafts.length} 条 Bug`).slice(
-          0,
-          160
-        ),
+        summary: (parsedRetry.summary || summarize(draftsRetry)).slice(0, 160),
         method: "openai",
-        drafts: parsedRetry.drafts.map((d, i) => ({
-          key: `ai-${i}`,
-          title: d.title.trim().slice(0, 120),
-          description: (d.description ?? "").trim().slice(0, 2000),
-          reproSteps: (d.reproSteps ?? "").trim().slice(0, 2000),
-          severity: (d.severity ?? 3) as BugSeverity,
-          bugType: d.bugType ?? "other",
-          selected: true,
-          imageHints: (d.imageHints ?? []).slice(0, 8),
-        })),
+        drafts: draftsRetry,
       };
     }
     throw new Error(`OpenAI 请求失败 (${response.status}): ${detail.slice(0, 200)}`);
@@ -334,19 +473,11 @@ export async function parseBugFeedbackWithOpenAi(
   if (!content) throw new Error("OpenAI 返回为空");
 
   const parsed = draftSchema.parse(parseJsonContent(content));
+  const drafts = mapAi(parsed.drafts);
   return {
-    summary: (parsed.summary || `整理出 ${parsed.drafts.length} 条 Bug`).slice(0, 160),
+    summary: (parsed.summary || summarize(drafts)).slice(0, 160),
     method: "openai",
-    drafts: parsed.drafts.map((d, i) => ({
-      key: `ai-${i}`,
-      title: d.title.trim().slice(0, 120),
-      description: (d.description ?? "").trim().slice(0, 2000),
-      reproSteps: (d.reproSteps ?? "").trim().slice(0, 2000),
-      severity: (d.severity ?? 3) as BugSeverity,
-      bugType: d.bugType ?? "other",
-      selected: true,
-      imageHints: (d.imageHints ?? []).slice(0, 8),
-    })),
+    drafts,
   };
 }
 
@@ -468,7 +599,7 @@ export async function previewBugFeedback(
         error instanceof Error
           ? /aborted|TimeoutError|timeout/i.test(error.name) ||
             /timeout|aborted/i.test(error.message)
-            ? "模型超时（25s），已改用规则拆分"
+            ? "模型超时（60s），已改用规则拆分"
             : error.message.slice(0, 180)
           : "AI 失败";
       const fallback = parseBugFeedbackHeuristic(raw);

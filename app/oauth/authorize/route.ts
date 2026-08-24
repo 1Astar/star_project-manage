@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   assertOwnerSecret,
   clientAcceptsRedirect,
-  getClient,
+  ensureDcrClient,
   isAllowedRedirect,
   randomToken,
   saveAuthCode,
@@ -63,10 +63,10 @@ export async function GET(request: Request) {
     return htmlPage("<h1>redirect_uri 不被允许</h1>", 400);
   }
 
-  const client = await getClient(p.client_id);
+  const client = await ensureDcrClient(p.client_id, p.redirect_uri);
   if (!client) {
     return htmlPage(
-      "<h1>未知 client_id</h1><p>请先完成 Dynamic Client Registration，或在 ChatGPT 里用 DCR 重新创建连接。</p>",
+      "<h1>未知 client_id</h1><p>请先完成 Dynamic Client Registration，或在 ChatGPT 里删掉连接后重新添加（走 DCR）。也可手动填固定 client_id：<code>star-pm-gpt</code>。</p>",
       400
     );
   }
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = await getClient(p.client_id);
+  const client = await ensureDcrClient(p.client_id, p.redirect_uri);
   if (!client || !clientAcceptsRedirect(client, p.redirect_uri)) {
     return htmlPage("<h1>client / redirect_uri 无效</h1>", 400);
   }

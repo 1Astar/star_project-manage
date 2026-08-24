@@ -36,6 +36,7 @@
 | **product-scheme-design** | 产品/项目方案设计书结构 | [product-scheme-design/SKILL.md](./product-scheme-design/SKILL.md) |
 | **version-management** | 文档三位版本 / 软件 git 发版号 | [version-management/SKILL.md](./version-management/SKILL.md) |
 | **safe-file-delete** | 删文件硬约束 | [safe-file-delete/SKILL.md](./safe-file-delete/SKILL.md) |
+| **star-table-folder** | **表格/文件夹通用底线**：排序·筛选·移动·删除·父子；**当场要求优先于通用标准** | [star-table-folder/SKILL.md](./star-table-folder/SKILL.md) |
 | **brainstorming**（指针） | 创意/方案前先对齐意图 | [brainstorming/SKILL.md](./brainstorming/SKILL.md) |
 | **canvas**（指针） | Cursor Canvas 分析页 | [canvas/SKILL.md](./canvas/SKILL.md) |
 | **verification-before-completion**（指针） | 宣称完成前必须验证 | [verification-before-completion/SKILL.md](./verification-before-completion/SKILL.md) |
