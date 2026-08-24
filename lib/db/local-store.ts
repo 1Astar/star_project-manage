@@ -12,6 +12,7 @@ import {
   upsertRequirementAttachmentRow,
   upsertBugAttachmentRow,
   upsertBugRow,
+  upsertBugRows,
   upsertBugCommentRow,
   upsertNotificationRow,
   deleteBugAttachmentRow,
@@ -19,6 +20,8 @@ import {
   upsertAcceptanceRecordRow,
   deleteRequirementAttachmentRow,
   upsertActivityLogRow,
+  upsertActivityLogRows,
+  upsertRequirementRows,
   upsertRequirementLinkRow,
   deleteRequirementLinkRow,
   deleteRequirementRows,
@@ -1688,7 +1691,7 @@ export async function deleteBugAttachment(id: string) {
   await saveLocalDb(db);
 }
 
-/** 批量入库 Bug：单条不刷通知，最后一条汇总通知 */
+/** 批量入库 Bug：Supabase 一次 upsert，禁止逐条 createBug（CF 子请求上限） */
 export async function importBugs(
   projectId: string,
   items: Array<{
@@ -1702,13 +1705,85 @@ export async function importBugs(
     created_at?: string | null;
   }>
 ) {
+  const prepared = items
+    .map((item) => ({ ...item, title: item.title.trim() }))
+    .filter((item) => item.title);
+
+  if (!prepared.length) return [] as Bug[];
+
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) throw new Error("项目不存在");
+
+    const stamp = nowIso();
+    const created: Bug[] = prepared.map((item) => {
+      const createdAt = item.created_at?.trim() || stamp;
+      return {
+        id: uid("bug-"),
+        project_id: project.id,
+        requirement_id: item.requirement_id ?? null,
+        title: item.title,
+        description: item.description ?? null,
+        repro_steps: item.repro_steps ?? null,
+        assignee: item.assignee ?? null,
+        status: "pending" as TaskStatus,
+        severity: item.severity ?? 3,
+        bug_type: normalizeBugTypeKey(item.bug_type) as BugType,
+        created_at: createdAt,
+        updated_at: createdAt,
+      };
+    });
+
+    await upsertBugRows(created);
+
+    const logs = created.map((bug) => ({
+      id: uid("log-"),
+      project_id: project.id,
+      entity_type: "bug" as const,
+      entity_id: bug.id,
+      field_name: "create",
+      old_value: null,
+      new_value: bug.title,
+      actor_name: "产品",
+      actor_role: "admin" as const,
+      created_at: stamp,
+    }));
+    try {
+      await upsertActivityLogRows(logs);
+    } catch {
+      /* 活动日志失败不阻断 */
+    }
+
+    try {
+      await upsertNotificationRow({
+        id: uid("notif-"),
+        project_id: project.id,
+        recipient_name: null,
+        type: "bug_created",
+        title: `导入 ${created.length} 条 Bug`,
+        body: created
+          .slice(0, 8)
+          .map((b) => b.title)
+          .join("；"),
+        link: `/projects/${project.slug}/bugs`,
+        is_read: false,
+        created_at: stamp,
+      });
+    } catch {
+      /* 汇总通知失败不阻断入库 */
+    }
+
+    if (memoryDb) {
+      memoryDb.bugs = [...created, ...memoryDb.bugs.filter((b) => !created.some((c) => c.id === b.id))];
+    }
+    return created;
+  }
+
   const created: Bug[] = [];
-  for (const item of items) {
-    const title = item.title.trim();
-    if (!title) continue;
+  for (const item of prepared) {
     const bug = await createBug({
       project_id: projectId,
-      title,
+      title: item.title,
       description: item.description,
       repro_steps: item.repro_steps,
       severity: item.severity,
@@ -1721,46 +1796,23 @@ export async function importBugs(
     created.push(bug);
   }
   if (created.length) {
-    if (isSupabaseConfigured()) {
-      const project = await findProjectBySlugOrId(projectId);
-      const notification: NotificationItem = {
-        id: uid("notif-"),
-        project_id: project?.id ?? projectId,
-        recipient_name: null,
-        type: "bug_created",
-        title: `导入 ${created.length} 条 Bug`,
-        body: created
-          .slice(0, 8)
-          .map((b) => b.title)
-          .join("；"),
-        link: project ? `/projects/${project.slug}/bugs` : null,
-        is_read: false,
-        created_at: nowIso(),
-      };
-      try {
-        await upsertNotificationRow(notification);
-      } catch {
-        /* 汇总通知失败不阻断入库 */
-      }
-    } else {
-      const db = await readDb();
-      const project = db.projects.find((p) => p.id === projectId);
-      db.notifications.unshift({
-        id: uid("notif-"),
-        project_id: projectId,
-        recipient_name: null,
-        type: "bug_created",
-        title: `导入 ${created.length} 条 Bug`,
-        body: created
-          .slice(0, 8)
-          .map((b) => b.title)
-          .join("；"),
-        link: project ? `/projects/${project.slug}/bugs` : null,
-        is_read: false,
-        created_at: nowIso(),
-      });
-      await saveLocalDb(db);
-    }
+    const db = await readDb();
+    const project = db.projects.find((p) => p.id === projectId);
+    db.notifications.unshift({
+      id: uid("notif-"),
+      project_id: projectId,
+      recipient_name: null,
+      type: "bug_created",
+      title: `导入 ${created.length} 条 Bug`,
+      body: created
+        .slice(0, 8)
+        .map((b) => b.title)
+        .join("；"),
+      link: project ? `/projects/${project.slug}/bugs` : null,
+      is_read: false,
+      created_at: nowIso(),
+    });
+    await saveLocalDb(db);
   }
   return created;
 }
@@ -2484,6 +2536,130 @@ export async function createPoolRequirement(
 
   await saveLocalDb(db);
   return req;
+}
+
+/**
+ * 整理反馈批量写需求池：Supabase 下禁止 readDb / 逐条 createPoolRequirement。
+ * 仅用于反馈导入（无 parent、无 studio_idea 幂等）。
+ */
+export async function importFeedbackRequirements(
+  projectId: string,
+  items: Array<{
+    title: string;
+    detail_work?: string | null;
+    priority?: Requirement["priority"];
+    type?: RequirementType;
+    actor_note?: string;
+    inspiration_source?: string;
+  }>
+): Promise<Requirement[]> {
+  const prepared = items
+    .map((item) => ({ ...item, title: item.title.trim() }))
+    .filter((item) => item.title);
+  if (!prepared.length) return [];
+
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) throw new Error("项目不存在");
+    const poolIteration = await ensurePoolIteration(project.id);
+    const stamp = nowIso();
+    const statusTags = applyLifecycleStatus([], "想法");
+    const created: Requirement[] = prepared.map((item, idx) => {
+      const inspiration = formatAgentInspiration({
+        windowNote: item.actor_note?.trim() || item.inspiration_source?.trim() || "整理反馈入库",
+        triggerSource: item.inspiration_source,
+      });
+      return {
+        id: uid("req-"),
+        project_id: project.id,
+        iteration_id: poolIteration.id,
+        module_l1_id: null,
+        module_l2_id: null,
+        parent_id: null,
+        type: item.type ?? "feature",
+        title: item.title,
+        sub_function: null,
+        detail_work: item.detail_work ?? null,
+        acceptance_criteria: null,
+        priority: item.priority ?? null,
+        status: deriveTaskStatusFromTags(statusTags),
+        status_tags: statusTags,
+        assignees: [],
+        req_source: null,
+        req_source_note: null,
+        inspiration_source: inspiration,
+        next_step: null,
+        completed_at: null,
+        studio_idea_id: null,
+        blocker_reason: null,
+        sort_order: Date.now() + idx,
+        in_pool: true,
+        category: null,
+        stage_type: null,
+        optimization_notes: null,
+        known_issues: null,
+        submitted_at: stamp.slice(0, 10),
+        due_date: null,
+        difficulty_notes: null,
+        scenario: null,
+        needs_discussion: false,
+        prd_link: null,
+        prototype_link: null,
+        product_estimate_hours: null,
+        direct_hours: null,
+        actual_hours: null,
+        force_closed: false,
+        tags: [],
+        custom_fields: {},
+        created_at: stamp,
+        updated_at: stamp,
+      };
+    });
+
+    await upsertRequirementRows(created);
+    try {
+      await upsertActivityLogRows(
+        created.map((req) => ({
+          id: uid("log-"),
+          project_id: project.id,
+          entity_type: "requirement" as const,
+          entity_id: req.id,
+          field_name: "create",
+          old_value: encodeAgentActivityNote(
+            (req.inspiration_source ?? "").replace(/^(白昼|星辰|尘|墨|Auto|Cursor)\s*·\s*/i, "").trim() ||
+              "整理反馈入库"
+          ),
+          new_value: req.title,
+          actor_name: AGENT_ACTOR_NAME,
+          actor_role: "agent" as const,
+          created_at: stamp,
+        }))
+      );
+    } catch {
+      /* ignore */
+    }
+    if (memoryDb) {
+      memoryDb.requirements = [...memoryDb.requirements, ...created];
+    }
+    return created;
+  }
+
+  const out: Requirement[] = [];
+  for (const item of prepared) {
+    out.push(
+      await createPoolRequirement(projectId, {
+        title: item.title,
+        priority: item.priority,
+        type: item.type ?? "feature",
+        status_tags: applyLifecycleStatus([], "想法"),
+        detail_work: item.detail_work ?? null,
+        actor_name: AGENT_ACTOR_NAME,
+        actor_note: item.actor_note ?? "整理反馈入库",
+        inspiration_source: item.inspiration_source ?? "整理反馈",
+      })
+    );
+  }
+  return out;
 }
 
 export async function createRequirementLink(input: {

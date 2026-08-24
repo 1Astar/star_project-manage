@@ -399,6 +399,25 @@ export async function upsertBugRow(bug: import("@/lib/types").Bug): Promise<void
   await upsertBugs([bug]);
 }
 
+/** 批量 upsert Bug（导入反馈用，避免 25× 单条打爆 CF 子请求） */
+export async function upsertBugRows(bugs: import("@/lib/types").Bug[]): Promise<void> {
+  await upsertBugs(bugs);
+}
+
+export async function upsertActivityLogRows(
+  logs: import("@/lib/types").ActivityLog[]
+): Promise<void> {
+  if (!logs.length) return;
+  await upsertRows("activity_logs", logs);
+}
+
+export async function upsertRequirementRows(
+  requirements: import("@/lib/types").Requirement[]
+): Promise<void> {
+  if (!requirements.length) return;
+  await upsertRows("requirements", requirements);
+}
+
 /** 仅 projects 表，供 getProjects / MCP 列表，禁止整库 */
 export async function listAllProjects(): Promise<Project[]> {
   const sb = client();

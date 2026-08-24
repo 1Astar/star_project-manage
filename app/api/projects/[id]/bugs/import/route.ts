@@ -1,14 +1,12 @@
 import { revalidatePath } from "next/cache";
 import { requireAdminSession } from "@/lib/auth/require-admin";
-import { createPoolRequirement, importBugs } from "@/lib/db/local-store";
+import { importBugs, importFeedbackRequirements } from "@/lib/db/local-store";
 import {
   previewBugFeedback,
   severityToRequirementPriority,
   type FeedbackItemKind,
 } from "@/lib/bugs/parse-feedback";
 import { resolvePmProject } from "@/lib/bugs/resolve-pm";
-import { AGENT_ACTOR_NAME } from "@/lib/cursor-actor";
-import { applyLifecycleStatus } from "@/lib/requirement-status";
 import { mapStudioError, readStudioBody, studioErr, studioOk } from "@/lib/studio/route-utils";
 import type { BugSeverity, BugType } from "@/lib/types";
 
@@ -94,24 +92,26 @@ export async function POST(
             }))
           );
 
-    const createdReqs = [];
-    for (const item of reqItems) {
-      const detailParts = [
-        item.description?.trim() || "",
-        item.reproSteps?.trim() ? `说明：\n${item.reproSteps.trim()}` : "",
-      ].filter(Boolean);
-      const req = await createPoolRequirement(pm.id, {
-        title: item.title!.trim(),
-        priority: severityToRequirementPriority(item.severity ?? 3),
-        type: "feature",
-        status_tags: applyLifecycleStatus([], "想法"),
-        detail_work: detailParts.join("\n\n") || null,
-        actor_name: AGENT_ACTOR_NAME,
-        actor_note: "整理反馈入库",
-        inspiration_source: "整理反馈",
-      });
-      createdReqs.push(req);
-    }
+    const createdReqs =
+      reqItems.length === 0
+        ? []
+        : await importFeedbackRequirements(
+            pm.id,
+            reqItems.map((item) => {
+              const detailParts = [
+                item.description?.trim() || "",
+                item.reproSteps?.trim() ? `说明：\n${item.reproSteps.trim()}` : "",
+              ].filter(Boolean);
+              return {
+                title: item.title!.trim(),
+                priority: severityToRequirementPriority(item.severity ?? 3),
+                type: "feature" as const,
+                detail_work: detailParts.join("\n\n") || null,
+                actor_note: "整理反馈入库",
+                inspiration_source: "整理反馈",
+              };
+            })
+          );
 
     revalidatePath(`/projects/${ctx.routeId}/bugs`);
     revalidatePath(`/projects/${pm.slug}/bugs`);
