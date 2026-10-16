@@ -12,6 +12,15 @@ export type PrdHostPage = {
   prototypeUrl?: string;
 };
 
+export type PrdHostComment = {
+  id: string;
+  quote: string;
+  text: string;
+  createdAt?: string;
+  unread?: boolean;
+  replies?: Array<{ id: string; text: string; createdAt?: string }>;
+};
+
 export function PrdEditorFrame({
   brand,
   section,
@@ -20,10 +29,12 @@ export function PrdEditorFrame({
   activeId,
   editable,
   review,
+  comments = [],
   revision,
   highlightTick = 0,
+  commentsOpenTick = 0,
   onHtmlChange,
-  onSelectText,
+  onCommentsChange,
 }: {
   brand: string;
   section: string;
@@ -32,19 +43,39 @@ export function PrdEditorFrame({
   activeId: string;
   editable: boolean;
   review: boolean;
+  comments?: PrdHostComment[];
   revision: string;
   highlightTick?: number;
+  commentsOpenTick?: number;
   onHtmlChange?: (html: string, title: string) => void;
-  onSelectText?: (text: string) => void;
+  onCommentsChange?: (comments: PrdHostComment[]) => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
-  const payloadRef = useRef({ brand, section, html, pages, activeId, editable, review });
-  payloadRef.current = { brand, section, html, pages, activeId, editable, review };
+  const payloadRef = useRef({
+    brand,
+    section,
+    html,
+    pages,
+    activeId,
+    editable,
+    review,
+    comments,
+  });
+  payloadRef.current = {
+    brand,
+    section,
+    html,
+    pages,
+    activeId,
+    editable,
+    review,
+    comments,
+  };
   const changeRef = useRef(onHtmlChange);
   changeRef.current = onHtmlChange;
-  const selectRef = useRef(onSelectText);
-  selectRef.current = onSelectText;
+  const commentsRef = useRef(onCommentsChange);
+  commentsRef.current = onCommentsChange;
 
   function postLoad() {
     const win = iframeRef.current?.contentWindow;
@@ -59,10 +90,13 @@ export function PrdEditorFrame({
         postLoad();
       }
       if (event.data?.type === "STAR_PRD_CHANGE") {
-        changeRef.current?.(String(event.data.html ?? ""), String(event.data.title ?? ""));
-      }
-      if (event.data?.type === "STAR_PRD_SELECTION") {
-        selectRef.current?.(String(event.data.text ?? ""));
+        changeRef.current?.(
+          String(event.data.html ?? ""),
+          String(event.data.title ?? "")
+        );
+        if (Array.isArray(event.data.comments)) {
+          commentsRef.current?.(event.data.comments as PrdHostComment[]);
+        }
       }
     }
     window.addEventListener("message", onMessage);
@@ -80,6 +114,14 @@ export function PrdEditorFrame({
       "*"
     );
   }, [highlightTick]);
+
+  useEffect(() => {
+    if (!commentsOpenTick) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { type: "STAR_PRD_COMMENTS_OPEN", on: true },
+      "*"
+    );
+  }, [commentsOpenTick]);
 
   return (
     <iframe

@@ -109,7 +109,7 @@ export function PrdShareViewer({
       </div>
       {comments.length ? (
         <aside className="max-h-40 overflow-auto border-t border-slate-200 bg-white px-4 py-2">
-          <p className="text-xs font-medium text-slate-500">审阅评论</p>
+          <p className="text-xs font-medium text-slate-500">评论</p>
           {comments.map((c) => (
             <p key={c.id} className="mt-1 text-xs text-slate-700">
               {c.anchor_text ? `「${c.anchor_text}」` : ""} {c.body}

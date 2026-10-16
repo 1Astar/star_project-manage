@@ -7,7 +7,6 @@ import {
   addPrdCommentAction,
   createPrdAction,
   deletePrdAction,
-  deletePrdCommentAction,
   linkPrototypeToPrdAction,
   updatePrdAction,
 } from "@/lib/actions";
@@ -18,7 +17,11 @@ import type {
   ProjectPrd,
   Prototype,
 } from "@/lib/types";
-import { PrdEditorFrame, type PrdHostPage } from "@/components/prd-editor-frame";
+import {
+  PrdEditorFrame,
+  type PrdHostComment,
+  type PrdHostPage,
+} from "@/components/prd-editor-frame";
 
 export function PrdWorkspaceClient({
   projectId,
@@ -49,15 +52,14 @@ export function PrdWorkspaceClient({
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newModule, setNewModule] = useState(featureModules[0] ?? "");
-  const [review, setReview] = useState(false);
+  const [suggest, setSuggest] = useState(false);
   const [showDiff, setShowDiff] = useState(false);
   const [viewVersionId, setViewVersionId] = useState<string | "current">("current");
   const [draftHtml, setDraftHtml] = useState("");
-  const [highlightTick, setHighlightTick] = useState(0);
-  const [anchorText, setAnchorText] = useState("");
-  const [commentBody, setCommentBody] = useState("");
+  const [commentsOpenTick, setCommentsOpenTick] = useState(0);
   const [shareHint, setShareHint] = useState("");
   const saveTimerRef = useRef<number | null>(null);
+  const syncedCommentIdsRef = useRef<Set<string>>(new Set());
 
   const selected = useMemo(
     () => prds.find((p) => p.id === openId) ?? null,
@@ -133,10 +135,56 @@ export function PrdWorkspaceClient({
     setActivePageId(pageId ?? prd.id);
     setDraftHtml(prd.html_content);
     setViewVersionId("current");
-    setReview(false);
+    setSuggest(false);
     setShareHint("");
-    setAnchorText("");
+    syncedCommentIdsRef.current = new Set(
+      (commentsByPrd[prd.id] ?? []).map((c) => c.id)
+    );
   };
+
+  const hostComments: PrdHostComment[] = useMemo(() => {
+    if (!selected) return [];
+    return (commentsByPrd[selected.id] ?? []).map((c) => ({
+      id: c.id,
+      quote: c.anchor_text,
+      text: c.body,
+      createdAt: c.created_at,
+    }));
+  }, [selected, commentsByPrd]);
+
+  const onCommentsChange = useCallback(
+    (comments: PrdHostComment[]) => {
+      if (!selected) return;
+      const prdId = selected.id;
+      startTransition(async () => {
+        const existing = commentsByPrd[prdId] ?? [];
+        const byId = new Map(existing.map((c) => [c.id, c]));
+        for (const comment of comments) {
+          if (byId.has(comment.id) || syncedCommentIdsRef.current.has(comment.id)) {
+            continue;
+          }
+          try {
+            const row = await addPrdCommentAction({
+              prdId,
+              projectId,
+              projectSlug,
+              body: comment.text,
+              anchorText: comment.quote,
+            });
+            syncedCommentIdsRef.current.add(row.id);
+            syncedCommentIdsRef.current.add(comment.id);
+            setCommentsByPrd((prev) => ({
+              ...prev,
+              [prdId]: [...(prev[prdId] ?? []), row],
+            }));
+          } catch (e) {
+            setMessage(e instanceof Error ? e.message : "评论保存失败");
+          }
+        }
+      });
+    },
+    [selected, commentsByPrd, projectId, projectSlug]
+  );
 
   function shareUrl(prd: ProjectPrd) {
     if (!prd.share_token || typeof window === "undefined") return "";
@@ -220,7 +268,7 @@ export function PrdWorkspaceClient({
         <div>
           <h2 className="text-base font-semibold text-slate-900">PRD</h2>
           <p className="mt-1 text-sm text-slate-500">
-            每个项目都有这个节点。正文存在服务端；原型仍在「原型与验收」，可挂到 PRD 目录里当链接打开。
+            正文服务端保存。选中文字可先改颜色/背景高亮；「开始建议」贴着正文写建议；「评论」是独立入口。原型可挂到目录。
           </p>
         </div>
         <button
@@ -436,20 +484,20 @@ export function PrdWorkspaceClient({
               ) : null}
               <button
                 type="button"
-                className="rounded-lg border px-2 py-1 text-sm"
+                className={`rounded-lg px-2 py-1 text-sm ${
+                  suggest ? "bg-indigo-100 text-indigo-800" : "border"
+                }`}
                 disabled={!editingCurrent}
-                onClick={() => setHighlightTick((n) => n + 1)}
+                onClick={() => setSuggest((v) => !v)}
               >
-                高亮选区
+                {suggest ? "结束建议" : "开始建议"}
               </button>
               <button
                 type="button"
-                className={`rounded-lg px-2 py-1 text-sm ${
-                  review ? "bg-indigo-100 text-indigo-800" : "border"
-                }`}
-                onClick={() => setReview((v) => !v)}
+                className="rounded-lg border px-2 py-1 text-sm"
+                onClick={() => setCommentsOpenTick((n) => n + 1)}
               >
-                审阅
+                评论
               </button>
               <select
                 className="max-w-[160px] rounded-lg border border-slate-200 px-2 py-1 text-sm"
@@ -523,101 +571,23 @@ export function PrdWorkspaceClient({
                 {shareHint}
               </p>
             ) : null}
-            <div className="flex min-h-0 flex-1">
-              <div className="min-h-0 min-w-0 flex-1">
-                <PrdEditorFrame
-                  brand={projectTitle}
-                  section={selected.module_path || "PRD"}
-                  html={editorHtml}
-                  pages={hostPages}
-                  activeId={activePageId ?? selected.id}
-                  editable={editingCurrent}
-                  review={review}
-                  revision={`${selected.id}:${activePageId}:${viewVersionId}:${showDiff}:${review}:${selected.linked_prototypes
-                    .map((l) => l.prototype_id)
-                    .join(",")}`}
-                  highlightTick={highlightTick}
-                  onHtmlChange={onHtmlChange}
-                  onSelectText={setAnchorText}
-                />
-              </div>
-              {review ? (
-                <aside className="w-80 shrink-0 overflow-auto border-l border-slate-200 p-3">
-                  <h4 className="text-sm font-medium">审阅评论</h4>
-                  <p className="mt-1 text-xs text-slate-500">
-                    在正文里选中文字，再写评论。评论会保存到服务端。
-                  </p>
-                  {anchorText ? (
-                    <p className="mt-2 rounded bg-indigo-50 px-2 py-1 text-xs text-indigo-800">
-                      锚点：{anchorText}
-                    </p>
-                  ) : null}
-                  <textarea
-                    className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                    rows={3}
-                    value={commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    placeholder="写下审阅意见"
-                  />
-                  <button
-                    type="button"
-                    className="mt-2 rounded-lg bg-indigo-600 px-3 py-1 text-sm text-white"
-                    disabled={pending || !commentBody.trim()}
-                    onClick={() => {
-                      startTransition(async () => {
-                        const row = await addPrdCommentAction({
-                          prdId: selected.id,
-                          projectId,
-                          projectSlug,
-                          body: commentBody,
-                          anchorText,
-                        });
-                        setCommentsByPrd((prev) => ({
-                          ...prev,
-                          [selected.id]: [...(prev[selected.id] ?? []), row],
-                        }));
-                        setCommentBody("");
-                      });
-                    }}
-                  >
-                    保存评论
-                  </button>
-                  <ul className="mt-3 space-y-2">
-                    {(commentsByPrd[selected.id] ?? []).map((c) => (
-                      <li
-                        key={c.id}
-                        className="rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs"
-                      >
-                        {c.anchor_text ? (
-                          <p className="text-indigo-700">「{c.anchor_text}」</p>
-                        ) : null}
-                        <p className="mt-1 text-slate-800">{c.body}</p>
-                        <p className="mt-1 text-slate-400">{c.author}</p>
-                        <button
-                          type="button"
-                          className="mt-1 text-rose-500"
-                          onClick={() => {
-                            startTransition(async () => {
-                              await deletePrdCommentAction({
-                                commentId: c.id,
-                                projectSlug,
-                              });
-                              setCommentsByPrd((prev) => ({
-                                ...prev,
-                                [selected.id]: (prev[selected.id] ?? []).filter(
-                                  (x) => x.id !== c.id
-                                ),
-                              }));
-                            });
-                          }}
-                        >
-                          删除
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </aside>
-              ) : null}
+            <div className="min-h-0 flex-1">
+              <PrdEditorFrame
+                brand={projectTitle}
+                section={selected.module_path || "PRD"}
+                html={editorHtml}
+                pages={hostPages}
+                activeId={activePageId ?? selected.id}
+                editable={editingCurrent}
+                review={suggest}
+                comments={hostComments}
+                revision={`${selected.id}:${activePageId}:${viewVersionId}:${showDiff}:${suggest}:${selected.linked_prototypes
+                  .map((l) => l.prototype_id)
+                  .join(",")}:${hostComments.length}`}
+                commentsOpenTick={commentsOpenTick}
+                onHtmlChange={onHtmlChange}
+                onCommentsChange={onCommentsChange}
+              />
             </div>
           </div>
         </div>
