@@ -145,6 +145,7 @@ export function ProjectNav({ projectId, slug }: { projectId: string; slug: strin
   const links = [
     { href: base, label: "总览" },
     { href: `${base}/board`, label: "需求看板" },
+    { href: `${base}/prd`, label: "PRD" },
     { href: `${base}/prototype`, label: "原型工作区" },
     { href: `${base}/gantt`, label: "甘特图" },
     { href: `${base}/hours`, label: "工时统计" },

@@ -28,6 +28,7 @@ Star 文档类任务的**路由 skill**。先读本文件，再按表加载子 s
 | 调研报告 / 商务 Word | `word-docx-professional` + `version-management` | Node `docx` 程序化生成优先 |
 | 咨询风商业 PPT | `ppt-consulting-visual` | 科技蓝 + 纸感；杂志风/SVG 用 guizang / ppt-master |
 | 产品 / 项目方案设计书 | `product-scheme-design` + `word-docx-professional` | 结构先对齐再落 Word |
+| PRD / 原型交互 | `prd-prototype-rules`（先）→ 再改 PRD/原型 | **先定规则清单，再写交付物**；规则要点**分层列表** |
 | 横向翻页网页 PPT / 发布会风 | `guizang-ppt-skill` 或 `ppt-master` | 非咨询风 PPT 时 |
 | 删旧版 / 清理文件 | `safe-file-delete` | 必须用户确认 |
 | 写 PM / 发版记录 | `star-pm-write-release` | 非文档成品 |

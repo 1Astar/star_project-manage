@@ -361,6 +361,7 @@ export async function createBugAction(input: {
   title: string;
   description?: string;
   reproSteps?: string;
+  suggestion?: string;
   assignee?: string;
   requirementId?: string | null;
   severity?: import("@/lib/types").BugSeverity;
@@ -372,6 +373,7 @@ export async function createBugAction(input: {
     title: input.title,
     description: input.description,
     repro_steps: input.reproSteps,
+    suggestion: input.suggestion,
     assignee: input.assignee,
     severity: input.severity,
     bug_type: input.bugType,
@@ -389,6 +391,7 @@ export async function updateBugAction(input: {
     title?: string;
     description?: string | null;
     reproSteps?: string | null;
+    suggestion?: string | null;
     assignee?: string | null;
     requirementId?: string | null;
     status?: import("@/lib/types").TaskStatus;
@@ -403,6 +406,7 @@ export async function updateBugAction(input: {
     title: input.updates.title,
     description: input.updates.description,
     repro_steps: input.updates.reproSteps,
+    suggestion: input.updates.suggestion,
     assignee: input.updates.assignee,
     requirement_id: input.updates.requirementId,
     status: input.updates.status,
@@ -446,6 +450,215 @@ export async function updateBugStatusAction(input: {
   await updateBugStatus(input.bugId, input.status);
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
+}
+
+export async function createLearningNoteAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  whyText?: string;
+  principle?: string;
+  protocol?: string;
+  techBackground?: string;
+  competitors?: string;
+  productThinking?: string;
+}) {
+  assertNotViewerWrite();
+  const { createProjectLearningNote } = await import("@/lib/learning-notes/store");
+  const row = await createProjectLearningNote({
+    project_id: input.projectId,
+    title: input.title,
+    why_text: input.whyText,
+    principle: input.principle,
+    protocol: input.protocol,
+    tech_background: input.techBackground,
+    competitors: input.competitors,
+    product_thinking: input.productThinking,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+export async function updateLearningNoteAction(input: {
+  noteId: string;
+  projectSlug: string;
+  title?: string;
+  whyText?: string;
+  principle?: string;
+  protocol?: string;
+  techBackground?: string;
+  competitors?: string;
+  productThinking?: string;
+}) {
+  assertNotViewerWrite();
+  const { updateProjectLearningNote } = await import("@/lib/learning-notes/store");
+  const row = await updateProjectLearningNote(input.noteId, {
+    title: input.title,
+    why_text: input.whyText,
+    principle: input.principle,
+    protocol: input.protocol,
+    tech_background: input.techBackground,
+    competitors: input.competitors,
+    product_thinking: input.productThinking,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+export async function deleteLearningNoteAction(input: {
+  noteId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deleteProjectLearningNote } = await import("@/lib/learning-notes/store");
+  await deleteProjectLearningNote(input.noteId);
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+}
+
+export async function createPrdAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  modulePath?: string | null;
+  htmlContent?: string;
+}) {
+  assertNotViewerWrite();
+  const { createProjectPrd } = await import("@/lib/prds/store");
+  const row = await createProjectPrd({
+    project_id: input.projectId,
+    title: input.title,
+    module_path: input.modulePath,
+    html_content: input.htmlContent,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  return row;
+}
+
+export async function updatePrdAction(input: {
+  prdId: string;
+  projectSlug: string;
+  title?: string;
+  modulePath?: string | null;
+  htmlContent?: string;
+  linkedPrototypes?: Array<{
+    prototype_id: string;
+    note: string;
+    section_hint: string;
+  }>;
+  rotateShareToken?: boolean;
+  snapshotVersion?: boolean;
+}) {
+  assertNotViewerWrite();
+  const { updateProjectPrd } = await import("@/lib/prds/store");
+  const row = await updateProjectPrd(input.prdId, {
+    title: input.title,
+    module_path: input.modulePath,
+    html_content: input.htmlContent,
+    linked_prototypes: input.linkedPrototypes,
+    rotate_share_token: input.rotateShareToken,
+    snapshot_version: input.snapshotVersion,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  return row;
+}
+
+export async function deletePrdAction(input: {
+  prdId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deleteProjectPrd } = await import("@/lib/prds/store");
+  await deleteProjectPrd(input.prdId);
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+}
+
+export async function addPrdCommentAction(input: {
+  prdId: string;
+  projectId: string;
+  projectSlug: string;
+  body: string;
+  author?: string;
+  anchorText?: string;
+  anchorSelector?: string | null;
+}) {
+  assertNotViewerWrite();
+  const { addPrdComment } = await import("@/lib/prds/store");
+  const row = await addPrdComment({
+    prd_id: input.prdId,
+    project_id: input.projectId,
+    body: input.body,
+    author: input.author,
+    anchor_text: input.anchorText,
+    anchor_selector: input.anchorSelector,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  return row;
+}
+
+export async function deletePrdCommentAction(input: {
+  commentId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deletePrdComment } = await import("@/lib/prds/store");
+  await deletePrdComment(input.commentId);
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+}
+
+export async function linkPrototypeToPrdAction(input: {
+  prototypeId: string;
+  prdId: string | null;
+  prdNote?: string | null;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { updatePrototypePrdLink } = await import("@/lib/prds/store");
+  await updatePrototypePrdLink({
+    prototype_id: input.prototypeId,
+    prd_id: input.prdId,
+    prd_note: input.prdNote,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  revalidatePath(`/projects/${input.projectSlug}/prototype`);
+}
+
+export async function addFeatureModuleFromPrdAction(input: {
+  studioProjectId: string;
+  projectSlug: string;
+  modulePath: string;
+}) {
+  assertNotViewerWrite();
+  const path = input.modulePath.trim();
+  if (!path) throw new Error("板块名不能为空");
+  const { getProjectById } = await import("@/lib/studio/data");
+  const { updateStudioProjectWithModuleSync } = await import(
+    "@/lib/studio/mutations"
+  );
+  const { normalizeFeaturePath, resolveFeatureModules } = await import(
+    "@/lib/studio/project-modules"
+  );
+  const studio = await getProjectById(input.studioProjectId);
+  if (!studio) throw new Error("Studio 项目不存在");
+  const normalized = normalizeFeaturePath(path);
+  const current = resolveFeatureModules(
+    studio.id,
+    studio.featureModules,
+    studio.githubRepo
+  );
+  if (current.some((m) => normalizeFeaturePath(m) === normalized)) {
+    return { featureModules: current, added: false as const };
+  }
+  const next = [...current, normalized];
+  const { project } = await updateStudioProjectWithModuleSync(studio.id, {
+    featureModules: next,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return {
+    featureModules: project.featureModules ?? next,
+    added: true as const,
+  };
 }
 
 export async function createInterviewAction(input: {

@@ -56,6 +56,11 @@ Scripts: [`EXAMPLES.md`](./EXAMPLES.md) · Rules: [`SKILL.md`](./SKILL.md)
 
 ---
 
+## Cursor + ChatGPT Plugin（私有 skill 全量）
+
+本仓完整私有 skill + MCP 打包：[`../../plugins/star-pm/`](../../plugins/star-pm/)（Cursor Plugin + GPT Instructions/OAuth）。  
+公开 Method 子集仍是本目录 / `star-pm-skill` 仓。
+
 ## Install
 
 **Public Skill repo:** https://github.com/1Astar/star-pm-skill  

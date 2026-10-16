@@ -1714,6 +1714,7 @@ export function registerWorkspaceTools(server: McpServer) {
         title: z.string().min(1),
         description: z.string().optional(),
         reproSteps: z.string().optional(),
+        suggestion: z.string().optional().describe("优化建议（给 +1 / 研发）"),
         severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微，默认 3"),
         bugType: bugTypeInputSchema.optional(),
         requirementId: z.string().nullable().optional(),
@@ -1746,6 +1747,7 @@ export function registerWorkspaceTools(server: McpServer) {
           title: input.title.trim(),
           description: input.description,
           repro_steps: input.reproSteps,
+          suggestion: input.suggestion,
           assignee: input.assignee,
           severity: (input.severity as 1 | 2 | 3 | 4 | undefined) ?? 3,
           bug_type: input.bugType ?? "other",
@@ -2041,12 +2043,13 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Update Bug",
       description:
-        "更新 Bug 标题/描述/复现/指派/关联需求/严重级别/类型/状态。标完成传 status:\"done\"。",
+        "更新 Bug 标题/描述/复现/优化建议/指派/关联需求/严重级别/类型/状态。标完成传 status:\"done\"。",
       inputSchema: {
         bugId: z.string().min(1),
         title: z.string().min(1).optional(),
         description: z.string().nullable().optional(),
         reproSteps: z.string().nullable().optional(),
+        suggestion: z.string().nullable().optional().describe("优化建议"),
         assignee: z.string().nullable().optional(),
         requirementId: z.string().nullable().optional(),
         severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微"),
@@ -2066,6 +2069,7 @@ export function registerWorkspaceTools(server: McpServer) {
         if (input.title !== undefined) patch.title = input.title.trim();
         if (input.description !== undefined) patch.description = input.description;
         if (input.reproSteps !== undefined) patch.repro_steps = input.reproSteps;
+        if (input.suggestion !== undefined) patch.suggestion = input.suggestion;
         if (input.assignee !== undefined) patch.assignee = input.assignee;
         if (input.requirementId !== undefined) patch.requirement_id = input.requirementId;
         if (input.severity !== undefined) {
@@ -2098,6 +2102,7 @@ export function registerWorkspaceTools(server: McpServer) {
             bugType: bug.bug_type,
             description: bug.description,
             reproSteps: bug.repro_steps,
+            suggestion: bug.suggestion,
             assignee: bug.assignee,
             requirementId: bug.requirement_id,
             updatedAt: bug.updated_at,
@@ -2113,7 +2118,7 @@ export function registerWorkspaceTools(server: McpServer) {
     "get_bug",
     {
       title: "Get Bug",
-      description: "按 bugId 取单条 Bug 详情（含复现步骤、指派、关联需求）。",
+      description: "按 bugId 取单条 Bug 详情（含复现步骤、优化建议、指派、关联需求）。",
       inputSchema: {
         bugId: z.string().min(1),
       },
@@ -2136,6 +2141,7 @@ export function registerWorkspaceTools(server: McpServer) {
             bugType: bug.bug_type,
             description: bug.description,
             reproSteps: bug.repro_steps,
+            suggestion: bug.suggestion,
             assignee: bug.assignee,
             requirementId: bug.requirement_id,
             requirementTitle: requirement?.title ?? null,

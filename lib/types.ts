@@ -368,11 +368,79 @@ export interface Bug {
   title: string;
   description: string | null;
   repro_steps: string | null;
+  /** 优化建议（给 +1 / 研发） */
+  suggestion: string | null;
   assignee: string | null;
   status: TaskStatus;
   /** 1 最高 … 4 最低 */
   severity: BugSeverity;
   bug_type: BugType;
+  created_at: string;
+  updated_at: string;
+}
+
+/** 项目学习池条目（个人学习：原理 / 协议 / 竞品等） */
+export interface ProjectLearningNote {
+  id: string;
+  project_id: string;
+  title: string;
+  /** 为什么？ */
+  why_text: string;
+  /** 原理 */
+  principle: string;
+  /** 协议 */
+  protocol: string;
+  /** 技术背景 */
+  tech_background: string;
+  /** 竞品 */
+  competitors: string;
+  /** 更底层的产品思考 */
+  product_thinking: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** PRD 内挂载的原型引用 */
+export interface PrdPrototypeLink {
+  prototype_id: string;
+  note: string;
+  /** 正文锚点提示（段落摘要等） */
+  section_hint: string;
+}
+
+/** 项目 PRD 文档（服务端正文） */
+/** PRD 文档内的小版本（1.0 / 1.0.1…，不是项目大版本） */
+export interface PrdDocVersion {
+  id: string;
+  label: string;
+  html_content: string;
+  created_at: string;
+}
+
+export interface ProjectPrd {
+  id: string;
+  project_id: string;
+  title: string;
+  /** 功能板块路径，如「通知消息」或「APP重构·通知消息」 */
+  module_path: string | null;
+  html_content: string;
+  /** 单独分享用明文 token；库内可空 */
+  share_token: string | null;
+  linked_prototypes: PrdPrototypeLink[];
+  versions: PrdDocVersion[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** PRD 审阅评论 */
+export interface PrdReviewComment {
+  id: string;
+  prd_id: string;
+  project_id: string;
+  anchor_text: string;
+  anchor_selector: string | null;
+  body: string;
+  author: string;
   created_at: string;
   updated_at: string;
 }
@@ -462,6 +530,10 @@ export interface Prototype {
   storage_path: string | null;
   external_url: string | null;
   requirement_id: string | null;
+  /** 备注关联的 PRD */
+  prd_id: string | null;
+  /** 对 PRD 某段的备注说明 */
+  prd_note: string | null;
   created_at: string;
 }
 

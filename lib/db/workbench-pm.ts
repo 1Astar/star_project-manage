@@ -46,6 +46,7 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
     repro_steps: (row.repro_steps as string | null) ?? null,
+    suggestion: (row.suggestion as string | null) ?? null,
     assignee: (row.assignee as string | null) ?? null,
     status: (row.status as Bug["status"]) ?? "pending",
     severity,

@@ -423,6 +423,7 @@ export async function registerStarPmTools(server: McpServer) {
             severity?: 1 | 2 | 3 | 4;
             bugType?: import("@/lib/types").BugType;
             reproSteps?: string;
+            suggestion?: string;
             description?: string;
           } = {};
           const jsonLine = lines[1]?.trim();
@@ -455,6 +456,7 @@ export async function registerStarPmTools(server: McpServer) {
             title: input.title.replace(/^【Bug】\s*/, "").trim(),
             description,
             repro_steps: meta.reproSteps,
+            suggestion: meta.suggestion,
             severity: meta.severity ?? 3,
             bug_type: meta.bugType ?? "other",
           });

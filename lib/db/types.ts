@@ -11,6 +11,9 @@ import type {
   PoolColumnDef,
   Project,
   ProjectInterview,
+  ProjectLearningNote,
+  ProjectPrd,
+  PrdReviewComment,
   ProjectMember,
   Prototype,
   Requirement,
@@ -48,4 +51,7 @@ export interface DatabaseSnapshot {
   requirement_links: RequirementLink[];
   project_interviews: ProjectInterview[];
   interview_requirement_links: InterviewRequirementLink[];
+  project_learning_notes: ProjectLearningNote[];
+  project_prds: ProjectPrd[];
+  prd_review_comments: PrdReviewComment[];
 }

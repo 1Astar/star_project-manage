@@ -1,0 +1,1573 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MinisCloud Design · 产品文档</title>
+  <style>
+    :root { --blue:#3D86F8; --ink:#031121; --muted:rgba(3,17,33,.70); --line:rgba(98,116,142,.10); --soft:rgba(61,134,248,.03); --sidebar:#fbfcfe; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#fff; color:var(--ink); font:15px/1.75 "PingFang SC",-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif; }
+    .app-nav { position:fixed; inset:0 auto 0 0; z-index:10; display:flex; flex-direction:column; width:288px; overflow:auto; padding:18px 16px 28px; background:var(--sidebar); border-right:1px solid var(--line); transition:transform 250ms cubic-bezier(0,0,.2,1); }
+    .app-brand { padding:0 0 26px; font-size:16px; font-weight:600; border-bottom:1px solid var(--line); }
+    .nav-section { margin-top:22px; color:var(--muted); font-size:13px; font-weight:500; }
+    .nav-item { display:block; margin:6px 0; padding:7px 11px; color:var(--ink); text-decoration:none; border-radius:8px; font-size:14px; }
+    .nav-item.sub { padding-left:22px; color:var(--muted); }
+    .nav-item.active { color:var(--blue); background:rgba(61,134,248,.10); font-weight:500; }
+    .nav-tree { flex:1; margin-top:18px; overflow:auto; }
+    .page-row { display:flex; align-items:center; gap:4px; min-height:34px; margin:2px 0; padding:4px 7px; border-radius:8px; color:var(--ink); font-size:14px; cursor:grab; user-select:none; }
+    .page-row:hover { background:rgba(61,134,248,.06); }
+    .page-row.active { color:var(--blue); background:rgba(61,134,248,.10); font-weight:500; }
+    .page-row.dragging { opacity:.45; }
+    .page-row.drop-before { box-shadow:inset 0 2px 0 var(--blue); }
+    .page-row.drop-after { box-shadow:inset 0 -2px 0 var(--blue); }
+    .page-row.drop-child { background:rgba(61,134,248,.16); }
+    .tree-caret { width:18px; border:0; background:transparent; color:var(--muted); padding:0; font-size:13px; cursor:pointer; }
+    .tree-caret.empty { visibility:hidden; }
+    .page-row-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .page-row-external { margin-left:auto; color:var(--muted); font-size:16px; line-height:1; }
+    .nav-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
+    .nav-actions button { border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .nav-actions button:hover { color:var(--blue); border-color:var(--blue); }
+    .sidebar-collapse { position:fixed; z-index:12; left:262px; top:14px; width:28px; height:28px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--muted); font-size:20px; line-height:1; cursor:pointer; transition:left 250ms cubic-bezier(0,0,.2,1),background-color 150ms ease-out; }
+    .sidebar-collapse:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    .main { min-height:100vh; margin-left:288px; transition:margin-left 250ms cubic-bezier(0,0,.2,1); }
+    body.nav-collapsed .app-nav { transform:translateX(-288px); }
+    body.nav-collapsed .sidebar-collapse { left:12px; }
+    body.nav-collapsed .main { margin-left:0; }
+    .toolbar { position:sticky; top:0; z-index:5; height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 32px; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(14px); }
+    .brand { color:var(--muted); font-weight:500; font-size:13px; }
+    .doc-layout { width:min(850px,calc(100% - 80px)); margin:52px auto 80px; }
+    .page { min-width:0; padding:0; background:#fff; }
+    /* 目录不占正文位置：默认仅在页面右侧显示一列细小进度标记，悬停后展开。 */
+    .on-page { position:fixed; z-index:8; top:150px; right:20px; width:18px; max-height:min(560px,calc(100vh - 190px)); overflow-y:auto; padding:12px 10px; border:1px solid transparent; border-radius:16px; background:rgba(255,255,255,0); box-shadow:none; transition:width .18s ease, padding .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease; }
+    .on-page:hover,.on-page:focus-within { width:280px; padding:18px 20px; border-color:#e8eaf0; background:rgba(255,255,255,.98); box-shadow:0 14px 34px rgba(3,17,33,.12); }
+    .on-page-title { height:0; margin:0; overflow:hidden; font-size:14px; font-weight:600; opacity:0; transition:height .12s ease, margin .12s ease, opacity .12s ease; white-space:nowrap; }
+    .on-page:hover .on-page-title,.on-page:focus-within .on-page-title { height:auto; margin:0 0 10px; opacity:1; }
+    .on-page a { position:relative; display:block; height:14px; padding:0; color:transparent; font-size:13px; line-height:14px; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:height .12s ease, padding .12s ease, color .12s ease; }
+    .on-page a::after { content:''; position:absolute; top:6px; right:0; width:7px; height:3px; border-radius:3px; background:#cfd4dc; transition:background .12s ease; }
+    .on-page a.active::after { background:var(--blue); width:11px; }
+    .on-page:hover a,.on-page:focus-within a { height:auto; min-height:28px; padding:5px 18px 5px 0; color:var(--muted); line-height:18px; }
+    .on-page:hover a::after,.on-page:focus-within a::after { top:13px; }
+    .on-page:hover a:hover,.on-page:hover a.active,.on-page:focus-within a:hover,.on-page:focus-within a.active { color:var(--blue); }
+    h1 { margin:0 0 52px; font-size:34px; line-height:1.35; letter-spacing:-.5px; }
+    h2 { margin:52px 0 20px; padding-top:36px; border-top:1px solid var(--line); font-size:22px; line-height:1.45; }
+    h3 { margin:26px 0 10px; font-size:16px; }
+    hr { height:1px; margin:34px 0; border:0; background:var(--line); }
+    p { margin:9px 0; }
+    ul,ol { margin:8px 0; padding-left:24px; }
+    .meta { display:none; color:var(--muted); font-size:13px; }
+    .callout { margin:16px 0; padding:14px 16px; border-left:4px solid var(--blue); border-radius:0 8px 8px 0; background:#f3f7ff; }
+    .todo { display:flex; align-items:flex-start; gap:9px; margin:9px 0; }
+    .todo input { width:16px; height:16px; margin:5px 0 0; accent-color:var(--blue); cursor:pointer; }
+    .todo:has(input:checked) span { color:var(--muted); text-decoration:line-through; }
+    blockquote { margin:16px 0; padding:6px 16px; border-left:3px solid rgba(61,134,248,.55); color:var(--muted); }
+    pre { margin:16px 0; padding:12px 14px; overflow:auto; border-radius:8px; background:#f5f7fa; font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
+    mark { padding:1px 3px; border-radius:3px; background:#fff1a8; }
+    .prd-rev-add { background:#e7f8ed; box-shadow:inset 0 0 0 1px #86d5a4; }
+    .prd-rev-del { background:#fde8e8; color:#9b1c1c; text-decoration:line-through; }
+    body.review-mode #document { box-shadow:inset 0 0 0 3px rgba(79,70,229,.28); }
+    body.host-mode .nav-section,
+    body.host-mode .nav-actions { display:none; }
+    .proto-frame-wrap { height:calc(100vh - 72px); margin:0 -32px; background:#eef3f8; }
+    .proto-frame-wrap iframe { width:100%; height:100%; border:0; background:#eef3f8; }
+    table { width:100%; margin:12px 0 18px; border-collapse:collapse; font-size:14px; }
+    th,td { padding:10px 12px; border:1px solid var(--line); vertical-align:top; text-align:left; }
+    th { background:var(--soft); font-weight:650; }
+    table.table-selected { outline:2px solid var(--blue); outline-offset:2px; }
+    tr.table-row-selected > th,tr.table-row-selected > td { background:rgba(61,134,248,.10); }
+    th.cell-selected,td.cell-selected { background:rgba(61,134,248,.18) !important; box-shadow:inset 0 0 0 1px rgba(61,134,248,.45); }
+    th ul,th ol,td ul,td ol { margin:4px 0; padding-left:20px; }
+    code { padding:1px 5px; border-radius:4px; background:#f2f4f7; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.9em; }
+    [contenteditable="true"]:focus { outline:none; }
+    .editable:focus { box-shadow:0 0 0 3px rgba(61,134,248,.12); }
+    .save-state { color:var(--muted); font-size:12px; white-space:nowrap; }
+    .block-plus { position:fixed; z-index:20; display:none; width:28px; height:28px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:23px; line-height:1; cursor:pointer; }
+    .block-plus:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    .insert-menu { position:fixed; z-index:30; display:none; min-width:176px; padding:6px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); }
+    .insert-menu.show { display:block; }
+    .insert-menu button,.table-context button { display:block; width:100%; border:0; border-radius:8px; padding:8px 10px; color:var(--ink); background:transparent; text-align:left; font:14px "PingFang SC",sans-serif; cursor:pointer; }
+    .insert-menu button:hover,.table-context button:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    /* 行列操作收在表格边线上，避免右侧重复出现一组菜单。 */
+    .table-context { display:none !important; }
+    .table-context button { white-space:nowrap; font-size:12px; }
+    .table-context button[data-table-action="delete-table"] { grid-column:1 / -1; color:#E11D48; }
+    .table-context button[data-table-action="delete-table"]:hover { color:#E11D48; background:rgba(225,29,72,.10); }
+    .table-inline { position:fixed; z-index:28; display:none; align-items:center; gap:3px; }
+    .table-inline.show { display:flex; }
+    .table-inline button { min-width:25px; height:25px; padding:0 6px; border:1px solid #dce1e8; border-radius:6px; color:#526072; background:#fff; box-shadow:0 3px 12px rgba(3,17,33,.12); font:600 16px/1 "PingFang SC",sans-serif; cursor:pointer; }
+    .table-inline button:hover { color:var(--blue); border-color:rgba(61,134,248,.55); background:#f3f8ff; }
+    .table-inline.table-text button,.table-inline.table-select button { height:27px; font-size:12px; font-weight:500; }
+    .table-inline.table-select button { color:#526072; }
+    .table-inline.table-cell button { height:27px; font-size:12px; font-weight:500; }
+    .proto-surface { position:relative; min-height:430px; margin:22px 0 34px; overflow:hidden; border:1px solid #dbe5ef; border-radius:18px; background:linear-gradient(135deg,#1a405b 0%,#41647a 48%,#8e9ba2 100%); box-shadow:0 14px 34px rgba(20,42,61,.16); }
+    .proto-surface:before { content:""; position:absolute; inset:0; background:radial-gradient(circle at 18% 22%,rgba(85,172,230,.34),transparent 32%),linear-gradient(112deg,rgba(12,47,72,.7),rgba(255,255,255,.08)); }
+    .proto-desktop { position:relative; z-index:1; min-height:430px; padding:28px; color:#fff; }
+    .proto-label { display:inline-flex; padding:7px 10px; border-radius:8px; background:rgba(255,255,255,.16); color:rgba(255,255,255,.84); font-size:12px; backdrop-filter:blur(12px); }
+    .proto-capsule { position:absolute; right:28px; top:26px; display:flex; align-items:center; gap:9px; padding:11px 12px 11px 15px; border:0; border-radius:999px; background:rgba(255,255,255,.95); color:#1c3348; box-shadow:0 10px 28px rgba(5,25,42,.28); font:14px "PingFang SC",sans-serif; cursor:pointer; }
+    .proto-capsule .dot { width:8px; height:8px; border-radius:50%; background:#3d86f8; box-shadow:0 0 0 4px rgba(61,134,248,.15); }
+    .proto-capsule .dismiss { display:grid; place-items:center; width:22px; height:22px; margin-left:2px; border:0; border-radius:50%; background:transparent; color:#718193; font-size:18px; cursor:pointer; }
+    .proto-capsule .dismiss:hover { background:#edf2f7; }
+    .proto-dialog-mask { position:absolute; inset:0; z-index:3; display:none; place-items:center; background:rgba(7,24,39,.42); backdrop-filter:blur(5px); }
+    .proto-dialog-mask.show { display:grid; }
+    .proto-dialog { width:min(560px,calc(100% - 36px)); overflow:hidden; border-radius:22px; background:rgba(244,250,255,.97); color:#1a2c3e; box-shadow:0 28px 70px rgba(2,20,35,.34); }
+    .proto-dialog-head { display:flex; justify-content:space-between; align-items:center; padding:19px 23px; border-bottom:1px solid #d9e3eb; font-size:18px; font-weight:650; }
+    .proto-dialog-x { border:0; background:transparent; color:#516272; font-size:23px; cursor:pointer; }
+    .proto-dialog-body { padding:20px 23px 16px; }
+    .proto-dialog-meta { display:flex; justify-content:space-between; gap:12px; margin-bottom:14px; font-size:12px; color:#758697; }
+    .proto-dialog-meta strong { color:#22384c; font-size:15px; }
+    .proto-dialog-copy { max-height:190px; overflow:auto; padding:15px; border-radius:12px; background:#e8f2f9; font-size:13px; line-height:1.65; }
+    .proto-dialog-copy p { margin:0 0 12px; }
+    .proto-dialog-copy p:last-child { margin-bottom:0; }
+    .proto-dialog-foot { display:flex; justify-content:space-between; align-items:center; padding:16px 23px 20px; border-top:1px solid #d9e3eb; }
+    .proto-link { border:0; background:transparent; color:#3d86f8; cursor:pointer; }
+    .proto-actions { display:flex; gap:10px; }
+    .proto-btn { padding:10px 16px; border:1px solid #d4dee7; border-radius:10px; background:#fff; color:#3d5063; cursor:pointer; }
+    .proto-btn.primary { border-color:#071b2e; background:#071b2e; color:#fff; }
+    .proto-toast { position:absolute; left:50%; bottom:18px; z-index:5; transform:translate(-50%,12px); padding:8px 13px; border-radius:8px; background:rgba(8,27,44,.86); color:#fff; font-size:12px; opacity:0; pointer-events:none; transition:.2s; }
+    .proto-toast.show { transform:translate(-50%,0); opacity:1; }
+    .proto-only { min-height:560px; margin:0; }
+    .proto-only .proto-desktop { min-height:560px; }
+    .proto-view { display:none; min-height:560px; }
+    .proto-view.show { display:block; }
+    .proto-os-view { display:none; place-items:center; padding:34px; }
+    .proto-os-view.show { display:grid; }
+    .proto-os-dialog { width:min(560px,calc(100% - 20px)); overflow:hidden; border-radius:22px; background:rgba(244,250,255,.97); color:#1a2c3e; box-shadow:0 28px 70px rgba(2,20,35,.34); }
+    .proto-os-version { margin-bottom:18px; color:#758697; font-size:12px; }
+    .proto-os-status { margin:12px 0 8px; font-size:24px; font-weight:700; }
+    .proto-os-status.success { color:#0b9a68; }
+    .proto-os-status.failure { color:#d4425c; }
+    .proto-os-copy { color:#526779; font-size:14px; }
+    .proto-hidden-toggle { position:absolute; right:3px; bottom:3px; z-index:20; width:38px; height:38px; border:0; border-radius:50%; opacity:0; cursor:pointer; }
+    .undo-toast { position:fixed; right:24px; bottom:24px; z-index:40; display:none; align-items:center; gap:14px; padding:10px 12px 10px 14px; border-radius:10px; background:rgba(3,17,33,.92); box-shadow:0 8px 40px rgba(0,0,0,.16); color:#fff; font-size:13px; }
+    .undo-toast.show { display:flex; }
+    .undo-toast button { border:0; border-radius:7px; padding:5px 8px; background:rgba(255,255,255,.16); color:#fff; font:500 13px "PingFang SC",sans-serif; cursor:pointer; }
+    .undo-toast button:hover { background:rgba(255,255,255,.28); }
+    @media (max-width:1050px) { .app-nav { width:220px; } .sidebar-collapse { left:194px; } .main { margin-left:220px; } body.nav-collapsed .app-nav { transform:translateX(-220px); } .doc-layout { width:min(850px,calc(100% - 56px)); } .on-page { display:none; } }
+    @media (max-width:700px) { .app-nav,.sidebar-collapse { display:none; } .main { margin-left:0; } .toolbar { padding:0 16px; } .doc-layout { width:calc(100% - 40px); margin:32px auto 56px; } h1 { font-size:27px; margin-bottom:34px; } h2 { font-size:20px; margin-top:42px; padding-top:28px; } table { display:block; overflow-x:auto; } .brand { display:none; } }
+    @media print { .app-nav,.toolbar,.on-page { display:none; } .main { margin:0; } .doc-layout { display:block; width:100%; margin:0; } }
+  </style>
+</head>
+<body>
+  <button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="收起侧边栏" title="收起侧边栏">‹</button>
+  <aside class="app-nav" aria-label="文档导航">
+    <div class="app-brand">MinisCloud Design</div>
+    <div class="nav-section">APP 重构 1.0（纯视觉）</div>
+    <nav id="page-tree" class="nav-tree" aria-label="页面目录"></nav>
+    <div class="nav-actions"><button id="new-page" type="button">＋ 页面</button><button id="new-child-page" type="button">＋ 子页面</button></div>
+  </aside>
+  <div class="main">
+  <header class="toolbar">
+    <div class="brand">产品设计 / 更新</div>
+  </header>
+
+  <div class="doc-layout">
+  <main class="page editable" id="document" contenteditable="true">
+<h1>更新弹窗展示优先级 PRD</h1>
+<h2>1. 版本记录</h2>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>日期</th>
+<th>修改内容</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>V1.8</td>
+<td>2026-10-16</td>
+<td>按评审意见确定本期自动续弹客户端、下期评估胶囊；明确检测入口、异常结果和通知消息边界。</td>
+</tr>
+</tbody></table>
+<h2>2. 背景</h2>
+<p>OS 与客户端分别检查更新并使用各自的更新弹窗。两项同时有更新时，需要确定弹窗顺序及 OS 流程结束后客户端弹窗的触发条件。本期只调整两类更新弹窗的编排，沿用原弹窗的内容、按钮和更新流程。</p>
+<p>本期不实现胶囊、“稍后提醒”、跨登录轮换及版本组合更新。</p>
+<h2>3. 目标</h2>
+<ol>
+<li>两项更新同时可用时，先展示 OS 更新弹窗，OS 流程结束后自动展示客户端更新弹窗；两个弹窗不重叠。</li>
+<li>每次自动或手动检查都重新获取 OS 与客户端的更新结果；两项检查结束后，仅依据此次结果决定弹窗。</li>
+<li>检测失败或超时时，只展示已确认有更新的项目；两项都未确认有更新且至少一项检测异常时，手动检查显示失败提示，登录自动检查不弹提示。</li>
+</ol>
+<h2>4. 核心功能</h2>
+<h3>4.1 检测入口与首次弹窗</h3>
+<ul>
+<li>用户登录并进入 OS 主屏幕时，若现有自动检查更新设置允许，则检查 OS 与客户端更新。关闭自动检查时，不因登录触发本需求的弹窗。</li>
+<li>用户点击现有“检查更新”入口时，立即重新检查两项更新；手动检查不受自动检查设置影响。</li>
+<li>每次触发是一轮独立检查。OS、客户端结果分别为“有更新”“无更新”“检测失败”或“检测超时”；两项均返回上述结果后，按本轮结果决定首次弹窗。检测超时沿用现有检查流程的终态，不新增固定 10 秒截止。</li>
+<li>新一轮检查开始时，废弃上一轮尚未展示的更新弹窗。上一轮迟到的检测结果不改变新一轮的判断。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>本轮 OS 结果</th>
+<th>本轮客户端结果</th>
+<th>首次弹窗</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>有更新</td>
+<td>有更新</td>
+<td>OS 更新弹窗</td>
+</tr>
+<tr>
+<td>有更新</td>
+<td>无更新／检测失败／检测超时</td>
+<td>OS 更新弹窗</td>
+</tr>
+<tr>
+<td>无更新／检测失败／检测超时</td>
+<td>有更新</td>
+<td>客户端更新弹窗</td>
+</tr>
+<tr>
+<td>无更新</td>
+<td>无更新</td>
+<td>不展示</td>
+</tr>
+<tr>
+<td>无更新／检测失败／检测超时</td>
+<td>无更新／检测失败／检测超时，且至少一项检测异常</td>
+<td>不展示更新弹窗；检测异常反馈按 4.3</td>
+</tr>
+</tbody></table>
+<p>“检测失败／超时”表示更新信息未知，不能解释为“已是最新版本”。如果现有检查流程无法为未返回的项目给出超时终态，需在研发评审中先确认终止机制；不得用未返回结果或旧轮次结果判定首次弹窗。</p>
+<h3>4.2 两项更新的弹窗顺序与操作</h3>
+<p>同轮两项均确认有更新时，<strong>先展示 OS 弹窗</strong>。OS 弹窗及其结果弹窗均已关闭、主屏幕恢复交互后，<strong>自动展示本轮客户端原有更新弹窗</strong>，无需用户再次点击入口。只有当前弹窗退出后才能展示下一弹窗，不能同时叠加。</p>
+<table>
+<thead>
+<tr>
+<th>OS 流程状态</th>
+<th>客户端弹窗处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户关闭 OS 更新弹窗</td>
+<td>回到主屏幕后自动展示。</td>
+</tr>
+<tr>
+<td>用户选择“忽略本次更新”</td>
+<td>只忽略 OS 的本次更新，不取消本轮客户端弹窗；OS 弹窗退出后自动展示客户端更新弹窗。</td>
+</tr>
+<tr>
+<td>用户取消 OS 更新，原流程已退出</td>
+<td>回到主屏幕后自动展示。</td>
+</tr>
+<tr>
+<td>OS 更新失败，结果弹窗仍在显示</td>
+<td>等用户按原流程关闭失败结果弹窗；回到主屏幕后自动展示。</td>
+</tr>
+<tr>
+<td>OS 更新成功，原流程不重启且已返回主屏幕</td>
+<td>自动展示。</td>
+</tr>
+<tr>
+<td>OS 更新进行中、结果弹窗未关闭或设备正在重启</td>
+<td>暂不展示。重启结束后不恢复旧轮次；重新登录时按 4.1 重新检查。</td>
+</tr>
+</tbody></table>
+<p>“忽略本次更新”只影响被操作的更新项；客户端弹窗中的关闭、忽略、立即更新和手动下载其他版本继续执行原有规则。强制更新若使 OS 弹窗无法退出，客户端弹窗等待原有强制更新流程结束；本需求不修改强制更新限制。两种更新若存在版本依赖，沿用各自现有可更新结果，不在本期新增依赖判定。</p>
+<h3>4.3 检测异常与手动检查反馈</h3>
+<p>一项已确认有更新、另一项检测失败或超时，只展示已确认项；未知项不排队，迟到结果不追加弹窗。两项都没有已确认的更新且至少一项检测失败或超时时：登录自动检查不弹出提示；手动检查显示一次“检查更新失败，请稍后重试”。手动检查的反馈沿用现有载体；如现有流程没有反馈载体，使用居中 Toast。</p>
+<p>OS 或客户端<strong>安装失败</strong>属于对应弹窗的更新流程，不当作“检测失败”。用户可再次手动检查；下次登录也按 4.1 重新检查。本期不保存跨登录待展示客户端弹窗，也不保证下次登录优先展示客户端。</p>
+<h3>4.4 通知消息与状态边界</h3>
+<p>本期更新弹窗由更新检查结果触发，<strong>不生成通知消息列表项</strong>，也不借用桌面新消息浮窗；因此不定义通知消息的过期时间、点击跳转和过期后点击行为。若现有更新入口实际依赖通知消息投递，研发评审时须说明现状，由产品补充通知消息规则后再接入，不得默认为通知中心消息。</p>
+<table>
+<thead>
+<tr>
+<th>逻辑状态</th>
+<th>取值</th>
+<th>初始／为空时处理</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>检查来源</td>
+<td>登录自动检查、手动检查</td>
+<td>无来源时不启动本需求的检查。</td>
+</tr>
+<tr>
+<td>OS／客户端检测结果</td>
+<td>未返回、有更新、无更新、检测失败、检测超时</td>
+<td>每轮初始为未返回；未返回不参与判定。</td>
+</tr>
+<tr>
+<td>待展示客户端弹窗</td>
+<td>无、待展示、已展示</td>
+<td>每轮初始为无；两项确认有更新时设为待展示，OS 流程结束后展示一次；重启或新轮检查时清除。</td>
+</tr>
+</tbody></table>
+<h2>5. 交互流程</h2>
+<h3>5.1 更新弹窗弹出规则及相关业务操作</h3>
+<ol>
+<li>进入主屏幕且自动检查设置允许，或用户点击“检查更新”，形成新一轮检查。</li>
+<li>两项检测均结束后按 4.1 选择首次弹窗。仅一项有更新时直接打开对应原弹窗；均无确认更新时按 4.3 处理。</li>
+<li>两项都有更新时先打开 OS 弹窗。用户通过原弹窗更新、忽略、取消或关闭；结果态按原 OS 流程处理。</li>
+<li>原 OS 流程结束并回到主屏幕，自动打开本轮客户端原弹窗。客户端弹窗退出后，本轮更新弹窗流程结束。</li>
+<li>设备重启后清除尚未展示的客户端弹窗；用户再次点击“检查更新”时清除上一轮待展示状态，并重新检查两项更新。</li>
+</ol>
+<h2>6. 页面详情</h2>
+<h3>6.1 OS 主屏幕</h3>
+<ul>
+<li>用途／入口：承载登录后的自动检查结果和手动检查入口；弹窗只在主屏幕可展示时打开。</li>
+<li>组件／操作：沿用现有“检查更新”入口，不新增胶囊或通知消息入口。</li>
+<li>状态／异常：检查中等待两项终态；手动检查无确认更新且有检测异常时按 4.3 反馈；重启后不恢复旧轮次弹窗。</li>
+</ul>
+<h3>6.2 OS 更新弹窗</h3>
+<ul>
+<li>用途／入口：本轮 OS 有更新时展示；与客户端同时有更新时先展示。</li>
+<li>组件／操作：保留原有“手动下载其他版本”“忽略本次更新”“立即更新”、右上角关闭、进度条和结果态；不修改按钮行为及文案。</li>
+<li>退出／异常：关闭、忽略、取消、成功和失败结束条件见 4.2；失败结果弹窗未关闭时不覆盖客户端弹窗。</li>
+</ul>
+<h3>6.3 客户端更新弹窗</h3>
+<ul>
+<li>用途／入口：仅客户端有更新时作为首次弹窗；两项均有更新时在 OS 流程结束后自动打开。</li>
+<li>组件／操作：沿用原有按钮、文案、进度、结果反馈及关闭逻辑。</li>
+<li>状态／异常：同轮最多展示一次；OS 流程重启导致旧轮次结束时不跨登录恢复。</li>
+</ul>
+<h2>7. 验收标准</h2>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>条件／操作</th>
+<th>预期结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>登录自动检查关闭</td>
+<td>登录进入主屏幕</td>
+<td>不因登录触发本需求的更新检查和弹窗；手动入口仍可检查。</td>
+</tr>
+<tr>
+<td>单项／双项更新</td>
+<td>分别模拟仅 OS、仅客户端、两项都有、两项都无</td>
+<td>按 4.1 展示首次弹窗；双项按 OS 后客户端顺序显示，绝不重叠。</td>
+</tr>
+<tr>
+<td>关闭／忽略 OS</td>
+<td>两项有更新，关闭 OS 弹窗或忽略 OS 本次更新</td>
+<td>OS 流程结束回到主屏幕后自动展示客户端原弹窗；OS 忽略不替客户端忽略。</td>
+</tr>
+<tr>
+<td>OS 失败／成功</td>
+<td>两项有更新，分别模拟失败结果、成功无重启及重启</td>
+<td>失败结果关闭后、成功无重启返回主屏幕后自动展示客户端；结果仍在显示或正在重启时不展示，重启后重新检查。</td>
+</tr>
+<tr>
+<td>单项检测异常</td>
+<td>一项有更新，另一项检测失败／超时</td>
+<td>只展示已确认项；未知项及迟到结果不续弹。</td>
+</tr>
+<tr>
+<td>无确认更新且检测异常</td>
+<td>登录自动检查与手动检查分别触发</td>
+<td>登录静默；手动检查显示一次指定失败反馈。</td>
+</tr>
+<tr>
+<td>重新检查</td>
+<td>前轮 OS 弹窗退出前或客户端待展示时手动检查</td>
+<td>废弃前轮待展示状态，只按新轮结果决定弹窗。</td>
+</tr>
+<tr>
+<td>通知消息</td>
+<td>本轮有更新</td>
+<td>不向通知消息列表新增更新项，也不出现新消息浮窗或通知跳转。</td>
+</tr>
+</tbody></table>
+<p>原有 OS 和客户端弹窗的按钮、下载、安装、进度及强制更新限制仍按各自既有流程验收。</p>
+  </main>
+  <aside class="on-page" aria-label="本页索引"><p class="on-page-title">本页目录</p><nav id="on-page-links"></nav></aside>
+  </div>
+  </div>
+  <button id="block-plus" class="block-plus" type="button" aria-label="插入内容">＋</button>
+  <div id="insert-menu" class="insert-menu" role="menu"><button type="button" data-insert="h1">H1&nbsp;&nbsp;一级标题</button><button type="button" data-insert="h2">H2&nbsp;&nbsp;二级标题</button><button type="button" data-insert="h3">H3&nbsp;&nbsp;三级标题</button><button type="button" data-insert="divider">—&nbsp;&nbsp;分割线</button><button type="button" data-insert="bullet">•&nbsp;&nbsp;项目符号列表</button><button type="button" data-insert="numbered">1.&nbsp;&nbsp;编号列表</button><button type="button" data-insert="todo">☑&nbsp;&nbsp;待办勾选</button><button type="button" data-insert="note">▤&nbsp;&nbsp;添加备注</button><button type="button" data-insert="table">▦&nbsp;&nbsp;插入表格</button><button type="button" data-insert="quote">❝&nbsp;&nbsp;引用</button><button type="button" data-insert="highlight">✦&nbsp;&nbsp;重点高亮</button><button type="button" data-insert="code">&lt;/&gt;&nbsp;&nbsp;代码块</button></div>
+  <div id="table-context" class="table-context" aria-label="表格操作"><button type="button" data-table-action="add-row">＋ 行</button><button type="button" data-table-action="add-column">＋ 列</button><button type="button" data-table-action="remove-row">－ 行</button><button type="button" data-table-action="remove-column">－ 列</button><button type="button" data-table-action="delete-table">删除表格</button></div>
+  <div id="table-row-inline" class="table-inline" aria-label="当前行操作"><button type="button" data-table-inline="add-row" title="在此行下添加一行">＋</button><button type="button" data-table-inline="remove-row" title="删除当前行">－</button><button type="button" data-table-inline="select-row" title="选中当前行后按 Backspace 删除">▤</button></div>
+  <div id="table-column-inline" class="table-inline" aria-label="当前列操作"><button type="button" data-table-inline="add-column" title="在此列右侧添加一列">＋</button><button type="button" data-table-inline="remove-column" title="删除当前列">－</button></div>
+  <div id="table-select-inline" class="table-inline table-select"><button type="button" data-table-inline="select-table">▦ 选中表格</button></div>
+  <div id="table-cell-inline" class="table-inline table-cell" aria-label="单元格操作"><button type="button" data-table-inline="merge-selected">合并选区</button><button type="button" data-table-inline="split-cell">拆分</button></div>
+  <div id="undo-toast" class="undo-toast" role="status">已删除表格 <button id="undo-delete" type="button">撤销</button></div>
+  <script>
+    const documentArea = document.getElementById('document');
+    const blockPlus = document.getElementById('block-plus');
+    const insertMenu = document.getElementById('insert-menu');
+    const tableContext = document.getElementById('table-context');
+    const tableRowInline = document.getElementById('table-row-inline');
+    const tableColumnInline = document.getElementById('table-column-inline');
+    const tableSelectInline = document.getElementById('table-select-inline');
+    const tableCellInline = document.getElementById('table-cell-inline');
+    const undoToast = document.getElementById('undo-toast');
+    let activeBlock = null;
+    let activeTable = null;
+    let activeCell = null;
+    let selectedTableForDelete = null;
+    let selectedRowForDelete = null;
+    let cellDragStart = null;
+    let cellDragOrigin = null;
+    let cellDragActive = false;
+    let preserveCellSelectionOnClick = false;
+    let selectedCellsForMerge = [];
+    let deletedTable = null;
+    let undoTimer = null;
+    const STORAGE_KEY = 'minis-prd-page-library-v4-7';
+    const PREVIOUS_STORAGE_KEY = 'minis-prd-page-library-v4-6';
+    const HOST_MODE = new URLSearchParams(location.search).get('host') === '1';
+    const READONLY = new URLSearchParams(location.search).get('readonly') === '1';
+    let hostEditable = !READONLY;
+    let saveTimer;
+    let pageState;
+    if (HOST_MODE) document.body.classList.add('host-mode');
+    if (READONLY) documentArea.contentEditable = 'false';
+    let draggedPageId = null;
+    let historyStack = [];
+    let historyIndex = -1;
+    if (HOST_MODE) {
+      pageState = { activeId:'root', pages:[{ id:'root', title:'PRD', parentId:null, order:0, expanded:true, content:'<h1>PRD</h1><p><br></p>' }] };
+    } else try {
+      const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if (savedState?.pages?.length) pageState = savedState;
+      else {
+        const previous = JSON.parse(localStorage.getItem(PREVIOUS_STORAGE_KEY));
+        if (previous?.pages?.length) {
+          const previousRoot = previous.pages.find(page => page.id === 'update-priority');
+          if (previousRoot?.content) localStorage.setItem(`${STORAGE_KEY}-previous-root-backup`, previousRoot.content);
+          pageState = { ...previous, activeId:'update-priority', pages: previous.pages.map(page => page.id === 'update-priority' ? { ...page, content:documentArea.innerHTML } : page) };
+        }
+      }
+    } catch (_) {}
+
+    if (!pageState) {
+      pageState = { activeId:'update-priority', pages:[{ id:'update-priority', title:'更新弹窗展示优先级 PRD', parentId:null, order:0, expanded:true, content:documentArea.innerHTML }] };
+    }
+    // 已保存的内容只做一次无损格式归一，空白段落不反复进入序列化结果。
+    pageState.pages.forEach(page => {
+      if (page.id === 'update-priority') {
+        const wordingUpdates = [
+          ['自动检查与手动检查均依据本轮已确认的结果决定展示，不使用上一轮结果。', '每次自动或手动检查都重新获取 OS 与客户端的更新结果；两项检查结束后，仅依据此次结果决定弹窗。'],
+          ['检测失败、更新失败、忽略、关闭和重新登录的行为具有可验证的结果。', '检测失败或超时时，只展示已确认有更新的项目；两项都未确认有更新且至少一项检测异常时，手动检查显示失败提示，登录自动检查不弹提示。'],
+          ['OS 弹窗结束并返回可展示弹窗的主屏幕后', 'OS 弹窗及其结果弹窗均已关闭、主屏幕恢复交互后'],
+          ['原有忽略规则生效；OS 弹窗退出后自动展示客户端更新弹窗。', '只忽略 OS 的本次更新，不取消本轮客户端弹窗；OS 弹窗退出后自动展示客户端更新弹窗。'],
+          ['设备重启或用户再次点击“检查更新”时，不继续旧轮次，重新检查两项更新。', '设备重启后清除尚未展示的客户端弹窗；用户再次点击“检查更新”时清除上一轮待展示状态，并重新检查两项更新。']
+        ];
+        wordingUpdates.forEach(([before, after]) => { page.content = (page.content || '').replace(before, after); });
+      }
+      const cleaned = sanitizePastedHtml(page.content || '');
+      if (cleaned) page.content = cleaned;
+    });
+    const PROTOTYPE_PAGE_ID = 'client-update-capsule-prototype';
+    const PROTOTYPE_HREF = '客户端更新胶囊交互原型_V1.1.html';
+    if (!HOST_MODE) {
+      if (!pageState.pages.some(page => page.id === PROTOTYPE_PAGE_ID)) {
+        pageState.pages.push({ id:PROTOTYPE_PAGE_ID, title:'Prototype｜客户端更新胶囊', parentId:'update-priority', order:pageState.pages.filter(page => page.parentId === 'update-priority').length, expanded:true, content:prototypePageContent() });
+      }
+      // 原型页始终使用当前交互版本，避免浏览器旧缓存继续显示上一版说明页。
+      const prototypePage = pageState.pages.find(page => page.id === PROTOTYPE_PAGE_ID);
+      if (prototypePage) { prototypePage.title = 'Prototype｜客户端更新胶囊（独立页）'; prototypePage.content = prototypePageContent(); }
+      if (pageState.activeId === PROTOTYPE_PAGE_ID) pageState.activeId = 'update-priority';
+      savePageState();
+    }
+
+    const pageById = id => pageState.pages.find(page => page.id === id);
+    const childrenOf = id => pageState.pages.filter(page => page.parentId === id).sort((a,b) => a.order - b.order);
+    const descendantsOf = id => childrenOf(id).flatMap(page => [page.id, ...descendantsOf(page.id)]);
+    const newId = () => `page-${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+
+    function savePageState() {
+      if (HOST_MODE) return;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pageState)); } catch (_) {}
+    }
+
+    function notifyHost() {
+      if (!HOST_MODE) return;
+      const current = pageById(pageState.activeId);
+      if (current?.prototypeUrl) return;
+      try {
+        parent.postMessage({
+          type: 'STAR_PRD_CHANGE',
+          html: documentArea.innerHTML,
+          title: documentArea.querySelector('h1')?.textContent || '',
+          pages: pageState.pages
+        }, '*');
+      } catch (_) {}
+    }
+
+    function commitCurrentPage() {
+      const current = pageById(pageState.activeId);
+      if (current) current.content = documentArea.innerHTML;
+    }
+
+    function showPrototypeFrame(url) {
+      documentArea.contentEditable = 'false';
+      const safe = escapeHtml(url);
+      documentArea.innerHTML = `<div class="proto-frame-wrap"><iframe src="${safe}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" title="原型"></iframe></div>`;
+    }
+
+    function openPage(id) {
+      const targetPage = pageById(id);
+      if (targetPage?.prototypeUrl) {
+        commitCurrentPage();
+        pageState.activeId = id;
+        showPrototypeFrame(targetPage.prototypeUrl);
+        resetHistory();
+        savePageState();
+        refreshOnPageIndex();
+        renderPageTree();
+        window.scrollTo({top:0, behavior:'smooth'});
+        return;
+      }
+      if (id === PROTOTYPE_PAGE_ID && !HOST_MODE) { window.open(PROTOTYPE_HREF, '_blank'); return; }
+      commitCurrentPage();
+      pageState.activeId = id;
+      const page = pageById(id);
+      documentArea.contentEditable = hostEditable ? 'true' : 'false';
+      documentArea.innerHTML = page?.content || '<h1>未命名页面</h1><p><br></p>';
+      renderPrototypePage();
+      resetHistory();
+      savePageState();
+      refreshOnPageIndex();
+      renderPageTree();
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    function createPage(parentId) {
+      const title = prompt(parentId ? '子页面名称' : '页面名称', '未命名页面');
+      if (title === null) return;
+      const siblings = childrenOf(parentId);
+      const page = { id:newId(), title:title.trim() || '未命名页面', parentId, order:siblings.length, expanded:true, content:`<h1>${escapeHtml(title.trim() || '未命名页面')}</h1><p><br></p>` };
+      if (parentId) pageById(parentId).expanded = true;
+      pageState.pages.push(page);
+      savePageState();
+      openPage(page.id);
+    }
+
+    function escapeHtml(value) { const element = document.createElement('div'); element.textContent = value; return element.innerHTML; }
+
+    function renderPageTree() {
+      const tree = document.getElementById('page-tree');
+      tree.innerHTML = '';
+      const renderPage = (page, depth) => {
+        const children = childrenOf(page.id);
+        const row = document.createElement('div');
+        row.className = `page-row${page.id === pageState.activeId ? ' active' : ''}`;
+        row.style.paddingLeft = `${7 + depth * 17}px`;
+        row.draggable = true;
+        row.dataset.pageId = page.id;
+        const caret = document.createElement('button');
+        caret.className = `tree-caret${children.length ? '' : ' empty'}`;
+        caret.type = 'button';
+        caret.textContent = page.expanded ? '⌄' : '›';
+        caret.addEventListener('click', event => { event.stopPropagation(); page.expanded = !page.expanded; savePageState(); renderPageTree(); });
+        const title = document.createElement('span'); title.className = 'page-row-title'; title.textContent = page.title;
+        row.append(caret, title);
+        if (page.title.startsWith('Prototype｜') || page.title.startsWith('Prototype-')) {
+          const external = document.createElement('span'); external.className = 'page-row-external'; external.textContent = '↗'; external.setAttribute('aria-label','打开原型'); external.title = '在新页面打开原型';
+          external.addEventListener('click', event => { event.stopPropagation(); window.open(page.prototypeUrl || PROTOTYPE_HREF, '_blank'); });
+          row.append(external);
+        }
+        row.addEventListener('click', () => {
+          if (!HOST_MODE && page.id === PROTOTYPE_PAGE_ID) {
+            window.open(PROTOTYPE_HREF, '_blank');
+            return;
+          }
+          openPage(page.id);
+        });
+        row.addEventListener('dragstart', event => { draggedPageId = page.id; row.classList.add('dragging'); event.dataTransfer.effectAllowed = 'move'; });
+        row.addEventListener('dragend', () => { draggedPageId = null; document.querySelectorAll('.page-row').forEach(item => item.classList.remove('dragging','drop-before','drop-after','drop-child')); });
+        row.addEventListener('dragover', event => {
+          if (!draggedPageId || draggedPageId === page.id || descendantsOf(draggedPageId).includes(page.id)) return;
+          event.preventDefault();
+          row.classList.remove('drop-before','drop-after','drop-child');
+          const ratio = (event.clientY - row.getBoundingClientRect().top) / row.getBoundingClientRect().height;
+          row.classList.add(ratio < .25 ? 'drop-before' : ratio > .75 ? 'drop-after' : 'drop-child');
+        });
+        row.addEventListener('dragleave', () => row.classList.remove('drop-before','drop-after','drop-child'));
+        row.addEventListener('drop', event => { event.preventDefault(); movePage(draggedPageId, page.id, row.classList.contains('drop-before') ? 'before' : row.classList.contains('drop-after') ? 'after' : 'child'); });
+        tree.append(row);
+        if (page.expanded) children.forEach(child => renderPage(child, depth + 1));
+      };
+      childrenOf(null).forEach(page => renderPage(page, 0));
+    }
+
+    function movePage(sourceId, targetId, mode) {
+      const source = pageById(sourceId), target = pageById(targetId);
+      if (!source || !target || sourceId === targetId || descendantsOf(sourceId).includes(targetId)) return;
+      if (mode === 'child') { source.parentId = target.id; target.expanded = true; source.order = childrenOf(target.id).length; }
+      else {
+        source.parentId = target.parentId;
+        const siblings = childrenOf(target.parentId).filter(page => page.id !== source.id);
+        const index = siblings.findIndex(page => page.id === target.id) + (mode === 'after' ? 1 : 0);
+        siblings.splice(index, 0, source);
+        siblings.forEach((page, order) => page.order = order);
+      }
+      savePageState(); renderPageTree();
+    }
+
+    function refreshOnPageIndex() {
+      const links = document.getElementById('on-page-links');
+      const headings = [...documentArea.querySelectorAll('h2,h3')];
+      links.innerHTML = '';
+      headings.forEach((heading, index) => {
+        heading.id = `section-${index + 1}`;
+        const link = document.createElement('a');
+        link.href = `#${heading.id}`;
+        link.textContent = heading.textContent;
+        if (heading.tagName === 'H3') link.style.paddingLeft = '12px';
+        links.appendChild(link);
+      });
+    }
+
+    function persistDocument() {
+      recordHistory();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        commitCurrentPage();
+        syncPageTitle();
+        savePageState();
+        refreshOnPageIndex();
+        renderPageTree();
+        notifyHost();
+      }, 350);
+    }
+
+    documentArea.addEventListener('input', event => {
+      persistDocument();
+      const block = getBlock(window.getSelection().anchorNode);
+      if (block?.tagName === 'P' && block.textContent.trim() === '/') openInsertMenu(block);
+    });
+    // 复制外部文档时只保留内容语义（标题、列表、表格等），丢弃来源页面的字号、颜色和布局，避免把原页面样式带进来。
+    documentArea.addEventListener('paste', event => {
+      const clipboard = event.clipboardData;
+      if (!clipboard) return;
+      event.preventDefault();
+      const html = clipboard.getData('text/html');
+      const text = clipboard.getData('text/plain');
+      const clean = parsePastedRuleTable(text) || sanitizePastedHtml(html) || escapeHtml(text).replace(/\n/g, '<br>');
+      insertPastedMarkup(clean);
+      persistDocument();
+      requestAnimationFrame(refreshCursorBlock);
+    });
+    documentArea.addEventListener('keydown', event => {
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && event.key.toLowerCase() === 'z') {
+        event.preventDefault();
+        event.shiftKey ? redoDocument() : undoDocument();
+        return;
+      }
+      if (modifier && event.key.toLowerCase() === 'y') {
+        event.preventDefault();
+        redoDocument();
+        return;
+      }
+      if (event.key === 'Delete' && selectedCellsForMerge.length) {
+        event.preventDefault();
+        clearSelectedCellContents();
+        return;
+      }
+      if (event.key === 'Backspace' && selectedCellsForMerge.length) {
+        event.preventDefault();
+        removeSelectedRowsOrColumns();
+        return;
+      }
+      if (event.key === 'Backspace' && selectedRowForDelete) {
+        event.preventDefault();
+        removeRow(selectedRowForDelete, selectedRowForDelete.closest('table'));
+        clearTableSelection();
+        return;
+      }
+      if (event.key === 'Delete' && selectedTableForDelete) {
+        event.preventDefault();
+        deleteTable(selectedTableForDelete);
+        return;
+      }
+      if (event.key === ' ') setTimeout(transformMarkdownHeading, 0);
+    });
+    documentArea.addEventListener('change', event => { if (event.target.matches('input[type="checkbox"]')) persistDocument(); });
+    document.getElementById('new-page').addEventListener('click', () => createPage(null));
+    document.getElementById('new-child-page').addEventListener('click', () => createPage(pageState.activeId));
+    documentArea.innerHTML = pageById(pageState.activeId)?.content || documentArea.innerHTML;
+    renderPrototypePage();
+    resetHistory();
+    refreshOnPageIndex();
+    renderPageTree();
+
+    function getBlock(target) {
+      const node = target && (target.nodeType === Node.TEXT_NODE ? target.parentElement : target);
+      const block = node?.closest?.('h1,h2,h3,p,li,table,hr,.callout');
+      return block && documentArea.contains(block) ? block : null;
+    }
+
+    function resetHistory() {
+      historyStack = [documentArea.innerHTML];
+      historyIndex = 0;
+    }
+
+    function recordHistory() {
+      const snapshot = documentArea.innerHTML;
+      if (historyStack[historyIndex] === snapshot) return;
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(snapshot);
+      if (historyStack.length > 100) historyStack.shift();
+      historyIndex = historyStack.length - 1;
+    }
+
+    function applyHistorySnapshot(snapshot) {
+      if (snapshot === undefined) return;
+      documentArea.innerHTML = snapshot;
+      clearTableSelection();
+      activeTable = null;
+      activeCell = null;
+      commitCurrentPage();
+      syncPageTitle();
+      savePageState();
+      refreshOnPageIndex();
+      renderPageTree();
+      documentArea.focus();
+    }
+
+    function undoDocument() {
+      if (historyIndex <= 0) return;
+      historyIndex -= 1;
+      applyHistorySnapshot(historyStack[historyIndex]);
+    }
+
+    function redoDocument() {
+      if (historyIndex >= historyStack.length - 1) return;
+      historyIndex += 1;
+      applyHistorySnapshot(historyStack[historyIndex]);
+    }
+
+    function insertPastedMarkup(markup) {
+      const selection = window.getSelection();
+      const cell = selectedCell();
+      // 表格单元格内允许保留粘贴的列表、换行等结构，不把它提升到整张表格之后。
+      if (cell && selection?.rangeCount && cell.contains(selection.anchorNode)) {
+        document.execCommand('insertHTML', false, markup);
+        return;
+      }
+      const hasStructuralBlocks = /<(h[1-3]|p|ul|ol|li|table|blockquote|pre)\b/i.test(markup);
+      const block = selection?.rangeCount ? getBlock(selection.anchorNode) : null;
+      if (!hasStructuralBlocks || !block) {
+        document.execCommand('insertHTML', false, markup);
+        return;
+      }
+      // 结构化内容必须作为同级区块插入，不能塞进当前 H2/H3/列表项里继承其字号。
+      if (!selection.isCollapsed) selection.getRangeAt(0).deleteContents();
+      block.insertAdjacentHTML('afterend', markup);
+      const lastInserted = block.nextElementSibling;
+      if (lastInserted) {
+        const range = document.createRange(); range.selectNodeContents(lastInserted); range.collapse(false);
+        selection.removeAllRanges(); selection.addRange(range);
+      }
+    }
+
+    function sanitizePastedHtml(html) {
+      if (!html) return '';
+      const source = new DOMParser().parseFromString(html, 'text/html');
+      const allowed = new Set(['h1','h2','h3','p','div','br','hr','ul','ol','li','table','thead','tbody','tr','th','td','blockquote','pre','strong','b','em','i','code','mark','del','s','a','label','span','input']);
+      const blocked = new Set(['script','style','iframe','object','embed','svg','canvas','img','video','audio','form','button','textarea','select']);
+      const blocks = new Set(['h1','h2','h3','p','ul','ol','li','table','thead','tbody','tr','th','td','blockquote','pre']);
+      function cleanNode(node) {
+        if (node.nodeType === Node.TEXT_NODE) return escapeHtml(node.nodeValue || '');
+        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+        const tag = node.tagName.toLowerCase();
+        if (blocked.has(tag)) return '';
+        const content = [...node.childNodes].map(cleanNode).join('');
+        if (allowed.has(tag)) {
+          if (tag === 'input') return node.getAttribute('type') === 'checkbox' ? `<input type="checkbox"${node.checked ? ' checked' : ''}>` : '';
+          if (tag === 'hr') return '<hr>';
+          if (tag === 'br') return '<br>';
+          const href = tag === 'a' && /^https?:/i.test(node.getAttribute('href') || '') ? ` href="${escapeHtml(node.getAttribute('href'))}"` : '';
+          const ownClass = ['todo','callout','meta','pill'].includes(node.className) ? ` class="${node.className}"` : '';
+          return `<${tag}${href}${ownClass}>${content}</${tag}>`;
+        }
+        // Word、飞书、Notion 等常用 div/span 包裹内容：保留内部结构，但不保留它们的样式。
+        if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) return `<p>${content}</p>`;
+        return content;
+      }
+      return normalizeDocumentWhitespace([...source.body.childNodes].map(cleanNode).join(''));
+    }
+
+    function normalizeDocumentWhitespace(markup) {
+      const parsed = new DOMParser().parseFromString(markup, 'text/html');
+      parsed.body.querySelectorAll('table,thead,tbody,tfoot,tr,ul,ol').forEach(parent => {
+        [...parent.childNodes].forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE && !node.nodeValue.trim()) node.remove();
+        });
+      });
+      parsed.body.querySelectorAll('td,th').forEach(cell => {
+        // 外部文档粘贴的空段落会把单元格不断撑高；保留有内容的段落与换行。
+        cell.querySelectorAll('p').forEach(paragraph => {
+          if (!paragraph.textContent.replace(/\u00a0/g, ' ').trim() && !paragraph.querySelector('img,input,table')) paragraph.remove();
+        });
+      });
+      return parsed.body.innerHTML;
+    }
+
+    function parsePastedRuleTable(text) {
+      const rawLines = String(text || '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (rawLines.length < 4) return '';
+      const headerMatch = rawLines[0] === '检测结果' && rawLines[1] === '展示规则';
+      const tabRows = rawLines.every(line => line.includes('\t'));
+      if (!headerMatch && !tabRows) return '';
+      let rows = [];
+      if (headerMatch) {
+        if ((rawLines.length - 2) % 2 !== 0) return '';
+        rows = [['检测结果','展示规则']];
+        for (let index = 2; index < rawLines.length; index += 2) rows.push([rawLines[index], rawLines[index + 1]]);
+      } else {
+        rows = rawLines.map(line => line.split('\t').map(value => value.trim())).filter(row => row.length >= 2);
+        if (rows.length < 2) return '';
+        rows = rows.map(row => [row[0], row.slice(1).join('｜')]);
+      }
+      return `<table><thead><tr><th>${escapeHtml(rows[0][0])}</th><th>${escapeHtml(rows[0][1])}</th></tr></thead><tbody>${rows.slice(1).map(row => `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td></tr>`).join('')}</tbody></table><p><br></p>`;
+    }
+
+    function prototypePageContent() {
+      return `<h1>Prototype｜客户端更新胶囊</h1><p class="meta">父页面：更新弹窗展示优先级 PRD　｜　阶段：下期方案验证，不纳入本期</p><h2>1. 原型目标</h2><p>验证 OS 更新结束后，使用非打断式胶囊承接客户端更新。胶囊不是通知中心，不修改原有客户端更新弹窗，只提供一个可点击入口。</p><h2>2. 交互说明</h2><ul><li>右上角出现“客户端有更新可用”胶囊。</li><li>用户点击胶囊后，才打开原客户端更新弹窗。</li><li>用户不点击，胶囊不抢焦点、不阻断当前操作。</li><li>用户可主动关闭胶囊；关闭弹窗后胶囊仍可保留。</li></ul><div class="proto-surface" data-prototype="capsule"><div class="proto-desktop"><span class="proto-label">OS 更新流程结束｜主界面已恢复</span><button class="proto-capsule" data-proto-action="open" type="button"><span class="dot"></span><span>客户端有更新可用</span><span class="dismiss" data-proto-action="dismiss" aria-label="关闭胶囊">×</span></button><div class="proto-dialog-mask" data-proto-modal aria-hidden="true"><section class="proto-dialog" role="dialog" aria-modal="true"><div class="proto-dialog-head"><span>客户端更新</span><button class="proto-dialog-x" data-proto-action="close" type="button">×</button></div><div class="proto-dialog-body"><div class="proto-dialog-meta"><strong>更新内容</strong><span>V2.1.1_25080　｜　211.73 MB　｜　2025-02-09</span></div><div class="proto-dialog-copy"><p><b>· 智能相册</b><br>智能相册新增批量管理：批量移出相册、批量删除照片、批量移入回收站。</p><p><b>· 外部存储</b><br>新增 GoogleDrive，修复 115 网盘的展示。</p></div></div><div class="proto-dialog-foot"><button class="proto-link" data-proto-action="toast" type="button">⌁ 手动下载其他版本</button><div class="proto-actions"><button class="proto-btn" data-proto-action="ignore" type="button">忽略本次更新</button><button class="proto-btn primary" data-proto-action="toast" type="button">立即更新</button></div></div></section></div><div class="proto-toast" data-proto-toast></div></div></div><h2>3. MVP 边界</h2><p>本原型仅用于下期胶囊方案验证。本期两项更新同时命中时，先显示 OS 原弹窗；OS 流程结束且返回主屏幕后自动显示客户端原弹窗。</p>`;
+    }
+
+    function renderPrototypePage() {
+      if (pageState.activeId !== PROTOTYPE_PAGE_ID) return;
+      const surface = documentArea.querySelector('[data-prototype="capsule"]');
+      if (!surface || surface.dataset.bound === '1') return;
+      surface.dataset.bound = '1';
+      const modal = surface.querySelector('[data-proto-modal]');
+      const toast = surface.querySelector('[data-proto-toast]');
+      const notify = text => { toast.textContent = text; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 1600); };
+      surface.addEventListener('click', event => {
+        const action = event.target.closest('[data-proto-action]')?.dataset.protoAction;
+        if (!action) return;
+        if (action === 'open') { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); }
+        if (action === 'close' || action === 'ignore') { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); }
+        if (action === 'dismiss') { event.stopPropagation(); surface.querySelector('.proto-capsule').remove(); notify('已关闭本次胶囊提醒'); }
+        if (action === 'toast') notify('已进入原有更新流程');
+      });
+    }
+
+    // Prototype page override: the child page is a pure interactive surface.
+    function prototypePageContent() {
+      return `<div class="proto-surface proto-only" data-prototype="capsule" data-proto-state="success">
+        <button class="proto-hidden-toggle" data-proto-action="toggle-status" type="button" aria-label="切换 OS 更新成功/失败"></button>
+        <div class="proto-desktop">
+          <div class="proto-view proto-os-view show" data-proto-view="os">
+            <section class="proto-os-dialog" role="dialog" aria-modal="true">
+              <div class="proto-dialog-head"><span>OS 更新</span><button class="proto-dialog-x" data-proto-action="os-close" type="button">×</button></div>
+              <div class="proto-dialog-body"><div class="proto-os-version">OS 2.2.8　｜　237.18 MB</div><div class="proto-os-status success" data-proto-status>✓ 更新成功</div><div class="proto-os-copy" data-proto-copy>OS 已更新到最新版本</div></div>
+              <div class="proto-dialog-foot"><span class="proto-link" data-proto-state-label>更新成功</span><button class="proto-btn primary" data-proto-action="continue" type="button">返回主界面</button></div>
+            </section>
+          </div>
+          <div class="proto-view proto-home-view" data-proto-view="home">
+            <span class="proto-label">MiniS Cloud OS</span>
+            <button class="proto-capsule" data-proto-action="open" type="button"><span class="dot"></span><span>客户端有更新可用</span><span class="dismiss" data-proto-action="dismiss" aria-label="关闭胶囊">×</span></button>
+            <div class="proto-dialog-mask" data-proto-modal aria-hidden="true"><section class="proto-dialog" role="dialog" aria-modal="true"><div class="proto-dialog-head"><span>客户端更新</span><button class="proto-dialog-x" data-proto-action="close" type="button">×</button></div><div class="proto-dialog-body"><div class="proto-dialog-meta"><strong>更新内容</strong><span>V2.1.1_25080　｜　211.73 MB　｜　2025-02-09</span></div><div class="proto-dialog-copy"><p><b>· 智能相册</b><br>智能相册新增批量管理：批量移出相册、批量删除照片、批量移入回收站。</p><p><b>· 外部存储</b><br>新增 GoogleDrive，修复 115 网盘的展示。</p></div></div><div class="proto-dialog-foot"><button class="proto-link" data-proto-action="toast" type="button">⌁ 手动下载其他版本</button><div class="proto-actions"><button class="proto-btn" data-proto-action="ignore" type="button">忽略本次更新</button><button class="proto-btn primary" data-proto-action="toast" type="button">立即更新</button></div></div></section></div><div class="proto-toast" data-proto-toast></div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderPrototypePage() {
+      if (pageState.activeId !== PROTOTYPE_PAGE_ID) return;
+      const surface = documentArea.querySelector('[data-prototype="capsule"]');
+      if (!surface || surface.dataset.bound === '1') return;
+      surface.dataset.bound = '1';
+      const osView = surface.querySelector('[data-proto-view="os"]');
+      const homeView = surface.querySelector('[data-proto-view="home"]');
+      const modal = surface.querySelector('[data-proto-modal]');
+      const status = surface.querySelector('[data-proto-status]');
+      const copy = surface.querySelector('[data-proto-copy]');
+      const stateLabel = surface.querySelector('[data-proto-state-label]');
+      const toast = surface.querySelector('[data-proto-toast]');
+      const notify = text => { toast.textContent = text; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 1600); };
+      const applyState = () => {
+        const failed = surface.dataset.protoState === 'failure';
+        status.classList.toggle('success', !failed);
+        status.classList.toggle('failure', failed);
+        status.textContent = failed ? '! 更新失败' : '✓ 更新成功';
+        copy.textContent = failed ? 'OS 更新失败，请检查网络连接后重试' : 'OS 已更新到最新版本';
+        stateLabel.textContent = failed ? '更新失败' : '更新成功';
+      };
+      applyState();
+      surface.addEventListener('click', event => {
+        const target = event.target.closest('[data-proto-action]');
+        const action = target?.dataset.protoAction;
+        if (!action) return;
+        if (action === 'toggle-status') {
+          surface.dataset.protoState = surface.dataset.protoState === 'success' ? 'failure' : 'success';
+          applyState();
+          osView.classList.add('show'); homeView.classList.remove('show'); modal.classList.remove('show'); modal.setAttribute('aria-hidden','true');
+          return;
+        }
+        if (action === 'continue' || action === 'os-close') {
+          osView.classList.remove('show'); homeView.classList.add('show');
+          return;
+        }
+        if (action === 'open') { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); return; }
+        if (action === 'close' || action === 'ignore') { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); return; }
+        if (action === 'dismiss') { event.stopPropagation(); target.closest('.proto-capsule').style.display = 'none'; notify('已关闭本次胶囊提醒'); return; }
+        if (action === 'toast') { notify('已进入原有更新流程'); }
+      });
+    }
+
+    function hideInsertControls() {
+      if (!insertMenu.matches(':hover') && !blockPlus.matches(':hover')) {
+        blockPlus.style.display = 'none';
+      }
+    }
+
+    function positionBlockPlus(block) {
+      if (window.innerWidth < 700 || !block) return;
+      const rect = block.getBoundingClientRect();
+      activeBlock = block;
+      blockPlus.style.left = `${Math.max(10, rect.left - 36)}px`;
+      blockPlus.style.top = `${rect.top + Math.min(4, Math.max(0, rect.height / 2 - 14))}px`;
+      blockPlus.style.display = 'block';
+    }
+
+    function showTableContext(table, cell) {
+      if (!table || window.innerWidth < 700) return;
+      activeTable = table;
+      activeCell = cell || table.querySelector('td,th');
+      const rect = table.getBoundingClientRect();
+      tableContext.style.left = `${Math.min(window.innerWidth - 126, rect.right + 10)}px`;
+      tableContext.style.top = `${Math.max(10, rect.top)}px`;
+      tableContext.classList.add('show');
+      showTableInlineControls(table, activeCell);
+    }
+
+    function showTableInlineControls(table, cell) {
+      if (!table || !cell || window.innerWidth < 700) return;
+      const tableRect = table.getBoundingClientRect();
+      const rowRect = cell.closest('tr').getBoundingClientRect();
+      const cellRect = cell.getBoundingClientRect();
+      tableRowInline.style.left = `${Math.max(8, tableRect.left - 74)}px`;
+      tableRowInline.style.top = `${rowRect.bottom - 13}px`;
+      tableColumnInline.style.left = `${Math.min(window.innerWidth - 68, cellRect.right - 26)}px`;
+      tableColumnInline.style.top = `${Math.max(8, tableRect.top - 31)}px`;
+      tableSelectInline.style.left = `${Math.max(8, tableRect.left - 96)}px`;
+      tableSelectInline.style.top = `${Math.max(8, tableRect.top - 31)}px`;
+      [tableRowInline, tableColumnInline, tableSelectInline].forEach(control => control.classList.add('show'));
+      if (selectedCellsForMerge.length) showCellSelectionMenu();
+      else tableCellInline.classList.remove('show');
+    }
+
+    function hideTableContext() {
+      if (!tableContext.matches(':hover')) tableContext.classList.remove('show');
+      if (![tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].some(control => control.matches(':hover'))) {
+        [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
+      }
+    }
+
+    documentArea.addEventListener('mousemove', event => {
+      const table = event.target.closest?.('table');
+      if (table) {
+        blockPlus.style.display = 'none';
+        showTableContext(table, event.target.closest('td,th'));
+      } else {
+        tableContext.classList.remove('show');
+        [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
+      }
+    });
+    documentArea.addEventListener('mouseleave', () => setTimeout(() => { hideInsertControls(); hideTableContext(); }, 100));
+    document.addEventListener('selectionchange', () => {
+      const cell = selectedCell();
+      if (cell && documentArea.contains(cell)) {
+        blockPlus.style.display = 'none';
+        showTableContext(cell.closest('table'), cell);
+        return;
+      }
+      tableContext.classList.remove('show');
+      [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
+      const selection = window.getSelection();
+      const block = selection.rangeCount && documentArea.contains(selection.anchorNode) ? getBlock(selection.anchorNode) : null;
+      if (block) positionBlockPlus(block);
+    });
+    documentArea.addEventListener('focusin', () => requestAnimationFrame(refreshCursorBlock));
+    documentArea.addEventListener('click', () => requestAnimationFrame(refreshCursorBlock));
+    documentArea.addEventListener('keyup', () => requestAnimationFrame(refreshCursorBlock));
+
+    function refreshCursorBlock() {
+      const selection = window.getSelection();
+      const cell = selectedCell();
+      if (cell && documentArea.contains(cell)) {
+        blockPlus.style.display = 'none';
+        showTableContext(cell.closest('table'), cell);
+        return;
+      }
+      const block = selection.rangeCount && documentArea.contains(selection.anchorNode) ? getBlock(selection.anchorNode) : null;
+      if (block) positionBlockPlus(block);
+    }
+
+    function openInsertMenu(block) {
+      activeBlock = block;
+      const rect = block.getBoundingClientRect();
+      insertMenu.style.left = `${Math.max(10, rect.left - 36)}px`;
+      insertMenu.style.top = `${Math.min(window.innerHeight - 330, rect.bottom + 4)}px`;
+      insertMenu.classList.add('show');
+    }
+
+    function transformMarkdownHeading() {
+      const selection = window.getSelection();
+      const block = getBlock(selection.anchorNode);
+      if (block?.tagName !== 'P') return;
+      const match = block.textContent.match(/^(#{1,3})\s$/);
+      if (!match) return;
+      const heading = document.createElement(`h${match[1].length}`);
+      heading.innerHTML = '<br>';
+      block.replaceWith(heading);
+      const range = document.createRange(); range.selectNodeContents(heading); range.collapse(true);
+      selection.removeAllRanges(); selection.addRange(range);
+      persistDocument();
+    }
+
+    blockPlus.addEventListener('click', () => {
+      if (!activeBlock) return;
+      openInsertMenu(activeBlock);
+    });
+    document.querySelectorAll('[data-insert]').forEach(button => {
+      button.addEventListener('click', () => {
+        insertMenu.classList.remove('show');
+        insertBlock(button.dataset.insert);
+      });
+    });
+    document.querySelectorAll('[data-table-action]').forEach(button => {
+      button.addEventListener('mousedown', event => event.preventDefault());
+      button.addEventListener('click', () => {
+        const action = button.dataset.tableAction;
+        if (action === 'add-row') addRow();
+        if (action === 'add-column') addColumn();
+        if (action === 'remove-row') removeRow();
+        if (action === 'remove-column') removeColumn();
+        if (action === 'delete-table') deleteTable();
+      });
+    });
+    document.querySelectorAll('[data-table-inline]').forEach(button => {
+      button.addEventListener('mousedown', event => event.preventDefault());
+      button.addEventListener('click', () => {
+        const action = button.dataset.tableInline;
+        if (action === 'add-row') addRow();
+        if (action === 'remove-row') removeRow();
+        if (action === 'add-column') addColumn();
+        if (action === 'remove-column') removeColumn();
+        if (action === 'select-table') selectTableForDelete(activeTable);
+        if (action === 'select-row') selectRowForDelete(activeCell?.closest('tr'));
+        if (action === 'merge-selected') mergeSelectedCells();
+        if (action === 'split-cell') splitCell();
+      });
+    });
+    documentArea.addEventListener('mousedown', event => {
+      if (!event.target.closest('table')) clearTableSelection();
+    });
+    documentArea.addEventListener('mousedown', event => {
+      const cell = event.target.closest?.('td,th');
+      if (!cell) {
+        clearCellSelection();
+        return;
+      }
+      if (!selectedCellsForMerge.includes(cell)) clearCellSelection();
+      // 单击仍然用于编辑；只有跨到另一个单元格拖动时，才切换为蓝色选区。
+      cellDragStart = cell;
+      cellDragOrigin = { x:event.clientX, y:event.clientY };
+      cellDragActive = false;
+    });
+    documentArea.addEventListener('mousemove', event => {
+      const cell = event.target.closest?.('td,th');
+      if (!cellDragStart || !cell || cell.closest('table') !== cellDragStart.closest('table')) return;
+      const moved = Math.hypot(event.clientX - cellDragOrigin.x, event.clientY - cellDragOrigin.y) > 6;
+      if (!moved || cell === cellDragStart) return;
+      cellDragActive = true;
+      event.preventDefault();
+      window.getSelection().removeAllRanges();
+      selectCellRectangle(cellDragStart, cell);
+    });
+    document.addEventListener('mouseup', event => {
+      if (cellDragActive) {
+        event.preventDefault();
+        preserveCellSelectionOnClick = true;
+        documentArea.focus();
+        setTimeout(() => { preserveCellSelectionOnClick = false; }, 0);
+      }
+      cellDragStart = null;
+      cellDragOrigin = null;
+      cellDragActive = false;
+    });
+    document.addEventListener('click', event => {
+      if (!event.target.closest('#insert-menu, #block-plus')) insertMenu.classList.remove('show');
+      if (preserveCellSelectionOnClick) { preserveCellSelectionOnClick = false; return; }
+      if (!event.target.closest('table, #table-cell-inline')) clearCellSelection();
+    });
+    documentArea.addEventListener('dblclick', event => {
+      const target = event.target;
+      if (target.closest?.('table')) return;
+      const nearTable = [...documentArea.querySelectorAll('table')].find(table => {
+        const rect = table.getBoundingClientRect();
+        return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.bottom && event.clientY <= rect.bottom + 44;
+      });
+      if (nearTable) insertTextAfterTable(nearTable);
+    });
+    document.getElementById('sidebar-collapse').addEventListener('click', () => {
+      const collapsed = document.body.classList.toggle('nav-collapsed');
+      const button = document.getElementById('sidebar-collapse');
+      button.textContent = collapsed ? '›' : '‹';
+      button.setAttribute('aria-label', collapsed ? '展开侧边栏' : '收起侧边栏');
+      button.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+      try { localStorage.setItem('minis-prd-sidebar-collapsed', collapsed ? '1' : '0'); } catch (_) {}
+    });
+    try {
+      if (localStorage.getItem('minis-prd-sidebar-collapsed') === '1') document.getElementById('sidebar-collapse').click();
+    } catch (_) {}
+    document.getElementById('undo-delete').addEventListener('click', undoDeleteTable);
+
+    function insertAfterActiveBlock(markup) {
+      if (!activeBlock || !documentArea.contains(activeBlock)) {
+        documentArea.focus();
+        document.execCommand('insertHTML', false, markup);
+      } else {
+        activeBlock.insertAdjacentHTML('afterend', markup);
+      }
+      persistDocument();
+    }
+
+    function syncPageTitle() {
+      const title = documentArea.querySelector('h1')?.textContent.trim();
+      const page = pageById(pageState.activeId);
+      if (page && title) page.title = title;
+    }
+
+    function highlightCurrentSelection() {
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount || selection.isCollapsed) return false;
+      if (!documentArea.contains(selection.anchorNode) || !documentArea.contains(selection.focusNode)) return false;
+      const range = selection.getRangeAt(0);
+      try {
+        const mark = document.createElement('mark');
+        range.surroundContents(mark);
+      } catch (_) {
+        const html = selection.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        document.execCommand('insertHTML', false, `<mark>${html}</mark>`);
+      }
+      persistDocument();
+      return true;
+    }
+
+    function insertBlock(type) {
+      if (type === 'table') return insertTable();
+      if (['h1','h2','h3'].includes(type)) return convertOrInsertHeading(type);
+      if (type === 'highlight' && highlightCurrentSelection()) return;
+      const blocks = {
+        divider:'<hr><p><br></p>',
+        bullet:'<ul><li>列表内容</li></ul><p><br></p>',
+        numbered:'<ol><li>列表内容</li></ol><p><br></p>',
+        todo:'<label class="todo"><input type="checkbox"><span>待办内容</span></label><p><br></p>',
+        note:'<div class="callout"><strong>备注</strong><br>请输入备注内容</div><p><br></p>',
+        quote:'<blockquote>引用内容</blockquote><p><br></p>',
+        highlight:'<p><mark>重点内容</mark></p><p><br></p>',
+        code:'<pre><code>代码内容</code></pre><p><br></p>'
+      };
+      const markup = blocks[type];
+      if (!markup) return;
+      const isSlashCommand = activeBlock?.tagName === 'P' && activeBlock.textContent.trim() === '/';
+      if (isSlashCommand) {
+        activeBlock.insertAdjacentHTML('beforebegin', markup);
+        activeBlock.remove();
+        persistDocument();
+      } else insertAfterActiveBlock(markup);
+    }
+
+    function convertOrInsertHeading(type) {
+      const text = activeBlock?.textContent.trim();
+      const convertible = activeBlock && documentArea.contains(activeBlock) && ['P','H1','H2','H3'].includes(activeBlock.tagName) && text && text !== '/';
+      if (convertible) {
+        const heading = document.createElement(type);
+        heading.innerHTML = activeBlock.innerHTML;
+        activeBlock.replaceWith(heading);
+        activeBlock = heading;
+        const range = document.createRange(); range.selectNodeContents(heading); range.collapse(false);
+        const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+        persistDocument();
+        return;
+      }
+      const labels = {h1:'一级标题', h2:'二级标题', h3:'三级标题'};
+      const markup = `<${type}>${labels[type]}</${type}><p><br></p>`;
+      const isSlashCommand = activeBlock?.tagName === 'P' && activeBlock.textContent.trim() === '/';
+      if (isSlashCommand) {
+        activeBlock.insertAdjacentHTML('beforebegin', markup);
+        activeBlock.remove();
+        persistDocument();
+      } else insertAfterActiveBlock(markup);
+    }
+
+    function insertTable() {
+      const rowInput = prompt('请输入表格总行数（含表头，1–20）', '3');
+      if (rowInput === null) return;
+      const colInput = prompt('请输入表格列数（1–12）', '3');
+      if (colInput === null) return;
+      const rows = Math.max(1, Math.min(20, Number(rowInput) || 3));
+      const cols = Math.max(1, Math.min(12, Number(colInput) || 3));
+      const headers = Array.from({ length: cols }, (_, i) => `<th>列 ${i + 1}</th>`).join('');
+      const cells = Array.from({ length: cols }, () => '<td>内容</td>').join('');
+      const body = Array.from({ length: Math.max(0, rows - 1) }, () => `<tr>${cells}</tr>`).join('');
+      insertAfterActiveBlock(`<table><thead><tr>${headers}</tr></thead><tbody>${body}</tbody></table><p><br></p>`);
+    }
+
+    function insertNote() {
+      insertBlock('note');
+    }
+
+    function selectedCell() {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return null;
+      let node = selection.anchorNode;
+      if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      return node && node.closest ? node.closest('td, th') : null;
+    }
+
+    function selectedTable() {
+      const cell = selectedCell() || activeCell;
+      return cell ? cell.closest('table') : null;
+    }
+
+    function clearTableSelection() {
+      selectedTableForDelete?.classList.remove('table-selected');
+      selectedRowForDelete?.classList.remove('table-row-selected');
+      selectedTableForDelete = null;
+      selectedRowForDelete = null;
+    }
+
+    function selectTableForDelete(table) {
+      if (!table) return;
+      clearTableSelection();
+      selectedTableForDelete = table;
+      table.classList.add('table-selected');
+      documentArea.focus();
+    }
+
+    function selectRowForDelete(row) {
+      if (!row) return;
+      clearTableSelection();
+      selectedRowForDelete = row;
+      row.classList.add('table-row-selected');
+      documentArea.focus();
+    }
+
+    function insertTextAfterTable(table) {
+      if (!table) return;
+      let paragraph = table.nextElementSibling;
+      if (!paragraph || paragraph.tagName !== 'P') {
+        paragraph = document.createElement('p');
+        paragraph.innerHTML = '<br>';
+        table.after(paragraph);
+      }
+      const range = document.createRange(); range.selectNodeContents(paragraph); range.collapse(true);
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      documentArea.focus();
+      activeBlock = paragraph;
+      persistDocument();
+    }
+
+    function cellStartColumn(row, cell) {
+      let column = 0;
+      for (const current of row.cells) {
+        if (current === cell) return column;
+        column += current.colSpan || 1;
+      }
+      return column;
+    }
+
+    function cellAtColumn(row, column) {
+      let cursor = 0;
+      for (const current of row.cells) {
+        const width = current.colSpan || 1;
+        if (column >= cursor && column < cursor + width) return current;
+        cursor += width;
+      }
+      return null;
+    }
+
+    function clearCellSelection() {
+      selectedCellsForMerge.forEach(cell => cell.classList.remove('cell-selected'));
+      selectedCellsForMerge = [];
+      tableCellInline.classList.remove('show');
+    }
+
+    function showCellSelectionMenu() {
+      if (!selectedCellsForMerge.length || window.innerWidth < 700) return;
+      const bounds = selectedCellsForMerge.map(cell => cell.getBoundingClientRect()).reduce((all, rect) => ({
+        left:Math.min(all.left, rect.left), right:Math.max(all.right, rect.right),
+        top:Math.min(all.top, rect.top), bottom:Math.max(all.bottom, rect.bottom)
+      }), {left:Infinity,right:-Infinity,top:Infinity,bottom:-Infinity});
+      tableCellInline.style.left = `${Math.min(window.innerWidth - 132, Math.max(8, bounds.right + 8))}px`;
+      tableCellInline.style.top = `${Math.min(window.innerHeight - 36, Math.max(8, bounds.bottom + 8))}px`;
+      tableCellInline.classList.add('show');
+    }
+
+    function clearSelectedCellContents() {
+      selectedCellsForMerge.forEach(cell => { cell.innerHTML = '<br>'; });
+      clearCellSelection();
+      persistDocument();
+    }
+
+    function selectedCellDeletionTarget() {
+      if (!selectedCellsForMerge.length) return null;
+      const table = selectedCellsForMerge[0].closest('table');
+      if (!table || selectedCellsForMerge.some(cell => cell.closest('table') !== table || cell.colSpan !== 1 || cell.rowSpan !== 1)) return null;
+      const rows = [...table.rows];
+      const selected = new Set(selectedCellsForMerge);
+      const completeRows = rows.filter(row => row.cells.length && [...row.cells].every(cell => selected.has(cell)));
+      if (completeRows.length && completeRows.length < rows.length && selectedCellsForMerge.every(cell => completeRows.includes(cell.closest('tr')))) {
+        return {kind:'rows', rows:completeRows};
+      }
+      const columnCount = rows[0]?.cells.length;
+      if (!columnCount || rows.some(row => row.cells.length !== columnCount)) return null;
+      const columns = [...rows[0].cells].flatMap((cell, index) => selected.has(cell) ? [index] : []);
+      if (!columns.length || columns.length === columnCount || selectedCellsForMerge.length !== columns.length * rows.length) return null;
+      if (!rows.every(row => columns.every(index => selected.has(row.cells[index])))) return null;
+      return {kind:'columns', columns};
+    }
+
+    function removeSelectedRowsOrColumns() {
+      const target = selectedCellDeletionTarget();
+      if (!target) return;
+      const table = selectedCellsForMerge[0].closest('table');
+      clearCellSelection();
+      if (target.kind === 'rows') target.rows.forEach(row => row.remove());
+      else target.columns.slice().reverse().forEach(index => [...table.rows].forEach(row => row.deleteCell(index)));
+      activeTable = table;
+      activeCell = table.querySelector('td,th');
+      persistDocument();
+    }
+
+    function selectCellRectangle(start, end) {
+      const table = start.closest('table');
+      if (!table || table !== end.closest('table')) return;
+      const rows = [...table.rows];
+      const startRow = rows.indexOf(start.closest('tr'));
+      const endRow = rows.indexOf(end.closest('tr'));
+      const minRow = Math.min(startRow, endRow), maxRow = Math.max(startRow, endRow);
+      const startCol = cellStartColumn(start.closest('tr'), start);
+      const endCol = cellStartColumn(end.closest('tr'), end) + (end.colSpan || 1) - 1;
+      const minCol = Math.min(startCol, endCol), maxCol = Math.max(startCol, endCol);
+      clearCellSelection();
+      for (let rowIndex = minRow; rowIndex <= maxRow; rowIndex += 1) {
+        for (const cell of rows[rowIndex].cells) {
+          const cellStart = cellStartColumn(rows[rowIndex], cell);
+          const cellEnd = cellStart + (cell.colSpan || 1) - 1;
+          if (cellStart >= minCol && cellEnd <= maxCol) {
+            cell.classList.add('cell-selected');
+            selectedCellsForMerge.push(cell);
+          }
+        }
+      }
+      showCellSelectionMenu();
+    }
+
+    function mergeSelectedCells() {
+      if (selectedCellsForMerge.length < 2) return alert('直接从一个单元格拖到相邻单元格，出现蓝色选区后再合并。');
+      const table = selectedCellsForMerge[0].closest('table');
+      if (!selectedCellsForMerge.every(cell => cell.closest('table') === table)) return;
+      const rows = [...table.rows];
+      const selectedRows = selectedCellsForMerge.map(cell => rows.indexOf(cell.closest('tr')));
+      const startRow = Math.min(...selectedRows), endRow = Math.max(...selectedRows);
+      const columns = selectedCellsForMerge.map(cell => cellStartColumn(cell.closest('tr'), cell));
+      const startCol = Math.min(...columns);
+      const endCol = Math.max(...selectedCellsForMerge.map(cell => cellStartColumn(cell.closest('tr'), cell) + (cell.colSpan || 1) - 1));
+      const rowCount = endRow - startRow + 1, colCount = endCol - startCol + 1;
+      const expected = rowCount * colCount;
+      const sameGroup = selectedCellsForMerge.every(cell => cell.closest('tr').parentElement === rows[startRow].parentElement);
+      const simpleCells = selectedCellsForMerge.every(cell => (cell.colSpan || 1) === 1 && (cell.rowSpan || 1) === 1);
+      if (!sameGroup || !simpleCells || selectedCellsForMerge.length !== expected) return alert('请框选同一个表格区域内连续、未合并的矩形单元格。');
+      const first = cellAtColumn(rows[startRow], startCol);
+      const contents = selectedCellsForMerge.filter(cell => cell !== first).map(cell => cell.innerHTML).filter(Boolean);
+      first.colSpan = colCount;
+      first.rowSpan = rowCount;
+      if (contents.length) first.innerHTML += `${first.innerHTML.trim() ? '<br>' : ''}${contents.join('<br>')}`;
+      selectedCellsForMerge.filter(cell => cell !== first).forEach(cell => cell.remove());
+      clearCellSelection();
+      activeCell = first;
+      persistDocument();
+    }
+
+    function mergeRightCell() {
+      const cell = selectedCell() || activeCell;
+      if (!cell || !cell.nextElementSibling) return alert('当前单元格右侧没有可合并的单元格。');
+      const next = cell.nextElementSibling;
+      cell.colSpan = (cell.colSpan || 1) + (next.colSpan || 1);
+      if (next.innerHTML.trim()) cell.innerHTML += `${cell.innerHTML.trim() ? '<br>' : ''}${next.innerHTML}`;
+      next.remove();
+      persistDocument();
+    }
+
+    function mergeDownCell() {
+      const cell = selectedCell() || activeCell;
+      const table = selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要合并的单元格。');
+      const row = cell.closest('tr');
+      const rowIndex = [...table.rows].indexOf(row);
+      const belowRow = table.rows[rowIndex + (cell.rowSpan || 1)];
+      if (!belowRow) return alert('当前单元格下方没有可合并的单元格。');
+      const target = cellAtColumn(belowRow, cellStartColumn(row, cell));
+      if (!target || (target.colSpan || 1) !== (cell.colSpan || 1)) return alert('下方单元格宽度不同，请先调整表格后再合并。');
+      cell.rowSpan = (cell.rowSpan || 1) + (target.rowSpan || 1);
+      if (target.innerHTML.trim()) cell.innerHTML += `${cell.innerHTML.trim() ? '<br>' : ''}${target.innerHTML}`;
+      target.remove();
+      persistDocument();
+    }
+
+    function splitCell() {
+      const cell = selectedCell() || activeCell;
+      const table = selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要拆分的单元格。');
+      const row = cell.closest('tr');
+      const colSpan = cell.colSpan || 1;
+      const rowSpan = cell.rowSpan || 1;
+      if (colSpan === 1 && rowSpan === 1) return alert('当前已经是独立单元格。');
+      const startColumn = cellStartColumn(row, cell);
+      cell.colSpan = 1;
+      cell.rowSpan = 1;
+      for (let index = 1; index < colSpan; index += 1) {
+        const extra = document.createElement(cell.tagName.toLowerCase());
+        extra.innerHTML = '<br>';
+        cell.after(extra);
+      }
+      const baseIndex = [...table.rows].indexOf(row);
+      for (let offset = 1; offset < rowSpan; offset += 1) {
+        const targetRow = table.rows[baseIndex + offset];
+        if (!targetRow) continue;
+        const extra = document.createElement(cell.tagName.toLowerCase());
+        extra.innerHTML = '<br>';
+        const before = cellAtColumn(targetRow, startColumn);
+        targetRow.insertBefore(extra, before || null);
+      }
+      persistDocument();
+    }
+
+    function addRow() {
+      const cell = selectedCell() || activeCell;
+      const table = selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
+      const row = cell.closest('tr');
+      const newRow = document.createElement('tr');
+      [...row.cells].forEach(() => {
+        const newCell = document.createElement('td');
+        newCell.innerHTML = '<br>';
+        newRow.appendChild(newCell);
+      });
+      if (row.parentElement.tagName === 'THEAD') {
+        const body = table.tBodies[0] || table.appendChild(document.createElement('tbody'));
+        body.prepend(newRow);
+      } else {
+        row.after(newRow);
+      }
+      persistDocument();
+    }
+
+    function addColumn() {
+      const cell = selectedCell() || activeCell;
+      const table = selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
+      const index = cell.cellIndex;
+      [...table.rows].forEach(row => {
+        const newCell = document.createElement(row.parentElement.tagName === 'THEAD' ? 'th' : 'td');
+        newCell.textContent = row.parentElement.tagName === 'THEAD' ? '新列' : '内容';
+        row.insertBefore(newCell, row.cells[index + 1] || null);
+      });
+      persistDocument();
+    }
+
+    function removeRow(rowOverride, tableOverride) {
+      const cell = selectedCell() || activeCell;
+      const table = tableOverride || selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
+      const row = rowOverride || cell.closest('tr');
+      if (table.rows.length === 1) return alert('表格至少保留一行。');
+      row.remove();
+      persistDocument();
+    }
+
+    function removeColumn() {
+      const cell = selectedCell() || activeCell;
+      const table = selectedTable() || activeTable;
+      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
+      const index = cell.cellIndex;
+      if (table.rows[0].cells.length === 1) return alert('表格至少保留一列。');
+      [...table.rows].forEach(row => row.deleteCell(index));
+      persistDocument();
+    }
+
+    function deleteTable(tableOverride) {
+      const table = tableOverride || activeTable || selectedTable();
+      if (!table) return alert('请先将光标放入需要删除的表格。');
+      deletedTable = { table, parent: table.parentNode, nextSibling: table.nextSibling };
+      table.remove();
+      tableContext.classList.remove('show');
+      activeTable = null;
+      activeCell = null;
+      clearTableSelection();
+      persistDocument();
+      undoToast.classList.add('show');
+      clearTimeout(undoTimer);
+      undoTimer = setTimeout(() => { deletedTable = null; undoToast.classList.remove('show'); }, 5000);
+    }
+
+    function undoDeleteTable() {
+      if (!deletedTable?.parent) return;
+      deletedTable.parent.insertBefore(deletedTable.table, deletedTable.nextSibling);
+      activeTable = deletedTable.table;
+      activeCell = activeTable.querySelector('td,th');
+      deletedTable = null;
+      clearTimeout(undoTimer);
+      undoToast.classList.remove('show');
+      persistDocument();
+    }
+
+    function applyHostPayload(data) {
+      if (!data || typeof data !== 'object') return;
+      if (Array.isArray(data.pages) && data.pages.length) {
+        pageState.pages = data.pages;
+        pageState.activeId = data.activeId || data.pages[0].id;
+      }
+      const active = pageById(pageState.activeId) || pageState.pages[0];
+      hostEditable = data.editable !== false && !READONLY;
+      if (data.brand) {
+        const brand = document.querySelector('.app-brand');
+        if (brand) brand.textContent = data.brand;
+      }
+      if (data.section) {
+        const section = document.querySelector('.brand');
+        if (section) section.textContent = data.section;
+      }
+      document.body.classList.toggle('review-mode', Boolean(data.review));
+      if (active?.prototypeUrl) {
+        showPrototypeFrame(active.prototypeUrl);
+      } else {
+        if (typeof data.html === 'string') {
+          if (active) active.content = data.html;
+          documentArea.innerHTML = data.html;
+        } else if (active?.content) {
+          documentArea.innerHTML = active.content;
+        }
+        documentArea.contentEditable = hostEditable ? 'true' : 'false';
+      }
+      refreshOnPageIndex();
+      renderPageTree();
+    }
+
+    window.addEventListener('message', event => {
+      if (event.data?.type === 'STAR_PRD_LOAD') applyHostPayload(event.data);
+      if (event.data?.type === 'STAR_PRD_REVIEW') {
+        document.body.classList.toggle('review-mode', Boolean(event.data.on));
+      }
+      if (event.data?.type === 'STAR_PRD_HIGHLIGHT') highlightCurrentSelection();
+    });
+    documentArea.addEventListener('mouseup', () => {
+      if (!HOST_MODE || !document.body.classList.contains('review-mode')) return;
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) return;
+      try {
+        parent.postMessage({ type:'STAR_PRD_SELECTION', text: selection.toString().slice(0, 240) }, '*');
+      } catch (_) {}
+    });
+    if (HOST_MODE) {
+      try { parent.postMessage({ type:'STAR_PRD_READY' }, '*'); } catch (_) {}
+    }
+  </script>
+</body>
+</html>

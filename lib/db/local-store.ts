@@ -188,6 +188,7 @@ function normalizeBugRow(bug: Bug): Bug {
     requirement_id: bug.requirement_id ?? null,
     description: bug.description ?? null,
     repro_steps: bug.repro_steps ?? null,
+    suggestion: bug.suggestion ?? null,
     assignee: bug.assignee ?? null,
     severity,
     bug_type,
@@ -211,6 +212,17 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     requirement_links: db.requirement_links ?? [],
     project_interviews: db.project_interviews ?? [],
     interview_requirement_links: db.interview_requirement_links ?? [],
+    project_learning_notes: db.project_learning_notes ?? [],
+    project_prds: (db.project_prds ?? []).map((p) => ({
+      ...p,
+      versions: Array.isArray(p.versions) ? p.versions : [],
+    })),
+    prd_review_comments: db.prd_review_comments ?? [],
+    prototypes: (db.prototypes ?? []).map((p) => ({
+      ...p,
+      prd_id: p.prd_id ?? null,
+      prd_note: p.prd_note ?? null,
+    })),
     projects: db.projects.map(normalizeProject),
     requirements: db.requirements.map(normalizeRequirement),
     iterations: (db.iterations ?? []).map(normalizeIteration),
@@ -1214,6 +1226,7 @@ export async function createBug(input: {
   title: string;
   description?: string;
   repro_steps?: string;
+  suggestion?: string;
   assignee?: string;
   severity?: BugSeverity;
   bug_type?: BugType;
@@ -1234,6 +1247,7 @@ export async function createBug(input: {
       title: input.title,
       description: input.description ?? null,
       repro_steps: input.repro_steps ?? null,
+      suggestion: input.suggestion ?? null,
       assignee: input.assignee ?? null,
       status: input.status ?? "pending",
       severity: input.severity ?? 3,
@@ -1307,6 +1321,7 @@ export async function createBug(input: {
     title: input.title,
     description: input.description ?? null,
     repro_steps: input.repro_steps ?? null,
+    suggestion: input.suggestion ?? null,
     assignee: input.assignee ?? null,
     status: input.status ?? "pending",
     severity: input.severity ?? 3,
@@ -1367,6 +1382,7 @@ export async function updateBug(
     title: string;
     description: string | null;
     repro_steps: string | null;
+    suggestion: string | null;
     assignee: string | null;
     requirement_id: string | null;
     status: TaskStatus;
@@ -1385,6 +1401,7 @@ export async function updateBug(
     if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
     if (patch.description !== undefined) bug.description = patch.description;
     if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+    if (patch.suggestion !== undefined) bug.suggestion = patch.suggestion;
     if (patch.assignee !== undefined) bug.assignee = patch.assignee;
     if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
     if (patch.status !== undefined) bug.status = patch.status;
@@ -1464,6 +1481,7 @@ export async function updateBug(
   if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
   if (patch.description !== undefined) bug.description = patch.description;
   if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+  if (patch.suggestion !== undefined) bug.suggestion = patch.suggestion;
   if (patch.assignee !== undefined) bug.assignee = patch.assignee;
   if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
   if (patch.status !== undefined) bug.status = patch.status;
@@ -1725,6 +1743,7 @@ export async function importBugs(
         title: item.title,
         description: item.description ?? null,
         repro_steps: item.repro_steps ?? null,
+        suggestion: null,
         assignee: item.assignee ?? null,
         status: "pending" as TaskStatus,
         severity: item.severity ?? 3,
@@ -1926,6 +1945,8 @@ export async function addPrototype(input: {
   storage_path?: string | null;
   external_url?: string | null;
   requirement_id?: string | null;
+  prd_id?: string | null;
+  prd_note?: string | null;
 }) {
   const db = await readDb();
   const proto: Prototype = {
@@ -1936,6 +1957,8 @@ export async function addPrototype(input: {
     storage_path: input.storage_path ?? null,
     external_url: input.external_url ?? null,
     requirement_id: input.requirement_id ?? null,
+    prd_id: input.prd_id ?? null,
+    prd_note: input.prd_note ?? null,
     created_at: nowIso(),
   };
   db.prototypes.push(proto);

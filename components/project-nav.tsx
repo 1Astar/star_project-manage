@@ -9,6 +9,8 @@ const TABS = [
   { suffix: "/overview", label: "概况" },
   { suffix: "/tasks", label: "需求与任务" },
   { suffix: "/bugs", label: "Bug" },
+  { suffix: "/prd", label: "PRD" },
+  { suffix: "/learning", label: "学习池" },
   { suffix: "/interviews", label: "访谈库" },
   { suffix: "/prototype", label: "原型与验收" },
   { suffix: "/schedule", label: "进度排期" },

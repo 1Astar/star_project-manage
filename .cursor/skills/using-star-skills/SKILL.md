@@ -38,6 +38,7 @@ description: >-
 | 写/改调研报告、Word | `doc-delivery-formats` → `word-docx-professional` + `version-management` |
 | 咨询风 PPT | `ppt-consulting-visual` |
 | 产品方案书 | `product-scheme-design` |
+| **PRD / 原型** | `prd-prototype-rules`（先定规则再交付） |
 | 删文件 | `safe-file-delete` |
 | **做/改项目库·需求池·灵感等表格或文件夹树** | `star-table-folder`（通用排序筛选移动删除父子；**当场要求优先**） |
 | 记灵感 / 勾完成 / 改下一步 P / 发版 | `star-pm-write-release` |
@@ -50,7 +51,8 @@ description: >-
 ## 跨窗口
 
 本 skill 与 PM 库 skill 通过 `~/.cursor/skills/` 挂载后，**任意 Cursor 窗口**都应能在 Agent Skills 列表中看到。  
-若新窗口仍看不到：重开该窗口，或确认 `C:\Users\l1397\.cursor\skills\<name>` 指向 PM 库目录。
+若新窗口仍看不到：重开该窗口，或确认 symlink / junction 指向本仓库 `.cursor/skills/<name>`。  
+重挂载：macOS/Linux 跑 `.cursor/skills/_link_skills_mac.sh`；Windows 跑 `_link_skills.py`。
 
 ## 与 using-superpowers
 

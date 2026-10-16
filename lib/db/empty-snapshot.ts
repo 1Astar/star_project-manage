@@ -28,6 +28,9 @@ export function emptyPmSnapshot(
     requirement_links: [],
     project_interviews: [],
     interview_requirement_links: [],
+    project_learning_notes: [],
+    project_prds: [],
+    prd_review_comments: [],
     ...partial,
   };
 }

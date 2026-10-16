@@ -10,6 +10,34 @@
 
 ---
 
+## v1.15.0 · 2026-10-16
+
+相对 **v1.14.19**（本版多方向合发：学习池 / Bug 建议 / PRD 工作台 / Agent skill·插件）：
+
+### 学习池
+
+- **项目「学习池」页**：个人笔记字段——为什么 / 原理 / 协议 / 技术背景 / 竞品 / 更底层产品思考（migration `039`）
+
+### Bug
+
+- **优化建议字段**：创建/编辑/导出/MCP 支持 `suggestion`（migration `038`）
+
+### PRD
+
+- **项目 PRD 工作台** + 分享查看；版本与评论（migration `040`/`041`）
+
+### Agent / 插件
+
+- **`prd-prototype-rules` skill**：先定规则再交付；规则要点必须**分层列表**写清
+- **`plugins/star-pm`**：Cursor Plugin（私有 skill 库 + MCP Bearer 变量）+ ChatGPT Instructions / OAuth 连接说明
+- Mac 重挂载 skill：`_link_skills_mac.sh`
+
+### 运维提醒
+
+- 生产需已跑 Supabase：`038`～`041`（你已确认 `suggestion` 与 `project_learning_notes`）
+
+---
+
 ## v1.14.19 · 2026-08-24
 
 相对 **v1.14.18**：

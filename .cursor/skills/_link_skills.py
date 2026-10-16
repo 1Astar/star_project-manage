@@ -21,6 +21,8 @@ LINK_NAMES = [
     "canvas",
     "verification-before-completion",
     "create-skill",
+    "star-table-folder",
+    "prd-prototype-rules",
 ]
 
 DST.mkdir(parents=True, exist_ok=True)

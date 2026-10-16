@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "star-pm": {
-      "url": "https://star-project-manage.vercel.app/api/mcp",
+      "url": "https://pm.starry-studio.cn/api/mcp",
       "headers": {
         "Authorization": "Bearer <YOUR_TOKEN>"
       }

@@ -30,6 +30,7 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
     repro_steps: (row.repro_steps as string | null) ?? null,
+    suggestion: (row.suggestion as string | null) ?? null,
     assignee: (row.assignee as string | null) ?? null,
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
@@ -132,6 +133,9 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     sb,
     "interview_requirement_links"
   );
+  const project_learning_notes = await loadOptionalTable(sb, "project_learning_notes");
+  const project_prds = await loadOptionalTable(sb, "project_prds");
+  const prd_review_comments = await loadOptionalTable(sb, "prd_review_comments");
 
   return {
     projects: throwOnError(projects, "projects"),
@@ -143,7 +147,23 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     test_records: throwOnError(test_records, "test_records"),
     acceptance_records: throwOnError(acceptance_records, "acceptance_records"),
     share_links: throwOnError(share_links, "share_links"),
-    prototypes: throwOnError(prototypes, "prototypes"),
+    prototypes: (
+      throwOnError(prototypes, "prototypes") as Array<Record<string, unknown>>
+    ).map((row) => ({
+      id: String(row.id),
+      project_id: String(row.project_id),
+      name: String(row.name ?? ""),
+      type: (row.type === "external_url" ? "external_url" : "html_zip") as
+        | "html_zip"
+        | "external_url",
+      storage_path: row.storage_path != null ? String(row.storage_path) : null,
+      external_url: row.external_url != null ? String(row.external_url) : null,
+      requirement_id:
+        row.requirement_id != null ? String(row.requirement_id) : null,
+      prd_id: row.prd_id != null ? String(row.prd_id) : null,
+      prd_note: row.prd_note != null ? String(row.prd_note) : null,
+      created_at: String(row.created_at ?? new Date().toISOString()),
+    })),
     bugs: throwOnError(bugs, "bugs").map((row) =>
       normalizeBug(row as unknown as Record<string, unknown>)
     ),
@@ -173,6 +193,67 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     ),
     interview_requirement_links: (interview_requirement_links ??
       []) as InterviewRequirementLink[],
+    project_learning_notes: ((project_learning_notes ?? []) as Record<string, unknown>[]).map(
+      (row) => ({
+        id: String(row.id),
+        project_id: String(row.project_id),
+        title: String(row.title ?? ""),
+        why_text: String(row.why_text ?? ""),
+        principle: String(row.principle ?? ""),
+        protocol: String(row.protocol ?? ""),
+        tech_background: String(row.tech_background ?? ""),
+        competitors: String(row.competitors ?? ""),
+        product_thinking: String(row.product_thinking ?? ""),
+        created_at: String(row.created_at ?? new Date().toISOString()),
+        updated_at: String(row.updated_at ?? new Date().toISOString()),
+      })
+    ),
+    project_prds: ((project_prds ?? []) as Record<string, unknown>[]).map((row) =>
+      normalizeProjectPrdRow(row)
+    ),
+    prd_review_comments: ((prd_review_comments ?? []) as Record<string, unknown>[]).map(
+      (row) => ({
+        id: String(row.id),
+        prd_id: String(row.prd_id),
+        project_id: String(row.project_id),
+        anchor_text: String(row.anchor_text ?? ""),
+        anchor_selector:
+          row.anchor_selector != null ? String(row.anchor_selector) : null,
+        body: String(row.body ?? ""),
+        author: String(row.author ?? ""),
+        created_at: String(row.created_at ?? new Date().toISOString()),
+        updated_at: String(row.updated_at ?? new Date().toISOString()),
+      })
+    ),
+  };
+}
+
+function normalizeProjectPrdRow(row: Record<string, unknown>) {
+  const links = Array.isArray(row.linked_prototypes)
+    ? (row.linked_prototypes as Record<string, unknown>[]).map((l) => ({
+        prototype_id: String(l.prototype_id ?? ""),
+        note: String(l.note ?? ""),
+        section_hint: String(l.section_hint ?? ""),
+      }))
+    : [];
+  return {
+    id: String(row.id),
+    project_id: String(row.project_id),
+    title: String(row.title ?? ""),
+    module_path: row.module_path != null ? String(row.module_path) : null,
+    html_content: String(row.html_content ?? ""),
+    share_token: row.share_token != null ? String(row.share_token) : null,
+    linked_prototypes: links,
+    versions: Array.isArray(row.versions)
+      ? (row.versions as Record<string, unknown>[]).map((item) => ({
+          id: String(item.id ?? ""),
+          label: String(item.label ?? ""),
+          html_content: String(item.html_content ?? ""),
+          created_at: String(item.created_at ?? ""),
+        }))
+      : [],
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
 }
 
@@ -191,10 +272,10 @@ async function upsertBugs(rows: DatabaseSnapshot["bugs"]) {
     await upsertRows("bugs", rows);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (/severity|bug_type|schema cache|column/i.test(message)) {
+    if (/severity|bug_type|suggestion|schema cache|column/i.test(message)) {
       await upsertRows(
         "bugs",
-        rows.map(({ severity: _s, bug_type: _t, ...rest }) => rest)
+        rows.map(({ severity: _s, bug_type: _t, suggestion: _sug, ...rest }) => rest)
       );
       return;
     }
@@ -215,7 +296,10 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "bug_attachments" ||
       table === "requirement_links" ||
       table === "project_interviews" ||
-      table === "interview_requirement_links"
+      table === "interview_requirement_links" ||
+      table === "project_learning_notes" ||
+      table === "project_prds" ||
+      table === "prd_review_comments"
     ) {
       return;
     }
@@ -295,6 +379,30 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
       }
     }
   }
+  if ((snapshot.project_learning_notes ?? []).length) {
+    try {
+      await upsertRows("project_learning_notes", snapshot.project_learning_notes ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/project_learning_notes|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
+  if ((snapshot.project_prds ?? []).length) {
+    try {
+      await upsertRows("project_prds", snapshot.project_prds ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/project_prds|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
+  if ((snapshot.prd_review_comments ?? []).length) {
+    try {
+      await upsertRows("prd_review_comments", snapshot.prd_review_comments ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/prd_review_comments|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
 
   await deleteMissing("git_activities", (snapshot.git_activities ?? []).map((r) => r.id));
   await deleteMissing("pool_column_defs", (snapshot.pool_column_defs ?? []).map((r) => r.id));
@@ -317,6 +425,18 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await deleteMissing(
     "project_interviews",
     (snapshot.project_interviews ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "project_learning_notes",
+    (snapshot.project_learning_notes ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "prd_review_comments",
+    (snapshot.prd_review_comments ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "project_prds",
+    (snapshot.project_prds ?? []).map((r) => r.id)
   );
   await deleteMissing("project_members", (snapshot.project_members ?? []).map((r) => r.id));
   await deleteMissing("requirement_comments", (snapshot.comments ?? []).map((r) => r.id));

@@ -11,14 +11,15 @@
 
 | 机制 | 作用 |
 |------|------|
-| `C:\Users\16148\.cursor\skills\<name>` → 本目录 junction | **任意 Cursor 窗口**的 Agent 都能加载这些 skill |
-| `d:\thing\项目\.cursor\skills\` | 本工作区项目路径发现 |
-| `d:\thing\项目\star-pm\.cursor\skills\` | star-pm 仓内同步副本 |
-| `C:\Users\16148\.cursor\rules\skill-first.mdc`（若存在） | **行动前**强制先查 skill |
+| `~/.cursor/skills/<name>` → 本目录 symlink（macOS）/ junction（Windows） | **任意 Cursor 窗口**的 Agent 都能加载这些 skill |
+| 本仓库 `.cursor/skills/` | skill 正文与跨机同步源 |
+| 用户规则 / skill-first（若存在） | **行动前**强制先查 skill |
 
 **Agent 硬规则：** 动手前先扫 skills；Star 交付类任务先读本 README，再 Read 对应 `SKILL.md`。
 
-重挂载（换机/目录坏了）可跑：同目录 `_link_skills.py`。
+重挂载（换机/目录坏了）：
+- macOS / Linux：同目录 `_link_skills_mac.sh`
+- Windows：同目录 `_link_skills.py`
 
 ---
 
@@ -37,6 +38,7 @@
 | **version-management** | 文档三位版本 / 软件 git 发版号 | [version-management/SKILL.md](./version-management/SKILL.md) |
 | **safe-file-delete** | 删文件硬约束 | [safe-file-delete/SKILL.md](./safe-file-delete/SKILL.md) |
 | **star-table-folder** | **表格/文件夹通用底线**：排序·筛选·移动·删除·父子；**当场要求优先于通用标准** | [star-table-folder/SKILL.md](./star-table-folder/SKILL.md) |
+| **prd-prototype-rules** | **PRD/原型**：先定规则清单再改交付物；规则变了先改清单 | [prd-prototype-rules/SKILL.md](./prd-prototype-rules/SKILL.md) |
 | **brainstorming**（指针） | 创意/方案前先对齐意图 | [brainstorming/SKILL.md](./brainstorming/SKILL.md) |
 | **canvas**（指针） | Cursor Canvas 分析页 | [canvas/SKILL.md](./canvas/SKILL.md) |
 | **verification-before-completion**（指针） | 宣称完成前必须验证 | [verification-before-completion/SKILL.md](./verification-before-completion/SKILL.md) |

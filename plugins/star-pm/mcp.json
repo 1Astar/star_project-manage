@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "star-pm": {
+      "url": "https://pm.starry-studio.cn/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${STAR_PM_MCP_TOKEN}"
+      }
+    }
+  }
+}

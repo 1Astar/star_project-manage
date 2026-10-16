@@ -79,6 +79,7 @@ async function createBugLight(input: {
     title: input.title,
     description: input.description,
     repro_steps: input.repro_steps ?? null,
+    suggestion: null,
     assignee: null,
     status: "pending",
     severity: 3,

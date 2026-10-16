@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/icon",
   "/apple-icon",
   "/prototypes",
+  "/prd-shell",
   "/bug-feedback-widget.js",
 ];
 

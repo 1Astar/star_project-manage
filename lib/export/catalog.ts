@@ -316,7 +316,7 @@ export async function loadExportSheets(opts: {
       sheets: [
         {
           name: "Bug",
-          headers: ["标题", "严重", "类型", "状态", "指派", "描述", "重现步骤", "创建时间"],
+          headers: ["标题", "严重", "类型", "状态", "指派", "描述", "重现步骤", "优化建议", "创建时间"],
           rows: bugs.map((b) => [
             b.title,
             BUG_SEVERITY_LABELS[(b.severity ?? 3) as BugSeverity],
@@ -325,6 +325,7 @@ export async function loadExportSheets(opts: {
             b.assignee,
             b.description,
             b.repro_steps,
+            b.suggestion,
             dt(b.created_at),
           ]),
         },

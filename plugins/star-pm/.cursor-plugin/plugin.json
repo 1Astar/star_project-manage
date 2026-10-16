@@ -1,0 +1,27 @@
+{
+  "name": "star-pm",
+  "version": "0.1.1",
+  "description": "Star PM：私有 skill 库 + MCP tools。写入灵感/需求/Bug/发版规则；Cursor 一键装，ChatGPT 走 OAuth MCP。",
+  "author": {
+    "name": "1Astar"
+  },
+  "homepage": "https://pm.starry-studio.cn",
+  "repository": "https://github.com/1Astar/star_project-manage",
+  "license": "UNLICENSED",
+  "keywords": ["star-pm", "mcp", "product-management", "skills", "chatgpt"],
+  "logo": "assets/logo.svg",
+  "skills": "./skills",
+  "rules": "./rules",
+  "mcpServers": "./mcp.json",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "STAR_PM_MCP_TOKEN": {
+        "type": "string",
+        "title": "Star PM MCP Bearer Token",
+        "description": "管理员 Bearer Token（只填 token，不要带 Bearer 前缀）。在 PM 设置/密钥处获取。"
+      }
+    },
+    "required": ["STAR_PM_MCP_TOKEN"]
+  }
+}

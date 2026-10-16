@@ -37,6 +37,7 @@ type SharedFields = {
   title: string;
   reproSteps: string;
   description: string;
+  suggestion: string;
   severity: BugSeverity;
   bugType: BugType;
   assignee: string;
@@ -232,6 +233,7 @@ export function BugCreateForm({
     title: initialTitle,
     reproSteps: "",
     description: "",
+    suggestion: "",
     severity: 3,
     bugType: "code",
     assignee: "",
@@ -253,6 +255,7 @@ export function BugCreateForm({
           title: fields.title.trim(),
           description: fields.description.trim() || undefined,
           reproSteps: fields.reproSteps.trim() || undefined,
+          suggestion: fields.suggestion.trim() || undefined,
           assignee: fields.assignee || undefined,
           requirementId: fields.requirementId || null,
           severity: fields.severity,
@@ -262,6 +265,7 @@ export function BugCreateForm({
           title: "",
           reproSteps: "",
           description: "",
+          suggestion: "",
           severity: 3,
           bugType: "code",
           assignee: "",
@@ -323,6 +327,16 @@ export function BugCreateForm({
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
+            <section className="space-y-1.5 border-t border-slate-100 pt-3">
+              <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+              <textarea
+                value={fields.suggestion}
+                onChange={(e) => patch({ suggestion: e.target.value })}
+                rows={3}
+                placeholder="给 +1 / 研发的建议（可选）…"
+                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+              />
+            </section>
           </>
         }
         right={
@@ -365,6 +379,7 @@ export function BugDetailEditor({
     title: bug.title,
     reproSteps: bug.repro_steps ?? "",
     description: bug.description ?? "",
+    suggestion: bug.suggestion ?? "",
     severity: bug.severity ?? 3,
     bugType: bug.bug_type ?? "code",
     assignee: bug.assignee ?? "",
@@ -422,6 +437,7 @@ export function BugDetailEditor({
             title: fields.title.trim(),
             description: fields.description.trim() || null,
             reproSteps: fields.reproSteps.trim() || null,
+            suggestion: fields.suggestion.trim() || null,
             assignee: fields.assignee || null,
             requirementId: fields.requirementId || null,
             status: fields.status,
@@ -544,6 +560,16 @@ export function BugDetailEditor({
                 value={fields.description}
                 onChange={(e) => patch({ description: e.target.value })}
                 rows={4}
+                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+              />
+            </section>
+            <section className="space-y-1.5 border-t border-slate-100 pt-3">
+              <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+              <textarea
+                value={fields.suggestion}
+                onChange={(e) => patch({ suggestion: e.target.value })}
+                rows={3}
+                placeholder="给 +1 / 研发的建议（可选）…"
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
