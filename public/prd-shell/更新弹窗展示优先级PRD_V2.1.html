@@ -58,6 +58,7 @@
     hr { height:1px; margin:34px 0; border:0; background:var(--line); }
     p { margin:9px 0; }
     ul,ol { margin:8px 0; padding-left:24px; }
+    ol { list-style-type:decimal; }
     ol ol { list-style-type:lower-alpha; }
     ol ol ol { list-style-type:lower-roman; }
     .meta { display:none; color:var(--muted); font-size:13px; }
@@ -304,7 +305,7 @@
 <table>
 <thead><tr><th>版本</th><th>日期</th><th>修改内容</th></tr></thead>
 <tbody>
-<tr><td>V2.2</td><td>2026-10-19</td><td>§8.2 通知摘要与徽标重算；厘清「点击二次校验」≠ 列表已换新，且校验失败不进栏、仅保留已有条目供重试。</td></tr>
+<tr><td>V2.2</td><td>2026-10-19</td><td>§8.2 通知摘要与二次校验厘清；规则树改为编号分层 1→a→i；无序并列仍用项目符号。</td></tr>
 <tr><td>V2.1</td><td>2026-10-19</td><td>压缩交互／页面章节；明确单独弹窗、超时结果回传后端、通知副标题缺字段不展示；本期不做胶囊与通知入口。</td></tr>
 <tr><td>V2.0</td><td>2026-10-19</td><td>统一登录与手动检测入口；明确二期通知进入弹窗、三期设置更新模块；补充最新版本消息移除、端侧下载入口和依赖异常处理。</td></tr>
 <tr><td>V1.9</td><td>2026-10-16</td><td>将检测入口、首次弹窗、客户端续弹及异常反馈拆为分层规则，保持本期既定弹窗顺序。</td></tr>
@@ -333,16 +334,16 @@
 </table>
 
 <h3 id="section-5">4.1 检测入口与首次弹窗</h3>
-<ul>
+<ol>
 <li><strong>检测时机</strong>
-<ul>
+<ol>
 <li>登录进入主屏幕，且当前可展示<strong>单独更新弹窗</strong>（主屏幕上无其它阻塞更新弹窗的全屏遮罩时）→ 检查 OS 与客户端更新。仅启动未登录不弹。</li>
 <li>用户点击现有「检查更新」→ 重新检查 OS 与客户端更新。</li>
-</ul>
+</ol>
 </li>
 <li>两项均进入终态（有更新／无更新／失败／超时）后，按本轮结果判定；不使用上一轮结果；不自动下载或安装。</li>
 <li>每次重新登录均重新检查。关闭弹窗不等于忽略版本；选择「忽略本次更新」后按原忽略规则过滤该版本。</li>
-</ul>
+</ol>
 
 <h3 id="section-6">4.2 检测异常与手动检查反馈</h3>
 <table>
@@ -355,17 +356,17 @@
 <tr><td>无更新／失败／超时</td><td>无更新／失败／超时</td><td>不展示更新弹窗；异常反馈见下</td></tr>
 </tbody>
 </table>
-<ul>
+<ol>
 <li>仅一项确认有更新、另一项失败或超时：只展示已确认项；失败／超时项不进入待展示队列。</li>
 <li><strong>超时结果</strong>（检测超时终态，或旧轮次超时结果在新轮次到达）：不追加弹窗；写日志并回传后端；不参与当前轮次判定。</li>
 <li>两项均未确认有更新，且至少一项失败或超时：
-<ul>
+<ol>
 <li>登录检查：不弹失败提示。</li>
 <li>手动检查：显示一次「检查更新失败，请稍后重试」。有现有失败反馈载体则用该载体，否则用居中 Toast。</li>
-</ul>
+</ol>
 </li>
 <li>OS／客户端<strong>安装失败</strong>属各自更新流程，走原结果弹窗，不按检测失败处理。</li>
-</ul>
+</ol>
 
 <h3 id="section-7">4.3 两项更新的弹窗顺序与操作</h3>
 <p>两项均确认有更新时，<strong>先展示 OS 弹窗</strong>。OS 弹窗及其结果弹窗均已关闭、主屏幕可再次展示单独弹窗后，<strong>自动展示本轮客户端原更新弹窗</strong>。当前弹窗未退出前不得叠加下一弹窗。</p>
@@ -466,29 +467,29 @@
 <p>副标题在列表完整展示；PC 右上角新消息浮窗最多 2 行。日期格式沿用通知消息 PRD。</p>
 
 <h3 id="section-13">8.2 通知消息：触发、展示与移除</h3>
-<ul>
+<ol>
 <li><strong>触发</strong>：登录主屏幕可展示时，或手动「检查更新」→ 重检。本轮确认客户端有可用更新且依赖已满足 → 新增或刷新最新版本消息。同轮最多浮出一次；同版本下次登录可再提醒，列表不叠重复条目。</li>
 <li><strong>忽略</strong>：关闭浮窗或弹窗 ≠ 忽略版本；仅「忽略本次更新」按原规则过滤。</li>
 <li><strong>失败／超时</strong>：不新增、不替换消息；未知结果不当作无更新。超时结果写日志回传后端。</li>
 <li><strong>移除</strong>：当前客户端已安装该版本、版本撤回或过期 → 从通知列表删除该条，不展示「已失效」。徽标按列表<strong>剩余条数</strong>重算（减 1；减至 0 则隐藏）。用户删除通知只去入口，≠ 忽略版本。</li>
 <li><strong>点击时二次校验</strong>（防列表未及时刷新）：
-<ul>
+<ol>
 <li><strong>不覆盖的情况</strong>：新版本已确认且列表已替换为最新条目时，按新条目点击打开弹窗，不适用本条。</li>
 <li><strong>适用场景</strong>：列表仍挂着某版本消息，但点击瞬间该版本已不可用——例如已安装、被撤回／过期，或服务端已换更新版本而本地列表尚未刷新。</li>
 <li><strong>目标不可用</strong>：移除该条，徽标按剩余条数重算，提示「该更新已不可用，请重新检查」；不启动旧版下载。</li>
 <li><strong>二次校验失败</strong>：指点击时的网络／检查接口失败，不是「检测失败写进通知栏」。消息本就在列表中，提示「检查更新失败，请稍后重试」并<strong>保留该条</strong>供重试。检测失败／超时本身仍按上文：不新增、不替换消息。</li>
-</ul>
+</ol>
 </li>
 <li><strong>PC／移动（摘要，细则以通知消息 PRD 为准）</strong>：
-<ul>
+<ol>
 <li><strong>浮窗队列</strong>：PC 右上角新消息浮窗按事件发生时间正序入队，同一时间按接收序号；约每 300ms 展示一张；单张默认展示 4500ms，悬停暂停计时；关闭浮窗只收起当前提醒，不删除列表消息。</li>
 <li><strong>列表排序</strong>：通知列表按发生时间倒序。</li>
 <li><strong>徽标</strong>：PC 通知入口徽标为列表实际总数；1～99 显示数值，超过 99 显示「99+」，为 0 时隐藏。</li>
 <li><strong>移动端</strong>：独立全屏通知页；删除按钮常态显示；接近底部时每次最多追加 50 条。</li>
 <li><strong>点击</strong>：二期点客户端更新浮窗或列表消息一律打开客户端更新弹窗；其他通知仍按各自原规则。</li>
-</ul>
+</ol>
 </li>
-</ul>
+</ol>
 
 <h3 id="section-14">8.3 依赖关系</h3>
 <p>未提供依赖信息 = 无依赖。已声明依赖时必须同时给出可识别依赖对象与最低版本；不完整、无法识别或无法启动的循环依赖 → 阻止相关更新并上报后端。</p>
@@ -516,12 +517,12 @@
 <p>服务端发布前校验；客户端仍校验。上报含更新对象、目标版本、当前 OS／客户端版本、平台、原因。可选依赖缺失按无依赖，不上报错误。</p>
 
 <h3 id="section-15">8.4 强制更新</h3>
-<ul>
+<ol>
 <li>OS 强制：沿用原限制；客户端不得覆盖未结束的 OS 强制流程。</li>
 <li>客户端强制：不降为可一直不点的通知；若依赖 OS，先满足 OS 再进原强制流程。</li>
 <li>双强制：先校验依赖；缺失／无效／循环 → 阻止并上报，不回退为忽略依赖的 OS 优先。</li>
 <li>强制更新失败属更新流程结果，不改写为检测失败。</li>
-</ul>
+</ol>
 
 <h3 id="section-16">8.5 二期验收</h3>
 <table>
@@ -617,7 +618,7 @@
     const STORAGE_KEY = 'minis-prd-export-stable-更新弹窗展示优先级-PRD';
     const PREVIOUS_STORAGE_KEY = 'minis-prd-export-stable-更新弹窗展示优先级-PRD-none';
     /* 导出时写入；与 localStorage 不一致时用文件正文覆盖根页，避免旧缓存盖住新导出 */
-    const DOCUMENT_STAMP = 'hqqxkjf';
+    const DOCUMENT_STAMP = 'h1g2951v';
     const HOST_MODE = new URLSearchParams(location.search).get('host') === '1';
     const READONLY = new URLSearchParams(location.search).get('readonly') === '1';
     let hostEditable = !READONLY;
@@ -1025,7 +1026,7 @@
       const block = getBlock(window.getSelection().anchorNode);
       if (block?.tagName === 'P' && block.textContent.trim() === '/') openInsertMenu(block);
     });
-    // 复制外部文档时只保留内容语义（标题、列表、表格等），丢弃来源页面的字号、颜色和布局，避免把原页面样式带进来。
+    // 粘贴：保留标题/列表/表格等结构；字号与布局仍丢弃。调色板文字色/背景色保留（含编辑器内复制的 data-* 与可映射的 style 色）。
     documentArea.addEventListener('paste', event => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -1237,6 +1238,69 @@
       }
     }
 
+    const EDITOR_TEXT_COLORS = {
+      default:'#031121', gray:'#7A858F', brown:'#A07155', orange:'#D26C24', yellow:'#B58A23',
+      green:'#079F4A', blue:'#3D86F8', purple:'#9068BE', pink:'#CC5D9C', red:'#E11D48'
+    };
+    const EDITOR_BG_COLORS = {
+      default:'#FFFFFF', gray:'#F1F2F4', brown:'#F5E9E3', orange:'#FFEDE0', yellow:'#FFF1A8',
+      green:'#E6F5EC', blue:'#E7F1FF', purple:'#F0E9F7', pink:'#FAE7F1', red:'#FDE8ED'
+    };
+    function parseCssColorToRgb(value) {
+      if (!value) return null;
+      const raw = String(value).trim().toLowerCase();
+      if (raw === 'transparent' || raw === 'inherit' || raw === 'initial') return null;
+      const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+      if (hex) {
+        let h = hex[1];
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      }
+      const rgb = raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+      try {
+        const probe = document.createElement('span');
+        probe.style.color = raw;
+        if (!probe.style.color) return null;
+        document.body.append(probe);
+        const computed = getComputedStyle(probe).color;
+        probe.remove();
+        const m = computed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+      } catch (_) { return null; }
+    }
+    function nearestEditorColorName(cssColor, palette) {
+      const rgb = parseCssColorToRgb(cssColor);
+      if (!rgb) return '';
+      let best = '', bestDist = Infinity;
+      Object.entries(palette).forEach(([name, hex]) => {
+        const p = parseCssColorToRgb(hex);
+        if (!p) return;
+        const dist = (rgb[0]-p[0])**2 + (rgb[1]-p[1])**2 + (rgb[2]-p[2])**2;
+        if (dist < bestDist) { bestDist = dist; best = name; }
+      });
+      /* 色差过大则视为非调色板色，不保留，避免把整页主题色带进来 */
+      return bestDist <= 35**2 ? best : '';
+    }
+    function resolvePastedSpanColors(node) {
+      const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
+      const dataText = colorName.test(node.dataset?.textColor || '') ? node.dataset.textColor : '';
+      const dataBg = colorName.test(node.dataset?.bgColor || '') ? node.dataset.bgColor : '';
+      const styleText = nearestEditorColorName(node.style?.color || node.getAttribute?.('color'), EDITOR_TEXT_COLORS);
+      const styleBg = nearestEditorColorName(node.style?.backgroundColor || node.style?.background, EDITOR_BG_COLORS);
+      const textName = dataText || styleText;
+      const bgName = dataBg || styleBg;
+      let textAttr = '', bgAttr = '', inline = '';
+      if (textName && textName !== 'default') {
+        textAttr = ` data-text-color="${textName}"`;
+        inline += `color:${EDITOR_TEXT_COLORS[textName]};`;
+      }
+      if (bgName && bgName !== 'default') {
+        bgAttr = ` data-bg-color="${bgName}"`;
+        inline += `background-color:${EDITOR_BG_COLORS[bgName]};`;
+      }
+      return { textAttr, bgAttr, styleAttr: inline ? ` style="${inline}"` : '' };
+    }
     function sanitizePastedHtml(html, preserveEditorContent = false, allowPastedImages = false) {
       if (!html) return '';
       const source = new DOMParser().parseFromString(html, 'text/html');
@@ -1266,15 +1330,19 @@
           const reviewId = hasReviewAnchor && /^[a-zA-Z0-9-]+$/.test(node.dataset.reviewId || '') ? ` data-review-id="${node.dataset.reviewId}"` : '';
           const suggestId = hasSuggestMark && /^[a-zA-Z0-9-]+$/.test(node.dataset.suggestId || '') ? ` data-suggest-id="${node.dataset.suggestId}"` : '';
           const suggestKind = hasSuggestMark && /^(insert|delete)$/.test(node.dataset.suggestKind || '') ? ` data-suggest-kind="${node.dataset.suggestKind}"` : '';
-          const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
-          const textColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.textColor || '') ? ` data-text-color="${node.dataset.textColor}"` : '';
-          const backgroundColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.bgColor || '') ? ` data-bg-color="${node.dataset.bgColor}"` : '';
+          /* 粘贴与本地持久化都保留调色板色；任意来源的 style 色映射到最近调色板名 */
+          const pastedColors = tag === 'span' ? resolvePastedSpanColors(node) : { textAttr:'', bgAttr:'', styleAttr:'' };
           const open = tag === 'details' && node.hasAttribute('open') ? ' open' : '';
           const controls = preserveEditorContent && ['video','audio'].includes(tag) ? ' controls' : '';
           if (tag === 'img' || tag === 'source') return src ? `<${tag}${src}${ownClass}>` : '';
-          return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${textColor}${backgroundColor}${open}${controls}>${content}</${tag}>`;
+          return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${pastedColors.textAttr}${pastedColors.bgAttr}${pastedColors.styleAttr}${open}${controls}>${content}</${tag}>`;
         }
-        // Word、飞书、Notion 等常用 div/span 包裹内容：保留内部结构，但不保留它们的样式。
+        // Word、飞书、Notion 等常用 div 包裹：升成段落；font 上的色映射后包一层 span
+        if (tag === 'font') {
+          const colors = resolvePastedSpanColors(node);
+          if (colors.textAttr || colors.bgAttr) return `<span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span>`;
+          return content;
+        }
         if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) return `<p>${content}</p>`;
         return content;
       }

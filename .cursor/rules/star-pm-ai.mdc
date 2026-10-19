@@ -16,6 +16,11 @@ alwaysApply: true
 字段：**有则写之，无则跳过**。  
 正文：`docs/ai/CANONICAL_RULES.md`
 
+## 改已有文件前（强制）
+
+**每次**改任何已有文件前：先读盘检查用户是否已改过；已改 → **必须在其当前版上增量改**，禁止用旧稿整份覆盖。  
+细则：`.cursor/rules/check-user-edits-before-write.mdc` + skill `version-management`。
+
 ## 审慎与全链路（硬规则）
 
 - **不要假设**用户已非常清楚想要什么、以及该怎么得到  

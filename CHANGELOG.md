@@ -10,6 +10,16 @@
 
 ---
 
+## v1.15.6 · 2026-10-19
+
+相对 **v1.15.5**：
+
+- **Cloudflare 构建**：修复 `opennextjs-cloudflare` ↔ `npm run build` 无限套娃导致超时；`ci-build` 在 OpenNext 内只跑 `next build`
+- **PRD 编辑器**：从外部复制带颜色的富文本粘贴时保留文字色/背景色（调色板优先，其余安全 `rgb` 内联）
+- **Skill**：新增 `content-architecture`（内容架构七阶段 + 高保真 Web 原型）；`doc-delivery-formats` / `using-star-skills` / 插件已路由
+
+---
+
 ## v1.15.5 · 2026-10-19
 
 相对 **v1.15.4**：

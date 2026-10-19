@@ -29,7 +29,8 @@
 |-------|--------|----------|
 | **starpm-method（对外包）** | **给别人复用的 Method v0.1**（非本机私有路径）：三场景 + 原始想法；见仓库 `method/starpm-skill/` | [../../method/starpm-skill/SKILL.md](../../method/starpm-skill/SKILL.md) |
 | **using-star-skills** | **开场 / 行动前**：判断该用哪些 Star skill；**开新项目前先扫 GitHub 复用** | [using-star-skills/SKILL.md](./using-star-skills/SKILL.md) |
-| **doc-delivery-formats** | 文档格式总入口、写作原则、Canvas 限制 | [doc-delivery-formats/SKILL.md](./doc-delivery-formats/SKILL.md) |
+| **doc-delivery-formats** | 文档格式总入口；开场五项；Canvas 限制；深做指向 `content-architecture` | [doc-delivery-formats/SKILL.md](./doc-delivery-formats/SKILL.md) |
+| **content-architecture** | **内容架构 / 信息设计**：七阶段交付 + 高保真 Web 原型；禁止直接开排版 | [content-architecture/SKILL.md](./content-architecture/SKILL.md) |
 | **star-pm-write-release** | 写 PM、灵感字段、做完勾完成、下一步改 P、发版 | [star-pm-write-release/SKILL.md](./star-pm-write-release/SKILL.md) |
 | **defer-scope-record** | **本期不做/后期再做**必须写清：是什么、为什么不做、后期怎么做 | [defer-scope-record/SKILL.md](./defer-scope-record/SKILL.md) |
 | **word-docx-professional** | 生成专业 Word（Node + docx） | [word-docx-professional/SKILL.md](./word-docx-professional/SKILL.md) |

@@ -26,6 +26,7 @@ LINK_NAMES = [
     "mystic-lab-ui",
     "miniscloud-prd-agents",
     "miniscloud-ui-design",
+    "content-architecture",
 ]
 
 DST.mkdir(parents=True, exist_ok=True)

@@ -347,7 +347,7 @@ export function PrdWorkspaceClient({
               type="button"
               disabled={pending}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white"
-              onClick={createOne}
+              onClick={() => createOne()}
             >
               创建
             </button>

@@ -50,9 +50,10 @@ description: >-
 
 | 你要做的事 | 先加载 |
 |------------|--------|
-| 写/改调研报告、Word | `doc-delivery-formats` → `word-docx-professional` + `version-management` |
-| 咨询风 PPT | `ppt-consulting-visual` |
-| 产品方案书（通用 Star） | `product-scheme-design` |
+| **内容架构 / 信息设计 / 高保真 Web 原型** | `content-architecture`（先分析再排版；Web 见 `web-prototype.md`）→ 再按载体 |
+| 写/改调研报告、Word / 首页 / 方案演示 | `doc-delivery-formats`（开场五项）→ 深做时 `content-architecture` → `word-docx-professional` 等 |
+| 咨询风 PPT | `doc-delivery-formats` → `content-architecture`（可选深做）→ `ppt-consulting-visual` |
+| 产品方案书（通用 Star） | `doc-delivery-formats` → `product-scheme-design` |
 | **PRD / 原型（通用 Star）** | `prd-prototype-rules`（先定规则再交付） |
 | **MinisCloud / NAS · PRD / HTML 原型 / 评审** | `miniscloud-prd-agents` → 视觉再 `miniscloud-ui-design` |
 | **MinisCloud OS UI / 组件 / 原型视觉** | `miniscloud-ui-design`（必读 `reference.md`） |

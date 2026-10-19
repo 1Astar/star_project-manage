@@ -58,6 +58,7 @@
     hr { height:1px; margin:34px 0; border:0; background:var(--line); }
     p { margin:9px 0; }
     ul,ol { margin:8px 0; padding-left:24px; }
+    ol { list-style-type:decimal; }
     ol ol { list-style-type:lower-alpha; }
     ol ol ol { list-style-type:lower-roman; }
     .meta { display:none; color:var(--muted); font-size:13px; }
@@ -1047,7 +1048,8 @@
       const block = getBlock(window.getSelection().anchorNode);
       if (block?.tagName === 'P' && block.textContent.trim() === '/') openInsertMenu(block);
     });
-    // 复制外部文档时只保留内容语义（标题、列表、表格等），丢弃来源页面的字号、颜色和布局，避免把原页面样式带进来。
+    // 粘贴：保留标题/列表/表格等结构；字号与布局仍丢弃。
+    // 颜色：编辑器调色板 data-* 优先；外部 HTML 的 color / background-color 在无法映射时也保留为安全内联色。
     documentArea.addEventListener('paste', event => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -1259,6 +1261,99 @@
       }
     }
 
+    const EDITOR_TEXT_COLORS = {
+      default:'#031121', gray:'#7A858F', brown:'#A07155', orange:'#D26C24', yellow:'#B58A23',
+      green:'#079F4A', blue:'#3D86F8', purple:'#9068BE', pink:'#CC5D9C', red:'#E11D48'
+    };
+    const EDITOR_BG_COLORS = {
+      default:'#FFFFFF', gray:'#F1F2F4', brown:'#F5E9E3', orange:'#FFEDE0', yellow:'#FFF1A8',
+      green:'#E6F5EC', blue:'#E7F1FF', purple:'#F0E9F7', pink:'#FAE7F1', red:'#FDE8ED'
+    };
+    function parseCssColorToRgb(value) {
+      if (!value) return null;
+      const raw = String(value).trim().toLowerCase();
+      if (raw === 'transparent' || raw === 'inherit' || raw === 'initial') return null;
+      const hex = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+      if (hex) {
+        let h = hex[1];
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      }
+      const rgb = raw.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+      try {
+        const probe = document.createElement('span');
+        probe.style.color = raw;
+        if (!probe.style.color) return null;
+        document.body.append(probe);
+        const computed = getComputedStyle(probe).color;
+        probe.remove();
+        const m = computed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+        return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+      } catch (_) { return null; }
+    }
+    function nearestEditorColorName(cssColor, palette) {
+      const rgb = parseCssColorToRgb(cssColor);
+      if (!rgb) return '';
+      let best = '', bestDist = Infinity;
+      Object.entries(palette).forEach(([name, hex]) => {
+        const p = parseCssColorToRgb(hex);
+        if (!p) return;
+        const dist = (rgb[0]-p[0])**2 + (rgb[1]-p[1])**2 + (rgb[2]-p[2])**2;
+        if (dist < bestDist) { bestDist = dist; best = name; }
+      });
+      /* 接近调色板则归并到命名色；否则交给外链色保留逻辑 */
+      return bestDist <= 40**2 ? best : '';
+    }
+    function cssColorToSafeInline(value) {
+      const rgb = parseCssColorToRgb(value);
+      if (!rgb) return '';
+      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+    function colorDistanceSq(a, b) {
+      if (!a || !b) return Infinity;
+      return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2;
+    }
+    function resolvePastedSpanColors(node) {
+      const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
+      const dataText = colorName.test(node.dataset?.textColor || '') ? node.dataset.textColor : '';
+      const dataBg = colorName.test(node.dataset?.bgColor || '') ? node.dataset.bgColor : '';
+      const rawText = node.style?.color || node.getAttribute?.('color') || '';
+      const rawBgAttr = node.style?.backgroundColor || '';
+      const rawBgFallback = !rawBgAttr && node.style?.background && !/url\s*\(/i.test(node.style.background)
+        ? node.style.background
+        : '';
+      const rawBg = rawBgAttr || rawBgFallback;
+      const styleText = nearestEditorColorName(rawText, EDITOR_TEXT_COLORS);
+      const styleBg = nearestEditorColorName(rawBg, EDITOR_BG_COLORS);
+      const textName = dataText || styleText;
+      const bgName = dataBg || styleBg;
+      let textAttr = '', bgAttr = '', inline = '';
+      if (textName && textName !== 'default') {
+        textAttr = ` data-text-color="${textName}"`;
+        inline += `color:${EDITOR_TEXT_COLORS[textName]};`;
+      } else if (!textName && rawText) {
+        const safe = cssColorToSafeInline(rawText);
+        const rgb = parseCssColorToRgb(rawText);
+        const ink = parseCssColorToRgb(EDITOR_TEXT_COLORS.default);
+        /* 接近正文黑/灰则不必写死，避免整页被刷成黑色 */
+        if (safe && colorDistanceSq(rgb, ink) > 28**2) inline += `color:${safe};`;
+      }
+      if (bgName && bgName !== 'default') {
+        bgAttr = ` data-bg-color="${bgName}"`;
+        inline += `background-color:${EDITOR_BG_COLORS[bgName]};`;
+      } else if (!bgName && rawBg) {
+        const safe = cssColorToSafeInline(rawBg);
+        const rgb = parseCssColorToRgb(rawBg);
+        const white = parseCssColorToRgb(EDITOR_BG_COLORS.default);
+        if (safe && colorDistanceSq(rgb, white) > 18**2) inline += `background-color:${safe};`;
+      }
+      return { textAttr, bgAttr, styleAttr: inline ? ` style="${inline}"` : '' };
+    }
+    const COLOR_BEARING_TAGS = new Set([
+      'span','font','strong','b','em','i','u','mark','a','code','del','s',
+      'p','h1','h2','h3','li','td','th','blockquote','label'
+    ]);
     function sanitizePastedHtml(html, preserveEditorContent = false, allowPastedImages = false) {
       if (!html) return '';
       const source = new DOMParser().parseFromString(html, 'text/html');
@@ -1288,16 +1383,26 @@
           const reviewId = hasReviewAnchor && /^[a-zA-Z0-9-]+$/.test(node.dataset.reviewId || '') ? ` data-review-id="${node.dataset.reviewId}"` : '';
           const suggestId = hasSuggestMark && /^[a-zA-Z0-9-]+$/.test(node.dataset.suggestId || '') ? ` data-suggest-id="${node.dataset.suggestId}"` : '';
           const suggestKind = hasSuggestMark && /^(insert|delete)$/.test(node.dataset.suggestKind || '') ? ` data-suggest-kind="${node.dataset.suggestKind}"` : '';
-          const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
-          const textColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.textColor || '') ? ` data-text-color="${node.dataset.textColor}"` : '';
-          const backgroundColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.bgColor || '') ? ` data-bg-color="${node.dataset.bgColor}"` : '';
+          /* 粘贴与本地持久化：调色板 data-* + 无法映射的外部内联色 */
+          const pastedColors = COLOR_BEARING_TAGS.has(tag) ? resolvePastedSpanColors(node) : { textAttr:'', bgAttr:'', styleAttr:'' };
           const open = tag === 'details' && node.hasAttribute('open') ? ' open' : '';
           const controls = preserveEditorContent && ['video','audio'].includes(tag) ? ' controls' : '';
           if (tag === 'img' || tag === 'source') return src ? `<${tag}${src}${ownClass}>` : '';
-          return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${textColor}${backgroundColor}${open}${controls}>${content}</${tag}>`;
+          return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${pastedColors.textAttr}${pastedColors.bgAttr}${pastedColors.styleAttr}${open}${controls}>${content}</${tag}>`;
         }
-        // Word、飞书、Notion 等常用 div/span 包裹内容：保留内部结构，但不保留它们的样式。
-        if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) return `<p>${content}</p>`;
+        // Word、飞书、Notion 等常用 div 包裹：升成段落；font / 带色 div 包一层 span
+        if (tag === 'font') {
+          const colors = resolvePastedSpanColors(node);
+          if (colors.textAttr || colors.bgAttr || colors.styleAttr) return `<span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span>`;
+          return content;
+        }
+        if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) {
+          const colors = resolvePastedSpanColors(node);
+          if (colors.textAttr || colors.bgAttr || colors.styleAttr) {
+            return `<p><span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span></p>`;
+          }
+          return `<p>${content}</p>`;
+        }
         return content;
       }
       return normalizeDocumentWhitespace([...source.body.childNodes].map(cleanNode).join(''));

@@ -7,6 +7,19 @@
 
 ## 1. 动手前：比版本（防覆盖）
 
+### 1.0 改已有文件前：检查用户是否已改过（强制）
+
+**每次**修改任何已有文件（含 PRD/HTML/导出稿/源码/配置）之前：
+
+1. 先读取目标文件**当前磁盘内容**（不要凭对话旧稿或内存稿整份写回）。  
+2. 用户已改过 → **只在其当前保存版上增量修改**；禁止整份覆盖。  
+3. 不确定 → 先问或先 diff，确认后再改。  
+4. 多副本时以用户**正在改的那一份**为源再同步其它。
+
+Cursor 落地：`.cursor/rules/check-user-edits-before-write.mdc`（`alwaysApply`）· skill `version-management`。
+
+### 1.1 Git / Vercel / Studio
+
 改代码或大范围写文件前，先调用 MCP **`compare_sources`**（或站内等价检查），对比：
 
 1. **Git**（`githubRepo` + `githubBranch` 最新 commit）  

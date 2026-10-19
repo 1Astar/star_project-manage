@@ -118,13 +118,14 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 
 ### Cloudflare 控制台 Build / Deploy（硬规则）
 
-`npm run build` 会经 `scripts/ci-build.mjs` 分流：在 Cloudflare CI（`/opt/buildhome` / `CF_PAGES` / `WORKERS_CI`）走 **OpenNext**；Vercel / 本地仍走 `next build`。  
-若控制台仍报 `Could not find compiled Open Next config`，把 Build 显式改成下方命令。
+`npm run build` 经 `scripts/ci-build.mjs` 分流：Cloudflare CI 顶层走 **OpenNext**；被 OpenNext 回调时（`NEXT_PRIVATE_STANDALONE`）只跑 `next build`，**禁止再套一层 OpenNext**（否则无限递归超时）。Vercel / 本地仍走 `next build`。
 
 | 控制台项 | 推荐命令 |
 |----------|----------|
-| **Build command** | `npm run build`（CF 上自动 OpenNext）或 `npm run cf-build` |
+| **Build command** | `npm run build`（推荐）或 `npm run cf-build` / `npx opennextjs-cloudflare build` |
 | **Deploy command** | `npx wrangler deploy` |
+
+若曾把 Build 设成 `npx opennextjs-cloudflare build` 且日志里反复出现 `[ci-build] … → opennextjs-cloudflare build` 后超时：拉含递归守卫的版本后再部署即可。
 
 本地一键：`npm run deploy`（内部先 OpenNext build 再 deploy，带 `--keep-vars`）。纯 Next：`npm run build:next`。
 

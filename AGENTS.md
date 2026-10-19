@@ -17,6 +17,7 @@ MCP：`get_ai_rules` · `compare_sources` · `publish_release`
 |----|--------|
 | MinisCloud / NAS · PRD/原型 | `miniscloud-prd-agents`（八章；Web 实现 + 原生窗观感）+ `miniscloud-ui-design` |
 | 通用 Star · PRD/方案 | `prd-prototype-rules` + `product-scheme-design` |
+| 文档 / 演示 / 高保真 Web 原型 | `doc-delivery-formats` → `content-architecture`（深做） |
 | Lab / 随心而行 UI | `mystic-lab-ui` |
 
 本文件管 **Star PM 工程仓**；不因 MinisCloud 文档覆盖上方 Vercel / MCP 工程约定。

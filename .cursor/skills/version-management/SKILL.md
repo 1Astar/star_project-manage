@@ -4,8 +4,9 @@ description: >-
   文档与项目版本号规则：改前检查用户是否已改过，有改则在其保存版上增量改；文档三位版本与存档合并；
   项目大/小/修订与 main/develop 发版流程（改版本→CHANGELOG→commit→tag→push）；
   发版前对比前一版、不同方向分不同版本迭代。
-  Use when 用户提到版本号、发版、CHANGELOG、git tag、文档改版、存档合并、在我改过的基础上再改，
-  或要决定改第几位版本数字、按方向分版。
+  Use when 改任何已有文档/导出稿/源码前须检查用户是否已改过、在用户修改基础上再改、
+  用户提到版本号、发版、CHANGELOG、git tag、文档改版、存档合并、在我改过的基础上再改，
+  或要决定改第几位版本数字、按方向分版。硬规则 always-on 见 .cursor/rules/check-user-edits-before-write.mdc。
 ---
 
 # 版本管理
