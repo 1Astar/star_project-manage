@@ -26,6 +26,8 @@
       "0 11 * * *"
     ]
   },
+  // 控制台 Variables 以 Dashboard 为准，避免下次 deploy 用仓库里空的 vars 覆盖掉
+  "keep_vars": true,
   "vars": {
     "NEXT_PUBLIC_CF_WORKER": "1"
   },

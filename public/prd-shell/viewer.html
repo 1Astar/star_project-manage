@@ -10,7 +10,10 @@
     body { margin:0; background:#fff; color:var(--ink); font:15px/1.75 "PingFang SC",-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif; }
     .app-nav { position:fixed; inset:0 auto 0 0; z-index:10; display:flex; flex-direction:column; width:288px; overflow:auto; padding:18px 16px 28px; background:var(--sidebar); border-right:1px solid var(--line); transition:transform 250ms cubic-bezier(0,0,.2,1); }
     .app-brand { padding:0 0 26px; font-size:16px; font-weight:600; border-bottom:1px solid var(--line); }
-    .nav-section { margin-top:22px; color:var(--muted); font-size:13px; font-weight:500; }
+    .nav-section { margin-top:22px; color:var(--muted); font-size:13px; font-weight:500; outline:none; border-radius:6px; padding:2px 4px; }
+    .nav-section:focus,.nav-section[contenteditable="true"]:hover { background:rgba(61,134,248,.08); color:var(--ink); }
+    .page-row-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px; }
+    .page-row-title[contenteditable="true"] { outline:none; background:rgba(61,134,248,.08); white-space:normal; }
     .nav-item { display:block; margin:6px 0; padding:7px 11px; color:var(--ink); text-decoration:none; border-radius:8px; font-size:14px; }
     .nav-item.sub { padding-left:22px; color:var(--muted); }
     .nav-item.active { color:var(--blue); background:rgba(61,134,248,.10); font-weight:500; }
@@ -24,7 +27,6 @@
     .page-row.drop-child { background:rgba(61,134,248,.16); }
     .tree-caret { width:18px; border:0; background:transparent; color:var(--muted); padding:0; font-size:13px; cursor:pointer; }
     .tree-caret.empty { visibility:hidden; }
-    .page-row-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .page-row-external { margin-left:auto; color:var(--muted); font-size:16px; line-height:1; }
     .nav-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
     .nav-actions button { border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; cursor:pointer; }
@@ -80,8 +82,16 @@
     [contenteditable="true"]:focus { outline:none; }
     .editable:focus { box-shadow:0 0 0 3px rgba(61,134,248,.12); }
     .save-state { color:var(--muted); font-size:12px; white-space:nowrap; }
-    .block-plus { position:fixed; z-index:20; display:none; width:28px; height:28px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:23px; line-height:1; cursor:pointer; }
-    .block-plus:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    .block-controls { position:fixed; z-index:20; display:none; align-items:center; gap:2px; }
+    .block-controls.show { display:flex; }
+    .block-plus,.block-drag { width:28px; height:28px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:18px; line-height:1; cursor:pointer; }
+    .block-plus { font-size:23px; }
+    .block-drag { cursor:grab; letter-spacing:-2px; font-size:14px; font-weight:700; }
+    .block-drag:active { cursor:grabbing; }
+    .block-plus:hover,.block-drag:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    .page > .block-drop-before { box-shadow:inset 0 2px 0 var(--blue); }
+    .page > .block-drop-after { box-shadow:inset 0 -2px 0 var(--blue); }
+    .page > .block-dragging { opacity:.45; }
     .insert-menu { position:fixed; z-index:30; display:none; width:270px; max-height:min(560px,calc(100vh - 24px)); overflow:auto; padding:8px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); }
     .insert-menu.show { display:block; }
     .insert-search { width:100%; padding:8px 10px; border:0; border-radius:8px; background:#F2F9FE; font:14px "PingFang SC",sans-serif; outline-color:var(--blue); }
@@ -157,8 +167,10 @@
     body.review-comments-open .main { margin-right:340px; }
     body.review-composing .on-page { display:none; }
     /* 建议/评论浮层贴着选区，不挤占右侧栏位 */
-    body.host-mode .nav-section,
-    body.host-mode .nav-actions { display:none; }
+    body.host-mode .nav-section { display:none; }
+    /* 宿主模式仍显示加页/加原型；只读时再藏 */
+    body.host-mode.prd-readonly .nav-actions { display:none; }
+    body.host-mode .nav-actions { grid-template-columns:1fr 1fr 1fr; }
     body.host-mode.review-composing .main,
     body.host-mode:not(.review-comments-open) .main { margin-right:0; }
     .review-head { display:flex; justify-content:space-between; align-items:center; padding:18px 20px; border-bottom:1px solid var(--line); font-size:16px; font-weight:600; }
@@ -244,6 +256,25 @@
     .review-composer-actions button:last-child { background:var(--blue); color:#fff; }
     .review-anchor { border-bottom:2px solid var(--blue); background:#fff1a8; cursor:pointer; }
     .review-anchor:hover,.review-anchor.active { background:rgba(61,134,248,.25); }
+    /* 建议与评论共用同一套锚点色：黄底 + 蓝下划线；增删用同类底，删改加删除线区分 */
+    .suggest-mark { border-bottom:2px solid var(--blue); background:#fff1a8; cursor:pointer; }
+    .suggest-mark:hover,.suggest-mark.active { background:rgba(61,134,248,.25); }
+    .suggest-mark[data-suggest-kind="delete"] { text-decoration:line-through; color:rgba(3,17,33,.55); }
+    .suggest-mark[data-suggest-kind="insert"] { border-bottom-style:solid; }
+    .suggest-card { position:fixed; z-index:34; display:none; width:min(300px,calc(100vw - 16px)); padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); }
+    .suggest-card.show { display:block; }
+    .suggest-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+    .suggest-card-title { font:500 13px "PingFang SC",sans-serif; color:var(--ink); }
+    .suggest-card-actions { display:flex; gap:4px; }
+    .suggest-card-actions button { width:28px; height:28px; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; font-size:15px; }
+    .suggest-card-actions button:hover { background:rgba(61,134,248,.10); color:var(--blue); }
+    .suggest-card-actions button[data-suggest-accept]:hover { color:var(--blue); background:rgba(61,134,248,.10); }
+    .suggest-card-actions button[data-suggest-reject]:hover { color:#E11D48; background:rgba(225,29,72,.10); }
+    .suggest-card-body { font:13px/1.5 "PingFang SC",sans-serif; color:var(--ink); }
+    .suggest-card-body strong { color:var(--blue); font-weight:600; }
+    .suggest-card-meta { margin-top:8px; color:var(--muted); font-size:12px; }
+    .suggest-hint { position:fixed; z-index:34; display:none; max-width:min(320px,calc(100vw - 24px)); padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); color:var(--muted); font:13px/1.5 "PingFang SC",sans-serif; }
+    .suggest-hint.show { display:block; }
     .page img.editor-media,.page video.editor-media,.page audio.editor-media { display:block; max-width:100%; margin:12px 0; }
     @media (max-width:1050px) { .app-nav { width:220px; } .sidebar-collapse { left:194px; } .main { margin-left:220px; } body.nav-collapsed .app-nav { transform:translateX(-220px); } .doc-layout { width:min(850px,calc(100% - 56px)); } .on-page { display:none; } }
     @media (max-width:700px) { .app-nav,.sidebar-collapse { display:none; } .main,body.review-comments-open .main,body.review-composing .main { margin-left:0; margin-right:0; } .toolbar { padding:0 16px; } .doc-layout { width:calc(100% - 40px); margin:32px auto 56px; } h1 { font-size:27px; margin-bottom:34px; } h2 { font-size:20px; margin-top:42px; padding-top:28px; } table { display:block; overflow-x:auto; } .brand { display:none; } }
@@ -254,9 +285,9 @@
   <button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="收起侧边栏" title="收起侧边栏">‹</button>
   <aside class="app-nav" aria-label="文档导航">
     <div class="app-brand">MinisCloud Design</div>
-    <div class="nav-section">APP 重构 1.0（纯视觉）</div>
+    <div class="nav-section" id="nav-section" contenteditable="true" spellcheck="false" title="双击后可改，失焦保存">APP 重构 1.0（纯视觉）</div>
     <nav id="page-tree" class="nav-tree" aria-label="页面目录"></nav>
-    <div class="nav-actions"><button id="new-page" type="button">＋ 页面</button><button id="new-child-page" type="button">＋ 子页面</button></div>
+    <div class="nav-actions"><button id="new-page" type="button">＋ 页面</button><button id="new-child-page" type="button">＋ 子页面</button><button id="new-prototype" type="button">＋ 原型</button></div>
   </aside>
   <div class="main">
   <header class="toolbar">
@@ -560,13 +591,18 @@
   <aside id="review-sidebar" class="review-sidebar" aria-label="审阅评论与本页目录"><div class="review-head"><div class="review-tabs" role="tablist" aria-label="侧栏内容"><button id="review-tab-comments" class="active" type="button" role="tab" aria-selected="true">评论 <span id="review-count"></span></button><button id="review-tab-index" type="button" role="tab" aria-selected="false">本页目录</button></div><button id="review-close" type="button" aria-label="收起侧栏">✕</button></div><div id="review-list" class="review-list" role="tabpanel"></div><nav id="review-index" class="review-index" aria-label="本页目录"></nav></aside>
   </div>
   </div>
-  <button id="block-plus" class="block-plus" type="button" aria-label="插入内容">＋</button>
+  <div id="block-controls" class="block-controls" aria-label="区块操作">
+    <button id="block-plus" class="block-plus" type="button" aria-label="插入内容" title="插入">＋</button>
+    <button id="block-drag" class="block-drag" type="button" aria-label="拖动区块" title="拖动排序" draggable="true">⠿</button>
+  </div>
   <div id="insert-menu" class="insert-menu" role="menu"><input id="insert-search" class="insert-search" type="search" placeholder="输入以筛选…" aria-label="筛选插入内容"><div class="insert-group">基本区块</div><button type="button" data-insert="text">T　文本</button><button type="button" data-insert="h1">H1　标题 1</button><button type="button" data-insert="h2">H2　标题 2</button><button type="button" data-insert="h3">H3　标题 3</button><button type="button" data-insert="bullet">•　项目符号列表</button><button type="button" data-insert="numbered">1.　编号列表</button><button type="button" data-insert="todo">☑　待办勾选</button><button type="button" data-insert="toggle">▸　折叠列表</button><button type="button" data-insert="page">▤　页面</button><button type="button" data-insert="note">▤　标注／备注</button><button type="button" data-insert="table">▦　插入表格</button><button type="button" data-insert="quote">❝　引用</button><button type="button" data-insert="highlight">✦　重点高亮</button><button type="button" data-insert="divider">—　分割线</button><div class="insert-group">媒体</div><button type="button" data-insert="image">▧　本地图片</button><button type="button" data-insert="image-url">▧　图片链接</button><button type="button" data-insert="video">▣　视频</button><button type="button" data-insert="audio">◖　音频</button><button type="button" data-insert="code">&lt;/&gt;　代码</button><button type="button" data-insert="file">♧　文件链接</button><button type="button" data-insert="bookmark">♧　网页书签</button></div>
   <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <div id="selection-tools" class="selection-tools" role="toolbar" aria-label="选中文字操作"><button id="selection-color-button" type="button" title="文字颜色 / 背景高亮" aria-haspopup="true" aria-expanded="false">A</button><select id="selection-block" aria-label="文字类型"><option value="text">普通文本</option><option value="h1">标题 1</option><option value="h2">标题 2</option><option value="h3">标题 3</option></select><button type="button" data-selection-action="bold" title="加粗"><b>B</b></button><button type="button" data-selection-action="italic" title="斜体"><i>I</i></button><button type="button" data-selection-action="underline" title="下划线"><u>U</u></button><button type="button" data-selection-action="text" title="清除格式">T×</button><button type="button" data-selection-action="link" title="插入链接">♧</button><button type="button" data-selection-action="strike" title="删除线"><s>S</s></button><button type="button" data-selection-action="code" title="行内代码">&lt;/&gt;</button><button type="button" data-selection-action="highlight" title="高亮选中文字">✦</button><button type="button" class="tool-comment" data-selection-action="comment" title="添加评论">▤ 评论</button></div>
   <div id="selection-color-menu" class="selection-color-menu" aria-label="文字与背景颜色"><p>文字颜色</p><div id="text-color-grid" class="selection-color-grid"></div><p>背景颜色</p><div id="background-color-grid" class="selection-color-grid"></div></div>
   <div id="review-composer" class="review-composer"><p id="review-selected-quote"></p><textarea id="review-input" placeholder="对选中的文字添加评论" aria-label="评论内容"></textarea><div class="review-composer-actions"><button id="review-cancel" type="button">取消</button><button id="review-submit" type="button">评论</button></div></div>
   <div id="review-thread" class="review-thread" aria-label="原文评论"></div>
+  <div id="suggest-card" class="suggest-card" aria-label="建议批注"></div>
+  <div id="suggest-hint" class="suggest-hint" role="status">建议已开启：新增、删除或改格式都会生成可接受／拒绝的批注；点「评论」可另加评注。</div>
   <div id="table-context" class="table-context" aria-label="表格操作"><button type="button" data-table-action="add-row">＋ 行</button><button type="button" data-table-action="add-column">＋ 列</button><button type="button" data-table-action="remove-row">－ 行</button><button type="button" data-table-action="remove-column">－ 列</button><button type="button" data-table-action="delete-table">删除表格</button></div>
   <div id="table-row-inline" class="table-inline" aria-label="当前行操作"><button type="button" data-table-inline="add-row" title="在此行下添加一行">＋</button><button type="button" data-table-inline="remove-row" title="删除当前行">－</button><button type="button" data-table-inline="select-row" title="选中当前行后按 Backspace 删除">▤</button></div>
   <div id="table-column-inline" class="table-inline" aria-label="当前列操作"><button type="button" data-table-inline="add-column" title="在此列右侧添加一列">＋</button><button type="button" data-table-inline="remove-column" title="删除当前列">－</button></div>
@@ -575,8 +611,11 @@
   <div id="undo-toast" class="undo-toast" role="status">已删除表格 <button id="undo-delete" type="button">撤销</button></div>
   <script>
     const documentArea = document.getElementById('document');
+    const blockControls = document.getElementById('block-controls');
     const blockPlus = document.getElementById('block-plus');
+    const blockDrag = document.getElementById('block-drag');
     const insertMenu = document.getElementById('insert-menu');
+    const navSection = document.getElementById('nav-section');
     const imageFileInput = document.getElementById('image-file-input');
     const tableContext = document.getElementById('table-context');
     const tableRowInline = document.getElementById('table-row-inline');
@@ -599,6 +638,8 @@
     let activeReviewId = null;
     const STORAGE_KEY = 'minis-prd-page-library-v4-7';
     const PREVIOUS_STORAGE_KEY = 'minis-prd-page-library-v4-6';
+    /* 导出时写入；与 localStorage 不一致时用文件正文覆盖根页，避免旧缓存盖住新导出 */
+    const DOCUMENT_STAMP = '';
     const HOST_MODE = new URLSearchParams(location.search).get('host') === '1';
     const READONLY = new URLSearchParams(location.search).get('readonly') === '1';
     let hostEditable = !READONLY;
@@ -609,7 +650,10 @@
     let historyStack = [];
     let historyIndex = -1;
     if (HOST_MODE) document.body.classList.add('host-mode');
-    if (READONLY) documentArea.contentEditable = 'false';
+    if (READONLY) {
+      documentArea.contentEditable = 'false';
+      document.body.classList.add('prd-readonly');
+    }
     if (HOST_MODE) {
       pageState = { activeId:'root', pages:[{ id:'root', title:'PRD', parentId:null, order:0, expanded:true, content:'<h1>PRD</h1><p><br></p>', comments:[] }] };
     } else try {
@@ -626,7 +670,12 @@
     } catch (_) {}
 
     if (!pageState) {
-      pageState = { activeId:'update-priority', pages:[{ id:'update-priority', title:'更新弹窗展示优先级 PRD', parentId:null, order:0, expanded:true, content:documentArea.innerHTML }] };
+      pageState = { activeId:'update-priority', pages:[{ id:'update-priority', title:'更新弹窗展示优先级 PRD', parentId:null, order:0, expanded:true, content:documentArea.innerHTML }], documentStamp: DOCUMENT_STAMP || undefined };
+    }
+    if (!HOST_MODE && DOCUMENT_STAMP && pageState.documentStamp !== DOCUMENT_STAMP) {
+      const root = pageState.pages.find(page => page.id === 'update-priority') || pageState.pages.find(page => !page.parentId);
+      if (root) root.content = documentArea.innerHTML;
+      pageState.documentStamp = DOCUMENT_STAMP;
     }
     // 已保存的内容只做一次无损格式归一，空白段落不反复进入序列化结果。
     pageState.pages.forEach(page => {
@@ -698,12 +747,15 @@
     const PROTOTYPE_HREF = '客户端更新胶囊交互原型_V1.1.html';
     if (!HOST_MODE) {
       if (!pageState.pages.some(page => page.id === PROTOTYPE_PAGE_ID)) {
-        pageState.pages.push({ id:PROTOTYPE_PAGE_ID, title:'Prototype｜客户端更新胶囊', parentId:'update-priority', order:pageState.pages.filter(page => page.parentId === 'update-priority').length, expanded:true, content:prototypePageContent() });
+        const parentId = pageState.pages.find(p => !p.parentId)?.id || 'update-priority';
+        pageState.pages.push({ id:PROTOTYPE_PAGE_ID, title:'Prototype｜客户端更新胶囊', parentId, order:pageState.pages.filter(page => page.parentId === parentId).length, expanded:true, content:prototypePageContent() });
       }
-      // 原型页始终使用当前交互版本，避免浏览器旧缓存继续显示上一版说明页。
+      // 原型交互内容刷新，但不覆盖用户改过的左侧标题
       const prototypePage = pageState.pages.find(page => page.id === PROTOTYPE_PAGE_ID);
-      if (prototypePage) { prototypePage.title = 'Prototype｜客户端更新胶囊（独立页）'; prototypePage.content = prototypePageContent(); }
-      if (pageState.activeId === PROTOTYPE_PAGE_ID) pageState.activeId = 'update-priority';
+      if (prototypePage) prototypePage.content = prototypePageContent();
+      if (pageState.activeId === PROTOTYPE_PAGE_ID) pageState.activeId = pageState.pages.find(p => !p.parentId)?.id || pageState.activeId;
+      if (typeof pageState.navSection === 'string' && navSection) navSection.textContent = pageState.navSection;
+      else if (navSection) pageState.navSection = navSection.textContent.trim();
       savePageState();
     }
 
@@ -713,6 +765,7 @@
     const newId = () => `page-${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
 
     function savePageState() {
+      if (navSection) pageState.navSection = navSection.textContent.trim();
       if (HOST_MODE) { notifyHost(); return true; }
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pageState)); storageWarningShown = false; return true; }
       catch (_) {
@@ -720,6 +773,10 @@
         return false;
       }
     }
+    navSection?.addEventListener('blur', () => { savePageState(); });
+    navSection?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); navSection.blur(); }
+    });
 
     function notifyHost() {
       if (!HOST_MODE) return;
@@ -772,6 +829,22 @@
     }
 
     function createPage(parentId) {
+      // 宿主模式：多页尚未落库，顶层「＋ 页面」改为让外层新建一份 PRD；子页面暂不支持
+      if (HOST_MODE) {
+        if (parentId) {
+          alert('子页面目录结构即将支持落库。现在请用「＋ 页面」新建另一份 PRD，或用「＋ 原型」挂原型。');
+          return;
+        }
+        const title = prompt('新 PRD 名称', '未命名 PRD');
+        if (title === null) return;
+        try {
+          parent.postMessage({
+            type: 'STAR_PRD_HOST_CREATE_PAGE',
+            title: title.trim() || '未命名 PRD',
+          }, '*');
+        } catch (_) {}
+        return;
+      }
       const title = prompt(parentId ? '子页面名称' : '页面名称', '未命名页面');
       if (title === null) return;
       const siblings = childrenOf(parentId);
@@ -780,6 +853,13 @@
       pageState.pages.push(page);
       savePageState();
       openPage(page.id);
+    }
+
+    function requestHostLinkPrototype() {
+      if (!HOST_MODE) return;
+      try {
+        parent.postMessage({ type: 'STAR_PRD_HOST_LINK_PROTOTYPE' }, '*');
+      } catch (_) {}
     }
 
     function escapeHtml(value) { const element = document.createElement('div'); element.textContent = value; return element.innerHTML; }
@@ -800,6 +880,29 @@
         caret.textContent = page.expanded ? '⌄' : '›';
         caret.addEventListener('click', event => { event.stopPropagation(); page.expanded = !page.expanded; savePageState(); renderPageTree(); });
         const title = document.createElement('span'); title.className = 'page-row-title'; title.textContent = page.title;
+        title.title = '双击重命名';
+        title.addEventListener('dblclick', event => {
+          event.stopPropagation();
+          title.contentEditable = 'true';
+          title.focus();
+          const range = document.createRange(); range.selectNodeContents(title); range.collapse(false);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        });
+        const commitTitle = () => {
+          if (title.contentEditable !== 'true') return;
+          title.contentEditable = 'false';
+          const next = title.textContent.trim() || page.title;
+          title.textContent = next;
+          page.title = next;
+          savePageState();
+        };
+        title.addEventListener('blur', commitTitle);
+        title.addEventListener('keydown', event => {
+          if (event.key === 'Enter') { event.preventDefault(); title.blur(); }
+          if (event.key === 'Escape') { title.textContent = page.title; title.blur(); }
+          event.stopPropagation();
+        });
+        title.addEventListener('click', event => { if (title.contentEditable === 'true') event.stopPropagation(); });
         row.append(caret, title);
         if (page.prototypeUrl || page.title.startsWith('Prototype｜') || page.title.startsWith('Prototype-')) {
           const external = document.createElement('span'); external.className = 'page-row-external'; external.textContent = '↗'; external.setAttribute('aria-label','打开原型'); external.title = '在新页面打开原型';
@@ -882,6 +985,63 @@
       }, 350);
     }
 
+    let suggestCompositionStart = null;
+    documentArea.addEventListener('compositionstart', () => {
+      if (!isSuggestMode() || READONLY || (HOST_MODE && !hostEditable)) return;
+      const selection = window.getSelection();
+      if (selection?.rangeCount) suggestCompositionStart = selection.getRangeAt(0).cloneRange();
+    });
+    documentArea.addEventListener('compositionend', event => {
+      if (!isSuggestMode() || READONLY || (HOST_MODE && !hostEditable)) { suggestCompositionStart = null; return; }
+      const text = event.data || '';
+      const start = suggestCompositionStart;
+      suggestCompositionStart = null;
+      if (!text || !start) return;
+      requestAnimationFrame(() => {
+        const selection = window.getSelection();
+        if (!selection?.rangeCount) return;
+        const end = selection.getRangeAt(0).cloneRange();
+        const wrap = document.createRange();
+        try {
+          wrap.setStart(start.startContainer, start.startOffset);
+          wrap.setEnd(end.startContainer, end.startOffset);
+        } catch (_) { return; }
+        if (!wrap.toString()) return;
+        /* 中文输入法：浏览器已插入文字，再包一层「新增」建议 */
+        createInsertSuggestionFromRange(wrap);
+      });
+    });
+    documentArea.addEventListener('beforeinput', event => {
+      if (!isSuggestMode() || READONLY || (HOST_MODE && !hostEditable)) return;
+      if (event.isComposing) return;
+      if (event.inputType?.startsWith('delete')) {
+        const selection = window.getSelection();
+        if (!selection?.rangeCount) return;
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) {
+          const direction = event.inputType === 'deleteContentForward' ? 'forward' : 'backward';
+          try {
+            selection.modify('extend', direction, 'character');
+          } catch (_) { return; }
+          if (selection.isCollapsed) return;
+          event.preventDefault();
+          createDeleteSuggestion(selection.getRangeAt(0).cloneRange());
+          return;
+        }
+        event.preventDefault();
+        createDeleteSuggestion(range.cloneRange());
+        return;
+      }
+      if (event.inputType === 'insertText' && event.data) {
+        event.preventDefault();
+        createInsertSuggestion(event.data);
+        return;
+      }
+      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
+        event.preventDefault();
+        createInsertSuggestion('\n');
+      }
+    });
     documentArea.addEventListener('input', event => {
       persistDocument();
       const block = getBlock(window.getSelection().anchorNode);
@@ -1017,6 +1177,10 @@
     documentArea.addEventListener('change', event => { if (event.target.matches('input[type="checkbox"]')) persistDocument(); });
     document.getElementById('new-page').addEventListener('click', () => createPage(null));
     document.getElementById('new-child-page').addEventListener('click', () => createPage(pageState.activeId));
+    document.getElementById('new-prototype')?.addEventListener('click', () => {
+      if (HOST_MODE) requestHostLinkPrototype();
+      else alert('独立打开 viewer 时请用目录旁挂接原型；工作台宿主模式可用「＋ 原型」。');
+    });
     documentArea.innerHTML = pageById(pageState.activeId)?.content || documentArea.innerHTML;
     renderPrototypePage();
     resetHistory();
@@ -1119,15 +1283,18 @@
           const src = tag === 'img' && (preserveEditorContent || allowPastedImages) && safeImageUrl(node.getAttribute('src')) ? ` src="${escapeHtml(node.getAttribute('src'))}"`
             : preserveEditorContent && ['video','audio','source'].includes(tag) && safeUrl(node.getAttribute('src')) ? ` src="${escapeHtml(node.getAttribute('src'))}"` : '';
           const hasReviewAnchor = preserveEditorContent && tag === 'span' && node.classList.contains('review-anchor');
-          const ownClass = ['todo','callout','meta','pill','toggle-list'].includes(node.className) || hasReviewAnchor || (preserveEditorContent && ['img','video','audio'].includes(tag) && node.className === 'editor-media') || (allowPastedImages && tag === 'img') ? ` class="${hasReviewAnchor ? 'review-anchor' : tag === 'img' && allowPastedImages ? 'editor-media' : node.className}"` : '';
+          const hasSuggestMark = preserveEditorContent && tag === 'span' && node.classList.contains('suggest-mark');
+          const ownClass = ['todo','callout','meta','pill','toggle-list'].includes(node.className) || hasReviewAnchor || hasSuggestMark || (preserveEditorContent && ['img','video','audio'].includes(tag) && node.className === 'editor-media') || (allowPastedImages && tag === 'img') ? ` class="${hasReviewAnchor ? 'review-anchor' : hasSuggestMark ? 'suggest-mark' : tag === 'img' && allowPastedImages ? 'editor-media' : node.className}"` : '';
           const reviewId = hasReviewAnchor && /^[a-zA-Z0-9-]+$/.test(node.dataset.reviewId || '') ? ` data-review-id="${node.dataset.reviewId}"` : '';
+          const suggestId = hasSuggestMark && /^[a-zA-Z0-9-]+$/.test(node.dataset.suggestId || '') ? ` data-suggest-id="${node.dataset.suggestId}"` : '';
+          const suggestKind = hasSuggestMark && /^(insert|delete)$/.test(node.dataset.suggestKind || '') ? ` data-suggest-kind="${node.dataset.suggestKind}"` : '';
           const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
           const textColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.textColor || '') ? ` data-text-color="${node.dataset.textColor}"` : '';
           const backgroundColor = preserveEditorContent && tag === 'span' && colorName.test(node.dataset.bgColor || '') ? ` data-bg-color="${node.dataset.bgColor}"` : '';
           const open = tag === 'details' && node.hasAttribute('open') ? ' open' : '';
           const controls = preserveEditorContent && ['video','audio'].includes(tag) ? ' controls' : '';
           if (tag === 'img' || tag === 'source') return src ? `<${tag}${src}${ownClass}>` : '';
-          return `<${tag}${href}${src}${ownClass}${reviewId}${textColor}${backgroundColor}${open}${controls}>${content}</${tag}>`;
+          return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${textColor}${backgroundColor}${open}${controls}>${content}</${tag}>`;
         }
         // Word、飞书、Notion 等常用 div/span 包裹内容：保留内部结构，但不保留它们的样式。
         if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) return `<p>${content}</p>`;
@@ -1258,18 +1425,19 @@
     }
 
     function hideInsertControls() {
-      if (!insertMenu.matches(':hover') && !blockPlus.matches(':hover')) {
-        blockPlus.style.display = 'none';
+      if (!insertMenu.matches(':hover') && !blockControls?.matches(':hover')) {
+        blockControls?.classList.remove('show');
       }
     }
 
     function positionBlockPlus(block) {
-      if (window.innerWidth < 700 || !block) return;
+      if (window.innerWidth < 700 || !block || !blockControls) return;
       const rect = block.getBoundingClientRect();
       activeBlock = block;
-      blockPlus.style.left = `${Math.max(10, rect.left - 36)}px`;
-      blockPlus.style.top = `${rect.top + Math.min(4, Math.max(0, rect.height / 2 - 14))}px`;
-      blockPlus.style.display = 'block';
+      const width = blockControls.offsetWidth || 58;
+      blockControls.style.left = `${Math.max(6, rect.left - width - 8)}px`;
+      blockControls.style.top = `${rect.top + Math.min(4, Math.max(0, rect.height / 2 - 14))}px`;
+      blockControls.classList.add('show');
     }
 
     function showTableContext(table, cell) {
@@ -1309,7 +1477,7 @@
     documentArea.addEventListener('mousemove', event => {
       const table = event.target.closest?.('table');
       if (table) {
-        blockPlus.style.display = 'none';
+        blockControls?.classList.remove('show');
         showTableContext(table, event.target.closest('td,th'));
       } else {
         tableContext.classList.remove('show');
@@ -1320,7 +1488,7 @@
     document.addEventListener('selectionchange', () => {
       const cell = selectedCell();
       if (cell && documentArea.contains(cell)) {
-        blockPlus.style.display = 'none';
+        blockControls?.classList.remove('show');
         showTableContext(cell.closest('table'), cell);
         return;
       }
@@ -1338,7 +1506,7 @@
       const selection = window.getSelection();
       const cell = selectedCell();
       if (cell && documentArea.contains(cell)) {
-        blockPlus.style.display = 'none';
+        blockControls?.classList.remove('show');
         showTableContext(cell.closest('table'), cell);
         return;
       }
@@ -1371,6 +1539,46 @@
       persistDocument();
     }
 
+    let draggingBlock = null;
+    blockDrag?.addEventListener('dragstart', event => {
+      if (!activeBlock || !documentArea.contains(activeBlock)) { event.preventDefault(); return; }
+      draggingBlock = activeBlock;
+      draggingBlock.classList.add('block-dragging');
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', 'block');
+    });
+    blockDrag?.addEventListener('dragend', () => {
+      documentArea.querySelectorAll('.block-drop-before,.block-drop-after,.block-dragging').forEach(node => {
+        node.classList.remove('block-drop-before', 'block-drop-after', 'block-dragging');
+      });
+      draggingBlock = null;
+    });
+    documentArea.addEventListener('dragover', event => {
+      if (!draggingBlock) return;
+      const target = getBlock(event.target);
+      if (!target || target === draggingBlock) return;
+      event.preventDefault();
+      documentArea.querySelectorAll('.block-drop-before,.block-drop-after').forEach(node => {
+        if (node !== target) node.classList.remove('block-drop-before', 'block-drop-after');
+      });
+      const rect = target.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      target.classList.toggle('block-drop-before', before);
+      target.classList.toggle('block-drop-after', !before);
+    });
+    documentArea.addEventListener('drop', event => {
+      if (!draggingBlock) return;
+      const target = getBlock(event.target);
+      if (!target || target === draggingBlock) return;
+      event.preventDefault();
+      const before = target.classList.contains('block-drop-before');
+      target.classList.remove('block-drop-before', 'block-drop-after');
+      if (before) target.before(draggingBlock);
+      else target.after(draggingBlock);
+      draggingBlock.classList.remove('block-dragging');
+      draggingBlock = null;
+      persistDocument();
+    });
     blockPlus.addEventListener('click', () => {
       if (!activeBlock) return;
       openInsertMenu(activeBlock);
@@ -1457,7 +1665,7 @@
       cellDragActive = false;
     });
     document.addEventListener('click', event => {
-      if (!event.target.closest('#insert-menu, #block-plus')) insertMenu.classList.remove('show');
+      if (!event.target.closest('#insert-menu, #block-controls, #block-plus')) insertMenu.classList.remove('show');
       if (preserveCellSelectionOnClick) { preserveCellSelectionOnClick = false; return; }
       if (!event.target.closest('table, #table-cell-inline')) clearCellSelection();
     });
@@ -1496,8 +1704,268 @@
       reviewToggle.classList.toggle('active', open);
       reviewToggle.textContent = open ? '结束建议' : '开始建议';
       reviewToggle.setAttribute('aria-pressed', String(open));
-      if (!open) { closeReviewComposer(); closeReviewThread(); setReviewSidebarOpen(false); }
+      if (!open) {
+        closeReviewComposer(); closeReviewThread(); setReviewSidebarOpen(false);
+        closeSuggestCard(); hideSuggestHint();
+      } else {
+        const page = pageById(pageState.activeId);
+        const hasSuggest = !!(page?.suggestions?.length || documentArea.querySelector('.suggest-mark'));
+        if (!hasSuggest) showSuggestHint();
+        else hideSuggestHint();
+      }
       renderReviewComments();
+    }
+    function isSuggestMode() { return document.body.classList.contains('review-open'); }
+    function showSuggestHint() {
+      const hint = document.getElementById('suggest-hint');
+      if (!hint) return;
+      hint.classList.add('show');
+      hint.style.left = `${Math.max(12, window.innerWidth - 340)}px`;
+      hint.style.top = '72px';
+      clearTimeout(showSuggestHint.timer);
+      showSuggestHint.timer = setTimeout(() => hideSuggestHint(), 5200);
+    }
+    function hideSuggestHint() {
+      document.getElementById('suggest-hint')?.classList.remove('show');
+    }
+    function closeSuggestCard() {
+      document.getElementById('suggest-card')?.classList.remove('show');
+    }
+    function suggestLabel(action) {
+      return ({ bold:'加粗', italic:'斜体', underline:'下划线', strike:'删除线', code:'行内代码', highlight:'高亮', link:'链接', text:'清除格式', insert:'新增', delete:'删减' })[action] || '修改';
+    }
+    function ensureSuggestions(page) {
+      if (!Array.isArray(page.suggestions)) page.suggestions = [];
+      return page.suggestions;
+    }
+    function showSuggestCard(id) {
+      const page = pageById(pageState.activeId);
+      const item = page?.suggestions?.find(s => s.id === id);
+      const mark = documentArea.querySelector(`.suggest-mark[data-suggest-id="${id}"]`);
+      const card = document.getElementById('suggest-card');
+      if (!item || !mark || !card) return;
+      hideSuggestHint();
+      card.replaceChildren();
+      const head = document.createElement('div'); head.className = 'suggest-card-head';
+      const title = document.createElement('span'); title.className = 'suggest-card-title'; title.textContent = '建议';
+      const actions = document.createElement('div'); actions.className = 'suggest-card-actions';
+      const accept = document.createElement('button'); accept.type = 'button'; accept.dataset.suggestAccept = '1'; accept.title = '接受'; accept.textContent = '✓';
+      const reject = document.createElement('button'); reject.type = 'button'; reject.dataset.suggestReject = '1'; reject.title = '拒绝'; reject.textContent = '✕';
+      accept.addEventListener('click', () => acceptSuggestion(id));
+      reject.addEventListener('click', () => rejectSuggestion(id));
+      actions.append(accept, reject); head.append(title, actions);
+      const body = document.createElement('div'); body.className = 'suggest-card-body';
+      body.innerHTML = `<strong>${escapeHtml(item.label)}：</strong>${escapeHtml(item.quote)}`;
+      const meta = document.createElement('div'); meta.className = 'suggest-card-meta';
+      meta.textContent = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN') : '';
+      card.append(head, body, meta);
+      const rect = mark.getBoundingClientRect();
+      const width = Math.min(300, window.innerWidth - 16);
+      const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.right + 12));
+      const top = Math.max(70, Math.min(window.innerHeight - 160, rect.top));
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
+      card.classList.add('show');
+      documentArea.querySelectorAll('.suggest-mark.active').forEach(node => node.classList.remove('active'));
+      mark.classList.add('active');
+    }
+    function acceptSuggestion(id) {
+      const mark = documentArea.querySelector(`.suggest-mark[data-suggest-id="${id}"]`);
+      const page = pageById(pageState.activeId);
+      const item = page?.suggestions?.find(s => s.id === id);
+      if (mark) {
+        if (item?.action === 'delete') mark.remove();
+        else mark.replaceWith(...mark.childNodes);
+      }
+      if (page) page.suggestions = (page.suggestions || []).filter(s => s.id !== id);
+      closeSuggestCard();
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
+    }
+    function rejectSuggestion(id) {
+      const mark = documentArea.querySelector(`.suggest-mark[data-suggest-id="${id}"]`);
+      const page = pageById(pageState.activeId);
+      const item = page?.suggestions?.find(s => s.id === id);
+      if (mark) {
+        if (item?.action === 'insert') mark.remove();
+        else if (item?.action === 'delete') mark.replaceWith(document.createTextNode(item?.quote ?? mark.textContent));
+        else mark.replaceWith(document.createTextNode(item?.quote ?? mark.textContent));
+      }
+      if (page) page.suggestions = (page.suggestions || []).filter(s => s.id !== id);
+      closeSuggestCard();
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
+    }
+    function pushSuggestionRecord(page, id, action, quote, kind) {
+      ensureSuggestions(page).push({
+        id,
+        label: suggestLabel(action),
+        quote,
+        action,
+        kind: kind || action,
+        createdAt: new Date().toISOString()
+      });
+    }
+    function createDeleteSuggestion(range) {
+      const page = pageById(pageState.activeId);
+      if (!page) return;
+      const quote = range.toString();
+      if (!quote) return;
+      /* 已在删减建议内继续删：并入同一条 */
+      const startEl = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+      const existing = startEl?.closest?.('.suggest-mark[data-suggest-kind="delete"]');
+      if (existing && existing.contains(range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer : range.endContainer)) {
+        const item = page.suggestions?.find(s => s.id === existing.dataset.suggestId);
+        if (item) item.quote = existing.textContent;
+        showSuggestCard(existing.dataset.suggestId);
+        commitCurrentPage(); savePageState(); persistDocument();
+        return;
+      }
+      const id = `suggest-${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`;
+      wrapRangeText(range, () => {
+        const span = document.createElement('span');
+        span.className = 'suggest-mark';
+        span.dataset.suggestId = id;
+        span.dataset.suggestKind = 'delete';
+        return span;
+      });
+      pushSuggestionRecord(page, id, 'delete', quote, 'delete');
+      showSuggestCard(id);
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
+    }
+    function placeCaretAfter(node) {
+      const selection = window.getSelection();
+      const after = document.createRange();
+      after.setStartAfter(node);
+      after.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(after);
+    }
+    function createInsertSuggestionFromRange(range) {
+      const page = pageById(pageState.activeId);
+      if (!page) return;
+      const quote = range.toString();
+      if (!quote) return;
+      const id = `suggest-${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`;
+      wrapRangeText(range, () => {
+        const span = document.createElement('span');
+        span.className = 'suggest-mark';
+        span.dataset.suggestId = id;
+        span.dataset.suggestKind = 'insert';
+        return span;
+      });
+      pushSuggestionRecord(page, id, 'insert', quote, 'insert');
+      const mark = documentArea.querySelector(`.suggest-mark[data-suggest-id="${id}"]`);
+      if (mark) placeCaretAfter(mark);
+      showSuggestCard(id);
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
+    }
+    function createInsertSuggestion(text) {
+      const page = pageById(pageState.activeId);
+      if (!page || !text) return;
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return;
+      let range = selection.getRangeAt(0);
+      if (!documentArea.contains(range.commonAncestorContainer)) return;
+      if (!range.collapsed) {
+        createDeleteSuggestion(range.cloneRange());
+        range = window.getSelection().getRangeAt(0);
+      }
+      /* 紧挨着上一段「新增」建议：并入同一条，避免一字一条 */
+      const atNode = range.startContainer;
+      const atEl = atNode.nodeType === Node.TEXT_NODE ? atNode.parentElement : atNode;
+      const insideInsert = atEl?.closest?.('.suggest-mark[data-suggest-kind="insert"]');
+      if (insideInsert && range.collapsed) {
+        if (atNode.nodeType === Node.TEXT_NODE) {
+          atNode.insertData(range.startOffset, text);
+          const next = range.startOffset + text.length;
+          range.setStart(atNode, next); range.setEnd(atNode, next);
+          selection.removeAllRanges(); selection.addRange(range);
+        } else {
+          insideInsert.append(document.createTextNode(text));
+          placeCaretAfter(insideInsert.lastChild);
+        }
+        const item = page.suggestions?.find(s => s.id === insideInsert.dataset.suggestId);
+        if (item) item.quote = insideInsert.textContent;
+        showSuggestCard(insideInsert.dataset.suggestId);
+        commitCurrentPage(); savePageState(); persistDocument();
+        return;
+      }
+      const prev = range.startContainer.nodeType === Node.TEXT_NODE && range.startOffset === 0
+        ? range.startContainer.previousSibling
+        : (range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer.childNodes[range.startOffset - 1] : null);
+      if (prev?.classList?.contains('suggest-mark') && prev.dataset.suggestKind === 'insert') {
+        prev.append(document.createTextNode(text));
+        placeCaretAfter(prev.lastChild);
+        const item = page.suggestions?.find(s => s.id === prev.dataset.suggestId);
+        if (item) item.quote = prev.textContent;
+        showSuggestCard(prev.dataset.suggestId);
+        commitCurrentPage(); savePageState(); persistDocument();
+        return;
+      }
+      const id = `suggest-${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`;
+      const span = document.createElement('span');
+      span.className = 'suggest-mark';
+      span.dataset.suggestId = id;
+      span.dataset.suggestKind = 'insert';
+      span.textContent = text;
+      range.insertNode(span);
+      placeCaretAfter(span);
+      pushSuggestionRecord(page, id, 'insert', text, 'insert');
+      showSuggestCard(id);
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
+    }
+    function applyFormatInMark(mark, action) {
+      if (!mark) return;
+      if (action === 'bold' || action === 'italic' || action === 'underline' || action === 'strike' || action === 'code') {
+        const tag = ({ bold:'strong', italic:'em', underline:'u', strike:'s', code:'code' })[action];
+        if (mark.querySelector(tag)) return;
+        const wrap = document.createElement(tag);
+        while (mark.firstChild) wrap.append(mark.firstChild);
+        mark.append(wrap);
+        return;
+      }
+      if (action === 'highlight') {
+        if (mark.querySelector('mark')) return;
+        const wrap = document.createElement('mark');
+        while (mark.firstChild) wrap.append(mark.firstChild);
+        mark.append(wrap);
+        return;
+      }
+      if (action === 'link') {
+        const url = prompt('请输入链接地址（http:// 或 https://）', 'https://');
+        if (!url || !/^https?:\/\//i.test(url.trim())) return;
+        if (mark.querySelector('a')) return;
+        const wrap = document.createElement('a');
+        wrap.href = url.trim();
+        wrap.target = '_blank';
+        wrap.rel = 'noopener noreferrer';
+        while (mark.firstChild) wrap.append(mark.firstChild);
+        mark.append(wrap);
+      }
+    }
+    function createFormatSuggestion(range, action) {
+      const page = pageById(pageState.activeId);
+      if (!page) return;
+      const quote = range.toString();
+      if (!quote.trim()) return;
+      const id = `suggest-${Date.now().toString(36)}${Math.random().toString(36).slice(2,5)}`;
+      wrapRangeText(range, () => {
+        const span = document.createElement('span');
+        span.className = 'suggest-mark';
+        span.dataset.suggestId = id;
+        return span;
+      });
+      const mark = documentArea.querySelector(`.suggest-mark[data-suggest-id="${id}"]`);
+      if (!mark) return;
+      applyFormatInMark(mark, action);
+      ensureSuggestions(page).push({
+        id,
+        label: suggestLabel(action),
+        quote,
+        action,
+        createdAt: new Date().toISOString()
+      });
+      showSuggestCard(id);
+      commitCurrentPage(); savePageState(); recordHistory(); persistDocument();
     }
     function setReviewSidebarOpen(open) {
       document.body.classList.toggle('review-comments-open', open);
@@ -1625,16 +2093,25 @@
       if (action === 'comment') { openReviewComposer(); return; }
       const selection = window.getSelection();
       selection.removeAllRanges(); selection.addRange(selectedTextRange);
-      if (action === 'highlight') toggleHighlight(selectedTextRange);
-      else if (action === 'code') wrapRangeText(selectedTextRange, () => document.createElement('code'));
-      else if (action === 'link') {
-        const url = prompt('请输入链接地址（http:// 或 https://）', 'https://');
-        if (url === null) return;
-        if (!/^https?:\/\//i.test(url.trim())) return alert('请输入有效的网址。');
-        document.execCommand('createLink', false, url.trim());
+      const applyDirect = () => {
+        if (action === 'highlight') toggleHighlight(selectedTextRange);
+        else if (action === 'code') wrapRangeText(selectedTextRange, () => document.createElement('code'));
+        else if (action === 'link') {
+          const url = prompt('请输入链接地址（http:// 或 https://）', 'https://');
+          if (url === null) return false;
+          if (!/^https?:\/\//i.test(url.trim())) { alert('请输入有效的网址。'); return false; }
+          document.execCommand('createLink', false, url.trim());
+        }
+        else if (action === 'text') document.execCommand('removeFormat');
+        else document.execCommand({bold:'bold',italic:'italic',underline:'underline',strike:'strikeThrough'}[action]);
+        return true;
+      };
+      if (isSuggestMode() && action !== 'text') {
+        createFormatSuggestion(selectedTextRange, action);
+        selectionTools.classList.remove('show');
+        return;
       }
-      else if (action === 'text') document.execCommand('removeFormat');
-      else document.execCommand({bold:'bold',italic:'italic',underline:'underline',strike:'strikeThrough'}[action]);
+      if (applyDirect() === false) return;
       selection.removeAllRanges(); selectionTools.classList.remove('show');
       persistDocument();
     });
@@ -1792,7 +2269,6 @@
       trigger.addEventListener('click', event => { event.stopPropagation(); document.querySelectorAll('.review-menu.show').forEach(other => { if (other !== menu) other.classList.remove('show'); }); menu.classList.toggle('show'); });
       const addOption = (label, action) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.addEventListener('click', event => { event.stopPropagation(); menu.classList.remove('show'); action(); }); menu.append(button); };
       addOption(comment.unread ? '标记为已读' : '标记为未读', () => { comment.unread = !comment.unread; savePageState(); refreshReviewViews(comment.id); });
-      addOption('再加一条评论', () => openReplyEditor(card, comment));
       addOption('编辑评论', () => openCommentEditor(card, comment));
       addOption('删除评论', () => {
         reviewAnchors(comment.id).forEach(anchor => anchor.replaceWith(...anchor.childNodes));
@@ -1865,12 +2341,15 @@
       comments.forEach(comment => list.append(createReviewCard(comment)));
     }
     documentArea.addEventListener('click', event => {
+      const suggest = event.target.closest?.('.suggest-mark');
+      if (suggest?.dataset.suggestId) { showSuggestCard(suggest.dataset.suggestId); return; }
       const anchor = event.target.closest?.('.review-anchor');
       if (!anchor) return;
       showReviewThread(anchor.dataset.reviewId);
     });
     document.addEventListener('click', event => {
       if (!event.target.closest('#review-thread,.review-anchor,#review-composer')) closeReviewThread();
+      if (!event.target.closest('#suggest-card,.suggest-mark')) closeSuggestCard();
       if (!event.target.closest('.review-menu-wrap')) document.querySelectorAll('.review-menu.show').forEach(menu => menu.classList.remove('show'));
     });
 
@@ -2349,6 +2828,7 @@
       const active = pageById(pageState.activeId) || pageState.pages[0];
       if (Array.isArray(data.comments) && active) active.comments = data.comments;
       hostEditable = data.editable !== false && !READONLY;
+      document.body.classList.toggle('prd-readonly', !hostEditable);
       if (data.brand) {
         const brand = document.querySelector('.app-brand');
         if (brand) brand.textContent = data.brand;
@@ -2384,6 +2864,15 @@
       if (event.data?.type === 'STAR_PRD_COMMENTS_OPEN') {
         setReviewSidebarView('comments');
         setReviewSidebarOpen(Boolean(event.data.on));
+      }
+      if (event.data?.type === 'STAR_PRD_COPY_PAGE') {
+        try {
+          const html = documentArea.innerHTML || '';
+          const text = documentArea.innerText || '';
+          parent.postMessage({ type: 'STAR_PRD_COPY_PAYLOAD', html, text }, '*');
+        } catch (_) {
+          parent.postMessage({ type: 'STAR_PRD_COPY_PAYLOAD', html: '', text: '', error: 'copy-failed' }, '*');
+        }
       }
     });
     if (HOST_MODE) {

@@ -224,6 +224,8 @@ export async function updateProjectPrd(
     versions?: PrdDocVersion[];
     rotate_share_token?: boolean;
     snapshot_version?: boolean;
+    /** 保存小版本时的自定义名称；空则自动 1.0.x */
+    snapshot_version_label?: string;
   }
 ): Promise<ProjectPrd> {
   const existing = await getPrdById(prdId);
@@ -235,11 +237,12 @@ export async function updateProjectPrd(
     patch.versions !== undefined ? patch.versions : existing.versions ?? [];
   if (patch.snapshot_version) {
     const now = nowIso();
+    const custom = patch.snapshot_version_label?.trim();
     versions = [
       ...versions,
       {
         id: uid("prdv-"),
-        label: nextPrdVersionLabel(versions),
+        label: custom || nextPrdVersionLabel(versions),
         html_content: htmlContent,
         created_at: now,
       },

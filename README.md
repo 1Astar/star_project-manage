@@ -131,9 +131,13 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 1. 安装依赖：`npm install`
 2. **Build 环境变量**：OpenNext/Next 在 `build` 阶段内联 `NEXT_PUBLIC_*`，需通过 `.env.local` / `.env*`（或 CI 环境变量）提供；`.dev.vars` 仅用于 Wrangler **运行时** secrets / `preview`，不参与 Next build。本地 preview 请保持两者值一致。
 3. 复制 `.dev.vars.example` → `.dev.vars`，填入运行时密钥（本地 preview 用）
-4. **生产必填**：`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`（及 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）、`ADMIN_*`、`CRON_SECRET`、MCP/OAuth 相关变量；Upstash REST（`KV_REST_API_*`）用于 OAuth token 存储
+4. **生产必填**：`NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`（及 `NEXT_PUBLIC_SUPABASE_ANON_KEY`）、`ADMIN_*`、`CRON_SECRET`、MCP/OAuth 相关变量；Upstash REST（`KV_REST_API_*`）用于 OAuth token 存储  
+   - **密钥 / 机密**：只放 Cloudflare **Secrets**（或控制台 Secret 类型），**不要**写进 `wrangler.jsonc`（会进 git）  
+   - **明文非机密**：可写在控制台 Variables；仓库已设 `keep_vars: true`，下次 deploy 不会冲掉控制台变量  
+   - 控制台若提示「更新 Wrangler 配置」：只需把 **routes / 非机密 vars / triggers** 等可公开项同步进 `wrangler.jsonc`；**不要**把控制台生成的密钥片段提交进仓  
+   - `NEXT_PUBLIC_*` 还须出现在 **Build** 环境变量里（OpenNext 构建期会内联）
 5. 本地 Workers 预览：`npm run preview`（Windows 上 OpenNext build 已通过；仍建议 preview/deploy 冒烟验收）
-6. 部署：`npm run deploy`（需已登录 `wrangler login`；脚本带 `--keep-vars`，避免覆盖 Cloudflare 控制台已配置的 plaintext 环境变量）
+6. 部署：`npm run deploy`（需已登录 `wrangler login`；脚本带 `--keep-vars`，与 `wrangler.jsonc` 的 `keep_vars` 一致）
 7. 部署后访问 `/api/health/db` 确认 `storage: "supabase"`
 
 **Cron（Cloudflare Cron Triggers）**：`wrangler.jsonc` 配置 UTC `0 9/10/11 * * *`，`cloudflare-worker.ts` 的 `scheduled` 处理器经 `WORKER_SELF_REFERENCE` 自调用现有 `/api/cron/*` 路由，携带 `Authorization: Bearer ${CRON_SECRET}`。手动验收：

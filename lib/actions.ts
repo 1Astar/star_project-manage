@@ -547,6 +547,7 @@ export async function updatePrdAction(input: {
   }>;
   rotateShareToken?: boolean;
   snapshotVersion?: boolean;
+  snapshotVersionLabel?: string;
 }) {
   assertNotViewerWrite();
   const { updateProjectPrd } = await import("@/lib/prds/store");
@@ -557,6 +558,7 @@ export async function updatePrdAction(input: {
     linked_prototypes: input.linkedPrototypes,
     rotate_share_token: input.rotateShareToken,
     snapshot_version: input.snapshotVersion,
+    snapshot_version_label: input.snapshotVersionLabel,
   });
   revalidatePath(`/projects/${input.projectSlug}/prd`);
   return row;

@@ -207,20 +207,22 @@ export function PrdWorkspaceClient({
     [projectSlug, router]
   );
 
-  function createOne() {
+  function createOne(titleOverride?: string, moduleOverride?: string | null) {
+    const title = (titleOverride ?? newTitle).trim() || "未命名 PRD";
+    const modulePath = (moduleOverride ?? newModule).trim() || null;
     startTransition(async () => {
       try {
         const row = await createPrdAction({
           projectId,
           projectSlug,
-          title: newTitle.trim() || "未命名 PRD",
-          modulePath: newModule.trim() || null,
+          title,
+          modulePath,
         });
-        if (studioProjectId && newModule.trim()) {
+        if (studioProjectId && modulePath) {
           await addFeatureModuleFromPrdAction({
             studioProjectId,
             projectSlug,
-            modulePath: newModule.trim(),
+            modulePath,
           });
         }
         setPrds((prev) => [row, ...prev]);
@@ -235,6 +237,14 @@ export function PrdWorkspaceClient({
     });
   }
 
+  function focusPrototypeLinker() {
+    const el = document.getElementById("prd-link-prototype");
+    if (el instanceof HTMLSelectElement) {
+      el.focus();
+      setShareHint("在「挂原型链接」下拉中选择要挂到当前 PRD 的原型");
+    }
+  }
+
   function copyShare(prd = selected) {
     if (!prd?.share_token) return;
     const url = shareUrl(prd);
@@ -242,6 +252,36 @@ export function PrdWorkspaceClient({
       () => setShareHint("分享链接已复制"),
       () => setShareHint(url)
     );
+  }
+
+  async function copyPageBody() {
+    const iframe = document.querySelector(
+      'iframe[title="PRD 编辑器"]'
+    ) as (HTMLIFrameElement & {
+      __copyPage?: () => Promise<{ html: string; text: string }>;
+    }) | null;
+    try {
+      const payload = iframe?.__copyPage
+        ? await iframe.__copyPage()
+        : { html: draftHtml || editorHtml, text: "" };
+      const html = payload.html || draftHtml || editorHtml;
+      const text =
+        payload.text ||
+        html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      if (typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      setShareHint("当前页正文已复制（含结构；外贴会保留标题/列表等语义格式）");
+    } catch (e) {
+      setShareHint(e instanceof Error ? e.message : "复制失败");
+    }
   }
 
   const onHtmlChange = useCallback(
@@ -269,7 +309,7 @@ export function PrdWorkspaceClient({
         <div>
           <h2 className="text-base font-semibold text-slate-900">PRD</h2>
           <p className="mt-1 text-sm text-slate-500">
-            正文服务端保存。选中文字可先改颜色/背景高亮；「开始建议」贴着正文写建议；「评论」是独立入口。原型可挂到目录。
+            左侧列表 = 多份 PRD（文档级）。打开后侧栏「＋ 页面」再建一份 PRD，「＋ 原型」挂原型。顶栏「当前稿 / 小版本」= 整份文档快照（可自命名），不是章节切换。正文里「版本记录」表是产品文案，与顶栏快照分开。
           </p>
         </div>
         <button
@@ -449,14 +489,28 @@ export function PrdWorkspaceClient({
                 type="button"
                 className="rounded-lg border px-2 py-1 text-sm"
                 disabled={pending || !editingCurrent}
-                onClick={() =>
+                onClick={() => {
+                  const suggested = (() => {
+                    const vers = selected.versions ?? [];
+                    const last = vers[vers.length - 1]?.label ?? "1.0";
+                    const m = last.match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
+                    if (!m) return `快照 ${vers.length + 1}`;
+                    const patch = m[3] != null ? Number(m[3]) + 1 : 1;
+                    return `${m[1]}.${m[2]}.${patch}`;
+                  })();
+                  const label = window.prompt(
+                    "小版本名称（可改；取消则不保存）",
+                    suggested
+                  );
+                  if (label === null) return;
                   persist(selected.id, {
                     prdId: selected.id,
                     projectSlug,
                     htmlContent: draftHtml,
                     snapshotVersion: true,
-                  })
-                }
+                    snapshotVersionLabel: label.trim() || suggested,
+                  });
+                }}
               >
                 保存为小版本
               </button>
@@ -501,6 +555,7 @@ export function PrdWorkspaceClient({
                 评论
               </button>
               <select
+                id="prd-link-prototype"
                 className="max-w-[160px] rounded-lg border border-slate-200 px-2 py-1 text-sm"
                 defaultValue=""
                 onChange={(e) => {
@@ -534,6 +589,13 @@ export function PrdWorkspaceClient({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                className="rounded-lg border px-2 py-1 text-sm"
+                onClick={() => void copyPageBody()}
+              >
+                复制正文
+              </button>
               <button
                 type="button"
                 className="rounded-lg border px-2 py-1 text-sm"
@@ -594,6 +656,18 @@ export function PrdWorkspaceClient({
                 {shareHint}
               </p>
             ) : null}
+            {!editingCurrent ? (
+              <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-950">
+                当前为<strong>只读</strong>
+                {showDiff ? "（已勾选「标注相对上一版改动」）" : ""}
+                {viewVersionId !== "current" ? "（正在看历史小版本）" : ""}
+                ：无法粘贴或改正文。取消标注并选回「当前稿」后即可编辑；仍可用上方「复制正文」拷出内容与结构。
+              </p>
+            ) : (
+              <p className="border-b border-slate-100 px-4 py-1 text-[11px] text-slate-500">
+                粘贴会保留标题/列表/表格/加粗等语义格式，并去掉 Word/网页带来的字号颜色，避免把外站样式带进 PRD。
+              </p>
+            )}
             <div className="min-h-0 flex-1">
               <PrdEditorFrame
                 brand={projectTitle}
@@ -610,6 +684,8 @@ export function PrdWorkspaceClient({
                 commentsOpenTick={commentsOpenTick}
                 onHtmlChange={onHtmlChange}
                 onCommentsChange={onCommentsChange}
+                onHostCreatePage={(title) => createOne(title, selected.module_path)}
+                onHostLinkPrototype={() => focusPrototypeLinker()}
               />
             </div>
           </div>

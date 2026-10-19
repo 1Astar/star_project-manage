@@ -4,18 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+/** 按产品工作流：调研 → 需求 → 方案 → 原型验收 → 缺陷 → 排期复盘 → 资料 → 项目卡 */
 const TABS = [
-  { suffix: "", label: "项目恢复" },
   { suffix: "/overview", label: "概况" },
-  { suffix: "/tasks", label: "需求与任务" },
-  { suffix: "/bugs", label: "Bug" },
-  { suffix: "/prd", label: "PRD" },
-  { suffix: "/learning", label: "学习池" },
   { suffix: "/interviews", label: "访谈库" },
+  { suffix: "/learning", label: "学习池" },
+  { suffix: "/tasks", label: "需求与任务" },
+  { suffix: "/prd", label: "PRD" },
   { suffix: "/prototype", label: "原型与验收" },
+  { suffix: "/bugs", label: "Bug" },
   { suffix: "/schedule", label: "进度排期" },
   { suffix: "/evolution", label: "迭代记录" },
   { suffix: "/resources", label: "资源中心" },
+  { suffix: "", label: "项目恢复" },
 ] as const;
 
 export function ProjectNav({ routeId }: { routeId: string }) {

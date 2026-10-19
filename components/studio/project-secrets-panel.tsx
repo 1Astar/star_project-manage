@@ -31,6 +31,13 @@ export function ProjectSecretsPanel({ projectId }: ProjectSecretsPanelProps) {
   const [newName, setNewName] = useState("");
   const [newValue, setNewValue] = useState("");
 
+  const [exportPass, setExportPass] = useState("");
+  const [importPass, setImportPass] = useState("");
+  const [packText, setPackText] = useState("");
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [lastPack, setLastPack] = useState<string | null>(null);
+  const [lastEnv, setLastEnv] = useState<string | null>(null);
+
   const loadSecrets = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -120,6 +127,94 @@ export function ProjectSecretsPanel({ projectId }: ProjectSecretsPanelProps) {
     }
   }
 
+  async function onExportEncrypted() {
+    setPending(true);
+    setError(null);
+    setMessage(null);
+    setLastEnv(null);
+    try {
+      const res = await fetch(`/api/studio/projects/${projectId}/secrets/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passphrase: exportPass, format: "pack" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "导出失败");
+        return;
+      }
+      const pack = String(data.pack ?? "");
+      setLastPack(pack);
+      await navigator.clipboard.writeText(pack);
+      setMessage(`已复制加密包（${data.count} 条）。别人看到是乱码；导入或解开需同一口令。`);
+    } catch {
+      setError("导出失败");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onExportEnvPlain() {
+    setPending(true);
+    setError(null);
+    setMessage(null);
+    setLastPack(null);
+    try {
+      const res = await fetch(`/api/studio/projects/${projectId}/secrets/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passphrase: exportPass, format: "env" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "导出失败");
+        return;
+      }
+      const env = String(data.env ?? "");
+      setLastEnv(env);
+      await navigator.clipboard.writeText(env);
+      setMessage(
+        `已复制明文 .env（${data.count} 条）。仅用于粘贴到 CF/本地；剪贴板此时可读，用完请清空。`
+      );
+    } catch {
+      setError("导出失败");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onImportEncrypted() {
+    setPending(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/studio/projects/${projectId}/secrets/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          passphrase: importPass,
+          pack: packText,
+          mode: importMode,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "导入失败");
+        return;
+      }
+      setPackText("");
+      setMessage(
+        `已导入 ${data.imported} 条（${data.mode === "replace" ? "覆盖" : "合并"}）` +
+          (data.sourceProjectTitle ? ` · 来自 ${data.sourceProjectTitle}` : "")
+      );
+      await loadSecrets();
+    } catch {
+      setError("导入失败");
+    } finally {
+      setPending(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-6">
@@ -162,6 +257,111 @@ export function ProjectSecretsPanel({ projectId }: ProjectSecretsPanelProps) {
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="text-sm font-semibold text-slate-800">一键导出 / 导入</h2>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          <strong className="font-medium text-slate-600">加密包</strong>
+          ：剪贴板是乱码，可微信/邮件转发；对方在本页粘贴 + 同一口令即可导入。
+          <br />
+          <strong className="font-medium text-slate-600">明文 .env</strong>
+          ：Cloudflare / 本地部署要用明文，须口令确认后再复制；CF 控制台不能直接吃加密包。
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-slate-600 sm:col-span-2">
+            导出口令（≥6 位；加密包用它加密，明文 .env 用它作确认）
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={exportPass}
+              onChange={(e) => setExportPass(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-indigo-300"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || secrets.length === 0}
+            onClick={() => void onExportEncrypted()}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            复制加密包
+          </button>
+          <button
+            type="button"
+            disabled={pending || secrets.length === 0}
+            onClick={() => void onExportEnvPlain()}
+            className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+          >
+            复制明文 .env（配 CF）
+          </button>
+        </div>
+        {lastPack ? (
+          <textarea
+            readOnly
+            value={lastPack}
+            className="mt-3 h-24 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-600"
+          />
+        ) : null}
+        {lastEnv ? (
+          <textarea
+            readOnly
+            value={lastEnv}
+            className="mt-3 h-24 w-full rounded-md border border-amber-200 bg-amber-50/50 px-3 py-2 font-mono text-[11px] text-slate-700"
+          />
+        ) : null}
+
+        <div className="mt-6 border-t border-slate-100 pt-4">
+          <h3 className="text-xs font-semibold text-slate-700">导入加密包</h3>
+          <label className="mt-2 block text-xs text-slate-600">
+            粘贴 STARPM_SECRETS_V1.…
+            <textarea
+              value={packText}
+              onChange={(e) => setPackText(e.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-[11px] outline-none focus:border-indigo-300"
+              placeholder="STARPM_SECRETS_V1.…"
+            />
+          </label>
+          <label className="mt-2 block text-xs text-slate-600">
+            导入口令
+            <input
+              type="password"
+              autoComplete="off"
+              value={importPass}
+              onChange={(e) => setImportPass(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-indigo-300"
+            />
+          </label>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="import-mode"
+                checked={importMode === "merge"}
+                onChange={() => setImportMode("merge")}
+              />
+              合并（同名覆盖值）
+            </label>
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="import-mode"
+                checked={importMode === "replace"}
+                onChange={() => setImportMode("replace")}
+              />
+              覆盖（先清空本项目密钥）
+            </label>
+            <button
+              type="button"
+              disabled={pending || !packText.trim()}
+              onClick={() => void onImportEncrypted()}
+              className="rounded-md bg-slate-900 px-3 py-1.5 font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              导入
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">

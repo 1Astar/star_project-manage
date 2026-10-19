@@ -157,3 +157,67 @@ export async function deleteProjectSecret(projectId: string, secretIdValue: stri
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("密钥不存在");
 }
+
+export async function deleteAllProjectSecrets(projectId: string): Promise<number> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase 未配置，无法删除项目密钥");
+  }
+  await assertProjectExists(projectId);
+  const { data, error } = await sb()
+    .from("studio_project_secrets")
+    .delete()
+    .eq("project_id", projectId)
+    .select("id");
+  if (error) throw new Error(error.message);
+  return data?.length ?? 0;
+}
+
+/** 按名称合并：已存在则更新值，否则新建 */
+export async function upsertProjectSecretByName(
+  projectId: string,
+  input: UpsertProjectSecretInput
+): Promise<ProjectSecret> {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase 未配置，无法存储项目密钥");
+  }
+  const name = input.name.trim();
+  if (!name) throw new Error("名称必填");
+  if (!input.value) throw new Error("值必填");
+  await assertProjectExists(projectId);
+
+  const { data: existing, error: fetchError } = await sb()
+    .from("studio_project_secrets")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("name", name)
+    .maybeSingle();
+  if (fetchError) throw new Error(fetchError.message);
+
+  if (existing) {
+    return updateProjectSecret(projectId, (existing as ProjectSecretRow).id, {
+      value: input.value,
+    });
+  }
+  return createProjectSecret(projectId, { name, value: input.value });
+}
+
+export type ImportSecretsMode = "merge" | "replace";
+
+export async function importProjectSecrets(
+  projectId: string,
+  items: UpsertProjectSecretInput[],
+  mode: ImportSecretsMode
+): Promise<{ imported: number; mode: ImportSecretsMode }> {
+  const cleaned = items
+    .map((i) => ({ name: i.name.trim(), value: i.value }))
+    .filter((i) => i.name && i.value);
+  if (!cleaned.length) throw new Error("密钥包内没有有效条目");
+
+  if (mode === "replace") {
+    await deleteAllProjectSecrets(projectId);
+  }
+  for (const item of cleaned) {
+    await upsertProjectSecretByName(projectId, item);
+  }
+  return { imported: cleaned.length, mode };
+}
