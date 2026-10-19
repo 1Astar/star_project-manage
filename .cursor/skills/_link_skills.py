@@ -23,6 +23,9 @@ LINK_NAMES = [
     "create-skill",
     "star-table-folder",
     "prd-prototype-rules",
+    "mystic-lab-ui",
+    "miniscloud-prd-agents",
+    "miniscloud-ui-design",
 ]
 
 DST.mkdir(parents=True, exist_ok=True)

@@ -6,7 +6,7 @@ alwaysApply: true
 # Star PM · 行动前
 
 1. 先扫本插件 `skills/`：有 ≥1% 可能适用 → 先读对应 `SKILL.md`。
-2. 开场优先：`using-star-skills`；写 PM / 收工：`star-pm-write-release`；PRD/原型：`prd-prototype-rules`。
+2. 开场优先：`using-star-skills`（含产品分域）；写 PM / 收工：`star-pm-write-release`；通用 Star PRD：`prd-prototype-rules`；MinisCloud：`miniscloud-prd-agents` + `miniscloud-ui-design`；Lab：`mystic-lab-ui`。
 3. 大批量写入前 MCP **`get_ai_rules`**；改代码前 **`compare_sources`**。
 4. **有则写之，无则跳过**；缺板块标待补齐，不瞎编。
 5. 做完勾完成并写清「下一步接什么」；插队须归队；不做/后期写清防双盲。

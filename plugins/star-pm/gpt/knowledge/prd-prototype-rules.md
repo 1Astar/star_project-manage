@@ -8,6 +8,9 @@ description: >-
 
 # PRD / 原型 · 先定规则再交付
 
+**产品域：通用 Star 产品。**  
+若任务属于 **MinisCloud / NAS 产品目录** → 改走 `miniscloud-prd-agents`（八章结构）+ `miniscloud-ui-design`，不要用本 skill 的交付骨架去覆盖八章。
+
 处理 **PRD** 或 **原型** 需求时，按下列硬规则执行。
 
 ## 硬规则（原文）

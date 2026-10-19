@@ -9,6 +9,7 @@ NAMES=(
   version-management safe-file-delete star-pm-write-release using-star-skills
   defer-scope-record brainstorming canvas verification-before-completion create-skill
   star-table-folder mystic-lab-ui html-demo-nav writing-plans prd-prototype-rules
+  miniscloud-prd-agents miniscloud-ui-design
 )
 for name in "${NAMES[@]}"; do
   target="$SRC/$name"

@@ -13,7 +13,7 @@ This skill guides you through creating effective Agent Skills for Cursor. Skills
 Before creating a skill, gather essential information from the user about:
 
 1. **Purpose and scope**: What specific task or workflow should this skill help with?
-2. **Target location**: Should this be a personal skill (your user Agent Store) or project skill (.cursor/skills/)?
+2. **Target location**: Should this be a personal skill (~/.cursor/skills/) or project skill (.cursor/skills/)?
 3. **Trigger scenarios**: When should the agent automatically apply this skill?
 4. **Key domain knowledge**: What specialized information does the agent need that it wouldn't already know?
 5. **Output format preferences**: Are there specific templates, formats, or styles required?
@@ -33,7 +33,7 @@ If you need clarification, use the AskQuestion tool when available:
 
 ```
 Example AskQuestion usage:
-- "Where should this skill be stored?" with options like ["Personal (my user Agent Store)", "Project (.cursor/skills/)"]
+- "Where should this skill be stored?" with options like ["Personal (~/.cursor/skills/)", "Project (.cursor/skills/)"]
 - "Should this skill include executable scripts?" with options like ["Yes", "No"]
 ```
 
@@ -61,12 +61,8 @@ skill-name/
 
 | Type | Path | Scope |
 |------|------|-------|
-| Personal | `skills/skill-name/` in your user Agent Store | Available in every project, on every machine you sign in on |
+| Personal | ~/.cursor/skills/skill-name/ | Available across all your projects |
 | Project | .cursor/skills/skill-name/ | Shared with anyone using the repository |
-
-**Personal skills live in your user Agent Store, not in `~/.cursor/skills/`.** Write them to `skills/<skill-name>/SKILL.md` under the user store path listed in the "Available persistent agent stores" section of your context — for example `/cursor/stores/user/skills/<skill-name>/SKILL.md` when that is the advertised path. Use the normal file tools; the store syncs from there.
-
-If no user store is listed in your context, that store is not mounted for this run. Write the skill to `~/.cursor/skills/skill-name/` instead and tell the user it landed on this machine only.
 
 **IMPORTANT**: Never create skills in `~/.cursor/skills-cursor/`. This directory is reserved for Cursor's internal built-in skills and is managed automatically by the system.
 

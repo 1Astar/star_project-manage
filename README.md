@@ -116,6 +116,18 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 
 基于 [@opennextjs/cloudflare](https://opennext.js.org/cloudflare/get-started) + Wrangler，与 Vercel 部署并存。
 
+### Cloudflare 控制台 Build / Deploy（硬规则）
+
+`npm run build` 会经 `scripts/ci-build.mjs` 分流：在 Cloudflare CI（`/opt/buildhome` / `CF_PAGES` / `WORKERS_CI`）走 **OpenNext**；Vercel / 本地仍走 `next build`。  
+若控制台仍报 `Could not find compiled Open Next config`，把 Build 显式改成下方命令。
+
+| 控制台项 | 推荐命令 |
+|----------|----------|
+| **Build command** | `npm run build`（CF 上自动 OpenNext）或 `npm run cf-build` |
+| **Deploy command** | `npx wrangler deploy` |
+
+本地一键：`npm run deploy`（内部先 OpenNext build 再 deploy，带 `--keep-vars`）。纯 Next：`npm run build:next`。
+
 1. 安装依赖：`npm install`
 2. **Build 环境变量**：OpenNext/Next 在 `build` 阶段内联 `NEXT_PUBLIC_*`，需通过 `.env.local` / `.env*`（或 CI 环境变量）提供；`.dev.vars` 仅用于 Wrangler **运行时** secrets / `preview`，不参与 Next build。本地 preview 请保持两者值一致。
 3. 复制 `.dev.vars.example` → `.dev.vars`，填入运行时密钥（本地 preview 用）

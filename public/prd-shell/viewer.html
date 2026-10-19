@@ -761,6 +761,7 @@
       pageState.activeId = id;
       const page = pageById(id);
       documentArea.innerHTML = page?.content || '<h1>未命名页面</h1><p><br></p>';
+      documentArea.contentEditable = (HOST_MODE ? hostEditable : !READONLY) ? 'true' : 'false';
       renderPrototypePage();
       resetHistory();
       savePageState();
@@ -1583,7 +1584,14 @@
           selection.removeAllRanges(); selection.addRange(selectedTextRange);
           wrapRangeText(selectedTextRange, () => {
             const span = document.createElement('span');
-            span.dataset[kind === 'text' ? 'textColor' : 'bgColor'] = name;
+            if (kind === 'text') {
+              span.dataset.textColor = name;
+              span.style.color = textColor;
+            } else {
+              span.dataset.bgColor = name;
+              /* 内联色作兜底：部分宿主/重载场景只靠 data 属性偶发不生效 */
+              span.style.backgroundColor = name === 'default' ? '' : bgColor;
+            }
             return span;
           });
           selection.removeAllRanges(); closeSelectionColorMenu(); selectionTools.classList.remove('show');
@@ -1680,7 +1688,15 @@
         const end = node === range.endContainer ? range.endOffset : node.nodeValue.length;
         if (end <= start) return;
         const piece = document.createRange(); piece.setStart(node, start); piece.setEnd(node, end);
-        piece.surroundContents(makeWrapper());
+        const wrapper = makeWrapper();
+        try {
+          piece.surroundContents(wrapper);
+        } catch (_) {
+          /* 跨标签边界时 surroundContents 会抛错；改为 extract + insert */
+          const contents = piece.extractContents();
+          wrapper.appendChild(contents);
+          piece.insertNode(wrapper);
+        }
       });
     }
     function closeReviewComposer() {

@@ -10,6 +10,17 @@
 
 ---
 
+## v1.15.4 · 2026-10-19
+
+相对 **v1.15.3**：
+
+- **工作台**：识别 Vercel `DEPLOYMENT_DISABLED` / 账单停用，主线摘要与星图不再只显示空白「加载失败」，改为统一说明 + 全部重试
+- **Cloudflare**：`npm run build` 在 CF CI 自动走 OpenNext（`scripts/ci-build.mjs`）；新增 `cf-build`；README 写明 Build/Deploy 命令
+- **MinisCloud 产品分域 skill**：`miniscloud-prd-agents`（八章 + Web 实现与原生窗观感）+ `miniscloud-ui-design`；`using-star-skills` 路由分流
+- **PRD**：导出可编辑独立 HTML；选区着色更稳；宿主编辑态修正
+
+---
+
 ## v1.15.3 · 2026-10-19
 
 相对 **v1.15.2**：

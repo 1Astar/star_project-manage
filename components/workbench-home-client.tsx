@@ -27,14 +27,19 @@ function SectionSkeleton({ label }: { label: string }) {
 
 function SectionError({
   label,
+  detail,
   onRetry,
 }: {
   label: string;
+  detail?: string;
   onRetry: () => void;
 }) {
   return (
     <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-900">
       <p>{label}加载失败</p>
+      {detail ? (
+        <p className="mt-1 text-xs leading-relaxed text-rose-800/85">{detail}</p>
+      ) : null}
       <button
         type="button"
         onClick={onRetry}
@@ -46,19 +51,42 @@ function SectionError({
   );
 }
 
+function explainWorkbenchHttpError(status: number, raw: string): string {
+  const text = raw.trim();
+  if (
+    status === 402 ||
+    /DEPLOYMENT_DISABLED/i.test(text) ||
+    /Payment required/i.test(text)
+  ) {
+    return "站点部署已停用（常见原因：Vercel 账单/套餐限制 DEPLOYMENT_DISABLED）。请恢复 Vercel，或改走 Cloudflare Workers 部署。";
+  }
+  if (status === 401 || status === 403) {
+    return "未登录或无权访问，请重新登录后再试。";
+  }
+  if (status >= 500) {
+    return text && text.length < 200 ? text : `服务端错误 HTTP ${status}`;
+  }
+  return text && text.length < 200 ? text : `HTTP ${status}`;
+}
+
 async function fetchPart<T>(part: string): Promise<T> {
   const res = await fetch(`/api/workbench/home?part=${part}`, {
     credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(
-      typeof body?.error === "string" ? body.error : `HTTP ${res.status}`
-    );
+    const raw = await res.text();
+    let message = raw;
+    try {
+      const body = JSON.parse(raw) as { error?: unknown };
+      if (typeof body?.error === "string") message = body.error;
+    } catch {
+      /* plain text e.g. Vercel DEPLOYMENT_DISABLED */
+    }
+    throw new Error(explainWorkbenchHttpError(res.status, message));
   }
-  const json = await res.json();
-  return json.data as T;
+  const json = (await res.json()) as { data: T };
+  return json.data;
 }
 
 export function WorkbenchHomeClient() {
@@ -157,13 +185,46 @@ export function WorkbenchHomeClient() {
 
   const drafts = hero?.nextActionDrafts ?? library?.nextActionDrafts ?? {};
   const captureProjects = library?.captureProjects ?? [];
+  const deploymentDisabledDetail = Object.values(errors).find(
+    (m) =>
+      typeof m === "string" &&
+      (/DEPLOYMENT_DISABLED/i.test(m) ||
+        m.includes("站点部署已停用") ||
+        /Payment required/i.test(m))
+  );
 
   return (
     <>
       <QuickCaptureModal projects={captureProjects} />
 
-      {errors.hero ? (
-        <SectionError label="主线摘要" onRetry={() => void retryPart("hero")} />
+      {deploymentDisabledDetail ? (
+        <div className="mt-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-950">
+          <p className="font-medium">工作台接口不可用：生产部署已停用</p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-900/90">
+            {deploymentDisabledDetail}
+          </p>
+          <p className="mt-2 text-xs text-amber-900/80">
+            恢复 Vercel 账单/套餐，或把 Cloudflare Workers Build 改为{" "}
+            <code className="rounded bg-amber-100 px-1">npx opennextjs-cloudflare build</code>
+            ，Deploy 用 <code className="rounded bg-amber-100 px-1">npx wrangler deploy</code>
+            后再打开本站。
+          </p>
+          <button
+            type="button"
+            onClick={() => setTick((t) => t + 1)}
+            className="mt-2 text-xs font-medium text-amber-800 underline"
+          >
+            全部重试
+          </button>
+        </div>
+      ) : null}
+
+      {deploymentDisabledDetail ? null : errors.hero ? (
+        <SectionError
+          label="主线摘要"
+          detail={errors.hero}
+          onRetry={() => void retryPart("hero")}
+        />
       ) : !hero ? (
         <div className="mt-6 grid animate-pulse gap-3 sm:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -267,8 +328,12 @@ export function WorkbenchHomeClient() {
       )}
 
       {/* 视觉顺序：星图 → 项目库 → 今日；网络顺序已是 hero→today→library→star */}
-      {errors.star ? (
-        <SectionError label="星图 / 日历" onRetry={() => void retryPart("star")} />
+      {deploymentDisabledDetail ? null : errors.star ? (
+        <SectionError
+          label="星图 / 日历"
+          detail={errors.star}
+          onRetry={() => void retryPart("star")}
+        />
       ) : !star ? (
         <SectionSkeleton label="星图与日历加载中…" />
       ) : (
@@ -280,8 +345,12 @@ export function WorkbenchHomeClient() {
         </div>
       )}
 
-      {errors.library ? (
-        <SectionError label="项目库" onRetry={() => void retryPart("library")} />
+      {deploymentDisabledDetail ? null : errors.library ? (
+        <SectionError
+          label="项目库"
+          detail={errors.library}
+          onRetry={() => void retryPart("library")}
+        />
       ) : !library ? (
         <SectionSkeleton label="项目库加载中…" />
       ) : (
@@ -291,8 +360,12 @@ export function WorkbenchHomeClient() {
         />
       )}
 
-      {errors.today ? (
-        <SectionError label="今日清单" onRetry={() => void retryPart("today")} />
+      {deploymentDisabledDetail ? null : errors.today ? (
+        <SectionError
+          label="今日清单"
+          detail={errors.today}
+          onRetry={() => void retryPart("today")}
+        />
       ) : !today ? (
         <SectionSkeleton label="今日 / 明日清单加载中…" />
       ) : (

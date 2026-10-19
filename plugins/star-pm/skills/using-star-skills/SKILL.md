@@ -31,14 +31,32 @@ description: >-
 3. **再开做**：对齐是否 fork、vendoring、只借鉴架构，或确认从零写；结论可记入 Star PM（Idea / Decision）。
 4. **例外**：用户明确说「不要找开源、就按现有仓改、续作小修」时可跳过；纯文档/排版/PM 写入不强制。
 
+## 产品分域（硬规则）
+
+**不同产品规则不同；先认域再加载 skill，禁止串用。**
+
+| 产品域 | PRD / 方案 | 前端 / 原型 UI |
+|--------|------------|----------------|
+| **MinisCloud / NAS** 产品目录 | `miniscloud-prd-agents`（**八章** + 四角色评审；Web 实现 + **原生窗观感**） | `miniscloud-ui-design`（蓝主色体系；完整见 `reference.md`） |
+| **通用 Star** 产品 | `prd-prototype-rules` + `product-scheme-design` | 仓库/用户当场 UI 规则；勿套 MinisCloud 蓝卡 |
+| **随心而行 / Mystic Lab** | 通用 PRD 规则即可 | `mystic-lab-ui`（整页画布，不要条幅/卡片框） |
+| **Star PM 工程仓** | 写需求进 PM；工程见 `AGENTS.md` + `CANONICAL_RULES` | 站内现有模式；不动 Lab / MinisCloud 规则 |
+
+结构打架时：**MinisCloud 产品目录以八章为准**；通用 Star 仍走 `prd-prototype-rules` + `product-scheme-design`。
+
+从 MinisCloud `Documents/AGENTS.md` **取亮点、已并入各域 skill**（只改指定内容、交付说明、PRD↔原型不自动互改等）；**不覆盖**本仓根 `AGENTS.md` 的工程/Vercel 说明。
+
 ## 常见路由（一眼）
 
 | 你要做的事 | 先加载 |
 |------------|--------|
 | 写/改调研报告、Word | `doc-delivery-formats` → `word-docx-professional` + `version-management` |
 | 咨询风 PPT | `ppt-consulting-visual` |
-| 产品方案书 | `product-scheme-design` |
-| **PRD / 原型** | `prd-prototype-rules`（先定规则再交付） |
+| 产品方案书（通用 Star） | `product-scheme-design` |
+| **PRD / 原型（通用 Star）** | `prd-prototype-rules`（先定规则再交付） |
+| **MinisCloud / NAS · PRD / HTML 原型 / 评审** | `miniscloud-prd-agents` → 视觉再 `miniscloud-ui-design` |
+| **MinisCloud OS UI / 组件 / 原型视觉** | `miniscloud-ui-design`（必读 `reference.md`） |
+| **Lab / 随心而行 界面** | `mystic-lab-ui` |
 | 删文件 | `safe-file-delete` |
 | **做/改项目库·需求池·灵感等表格或文件夹树** | `star-table-folder`（通用排序筛选移动删除父子；**当场要求优先**） |
 | 记灵感 / 勾完成 / 改下一步 P / 发版 | `star-pm-write-release` |

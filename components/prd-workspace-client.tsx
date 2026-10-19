@@ -11,6 +11,7 @@ import {
   updatePrdAction,
 } from "@/lib/actions";
 import { annotateHtmlDiff } from "@/lib/prds/html-diff";
+import { downloadStandalonePrd } from "@/lib/prds/export-standalone";
 import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type {
   PrdReviewComment,
@@ -542,6 +543,28 @@ export function PrdWorkspaceClient({
               </button>
               <button
                 type="button"
+                className="rounded-lg border px-2 py-1 text-sm"
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      await downloadStandalonePrd({
+                        title: selected.title || "PRD",
+                        bodyHtml: editorHtml,
+                      });
+                      setMessage("已导出可编辑 HTML");
+                    } catch (e) {
+                      setMessage(
+                        e instanceof Error ? e.message : "导出失败"
+                      );
+                    }
+                  });
+                }}
+              >
+                导出 HTML
+              </button>
+              <button
+                type="button"
                 className="rounded-lg border px-2 py-1 text-sm text-rose-600"
                 onClick={() => {
                   if (!confirm(`删除「${selected.title}」？`)) return;
@@ -583,7 +606,7 @@ export function PrdWorkspaceClient({
                 comments={hostComments}
                 revision={`${selected.id}:${activePageId}:${viewVersionId}:${showDiff}:${suggest}:${selected.linked_prototypes
                   .map((l) => l.prototype_id)
-                  .join(",")}:${hostComments.length}`}
+                  .join(",")}`}
                 commentsOpenTick={commentsOpenTick}
                 onHtmlChange={onHtmlChange}
                 onCommentsChange={onCommentsChange}
