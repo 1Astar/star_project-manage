@@ -265,7 +265,11 @@ function normalizeProject(project: Project): Project {
 async function readLocalDb(): Promise<DatabaseSnapshot> {
   if (isValidDb(memoryDb)) return memoryDb;
 
-  if (isProductionLikeRuntime() && !isSupabaseConfigured()) {
+  if (
+    isProductionLikeRuntime() &&
+    !isSupabaseConfigured() &&
+    process.env.NEXT_PHASE !== "phase-production-build"
+  ) {
     assertDurableStorage();
   }
 

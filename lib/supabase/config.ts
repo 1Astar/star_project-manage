@@ -1,4 +1,7 @@
-import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
+import {
+  isNextProductionBuild,
+  isProductionLikeRuntime,
+} from "@/lib/runtime/serverless";
 
 /** 服务端持久化需要 URL + Service Role Key */
 export function isSupabaseConfigured(): boolean {
@@ -10,6 +13,8 @@ export function isSupabaseConfigured(): boolean {
 
 /** Fail fast on Cloudflare/Vercel when Supabase is missing (no in-memory prod fallback). */
 export function assertDurableStorage(): void {
+  // 构建期密钥可能只存在于 Worker 运行时；预渲染勿因此整包失败
+  if (isNextProductionBuild()) return;
   if (isProductionLikeRuntime() && !isSupabaseConfigured()) {
     throw new Error(
       "生产部署须配置 Supabase（NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY）。" +

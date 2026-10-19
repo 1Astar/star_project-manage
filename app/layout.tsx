@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { StarPmBugFeedbackHost } from "@/components/star-pm-bug-feedback-host";
 import "./globals.css";
 
+/** 全站读库/鉴权：CF 构建期无 Worker 密钥，禁止静态预渲染 */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Star PM · 轻量原型项目管理",
   description: "原型 → 需求 → 开发 → 测试 → 产品验收",

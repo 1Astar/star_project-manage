@@ -13,3 +13,8 @@ export function isProductionLikeRuntime(): boolean {
     Boolean(process.env.OPEN_NEXT_BUILD_ID)
   );
 }
+
+/** `next build` 收集/预渲染阶段；此时 CF/Vercel 密钥常尚未注入，勿当运行时失败。 */
+export function isNextProductionBuild(): boolean {
+  return process.env.NEXT_PHASE === "phase-production-build";
+}

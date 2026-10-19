@@ -5,6 +5,9 @@ import { GlobalRequirementBoard } from "@/components/global-requirement-board";
 import { getAdminSession } from "@/lib/auth/session";
 import { getAllRequirementsBoard } from "@/lib/db/local-store";
 
+/** 读库页：勿在 CF 构建期静态预渲染（运行时才有 Supabase 密钥） */
+export const dynamic = "force-dynamic";
+
 export default async function GlobalRequirementsBoardPage() {
   const session = await getAdminSession();
   const { items, projects } = await getAllRequirementsBoard();
