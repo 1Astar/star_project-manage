@@ -536,7 +536,7 @@ export function PrdWorkspaceClient({
               <button
                 type="button"
                 className="rounded-lg border px-2 py-1 text-sm"
-                onClick={copyShare}
+                onClick={() => copyShare()}
               >
                 复制分享链接
               </button>
