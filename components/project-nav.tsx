@@ -66,14 +66,14 @@ export function ProjectMoreMenu({
   const slug = pmSlug ?? routeId;
   return (
     <details className="relative inline-block text-sm">
-      <summary className="cursor-pointer list-none rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-50">
+      <summary className="cursor-pointer list-none rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
         更多操作
       </summary>
-      <div className="absolute right-0 z-10 mt-1 min-w-[160px] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+      <div className="absolute right-0 z-50 mt-1 min-w-[180px] overflow-visible rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
         {showSecrets ? (
           <a
             href={`/projects/${routeId}/secrets`}
-            className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+            className="block whitespace-nowrap px-3 py-2 text-slate-700 hover:bg-slate-50"
           >
             项目密钥
           </a>
@@ -82,19 +82,22 @@ export function ProjectMoreMenu({
           <>
             <a
               href={`/projects/${slug}/import`}
-              className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+              className="block whitespace-nowrap px-3 py-2 text-slate-700 hover:bg-slate-50"
             >
               Excel 导入
             </a>
             <a
               href={`/projects/${slug}/settings`}
-              className="block px-3 py-2 text-slate-700 hover:bg-slate-50"
+              className="block whitespace-nowrap px-3 py-2 text-slate-700 hover:bg-slate-50"
             >
               项目设置
             </a>
           </>
         ) : null}
-        <a href="/settings" className="block px-3 py-2 text-slate-700 hover:bg-slate-50">
+        <a
+          href="/settings"
+          className="block whitespace-nowrap px-3 py-2 text-slate-700 hover:bg-slate-50"
+        >
           全局设置
         </a>
       </div>
