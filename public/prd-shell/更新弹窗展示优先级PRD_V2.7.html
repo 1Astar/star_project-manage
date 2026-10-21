@@ -353,8 +353,27 @@
     @media (max-width:720px) { .on-page { display:none; } .phase-pager { width:calc(100% - 40px); grid-template-columns:1fr; } }
     @media (max-width:700px) { .app-nav,.sidebar-collapse { display:none; } .main,body.review-comments-open .main,body.review-composing .main { margin-left:0; margin-right:0; } .toolbar { padding:0 16px; } .doc-layout { width:calc(100% - 40px); margin:32px auto 56px; } h1 { font-size:27px; margin-bottom:34px; } h2 { font-size:20px; margin-top:42px; padding-top:28px; } table { display:block; overflow-x:auto; } .brand { display:none; } }
     pre.mermaid { white-space:pre-wrap; overflow:auto; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#334155; }
-    .mermaid-rendered { margin:12px 0 20px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; overflow:auto; text-align:center; }
-    .mermaid-rendered svg { max-width:100%; height:auto; }
+    .mermaid-block { margin:12px 0 20px; border:1px solid var(--line); border-radius:12px; background:#fff; overflow:hidden; }
+    .mermaid-block[contenteditable="false"] { user-select:none; }
+    .mermaid-block .mermaid-source-wrap { display:none; border-bottom:1px solid var(--line); background:#f8fafc; }
+    .mermaid-block.is-editing .mermaid-source-wrap { display:block; }
+    .mermaid-block .mermaid-source-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); font:12px "PingFang SC",sans-serif; color:var(--muted); }
+    .mermaid-block .mermaid-source-actions { display:flex; gap:6px; }
+    .mermaid-block .mermaid-source-actions button { border:1px solid var(--line); border-radius:6px; background:#fff; padding:4px 10px; font:12px "PingFang SC",sans-serif; color:var(--ink); cursor:pointer; }
+    .mermaid-block .mermaid-source-actions button.primary { border-color:var(--blue); color:var(--blue); background:rgba(61,134,248,.08); }
+    .mermaid-block .mermaid-source-actions button:hover { border-color:var(--blue); color:var(--blue); }
+    .mermaid-block textarea.mermaid-source { display:block; width:100%; min-height:140px; max-height:42vh; margin:0; padding:12px 14px; border:0; resize:vertical; background:transparent; color:#334155; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; outline:none; }
+    .mermaid-rendered { position:relative; padding:12px; overflow:auto; text-align:center; cursor:pointer; }
+    .mermaid-block.is-editing .mermaid-rendered { cursor:default; }
+    .mermaid-rendered:hover { background:rgba(61,134,248,.04); }
+    .mermaid-block.is-editing .mermaid-rendered:hover { background:transparent; }
+    .mermaid-rendered svg { max-width:100%; height:auto; pointer-events:none; }
+    .mermaid-edit-fab { position:absolute; top:10px; right:10px; z-index:2; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.96); color:var(--ink); padding:4px 10px; font:12px "PingFang SC",sans-serif; cursor:pointer; box-shadow:0 2px 8px rgba(3,17,33,.08); opacity:0; pointer-events:none; }
+    .mermaid-block:hover .mermaid-edit-fab,.mermaid-block:focus-within .mermaid-edit-fab { opacity:1; pointer-events:auto; }
+    .mermaid-block.is-editing .mermaid-edit-fab { display:none; }
+    .mermaid-hint { margin:0; padding:0 12px 10px; color:var(--muted); font:12px "PingFang SC",sans-serif; text-align:left; }
+    .mermaid-block.is-editing .mermaid-hint { display:none; }
+    .mermaid-fallback-code { margin:0; padding:12px; text-align:left; white-space:pre-wrap; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#334155; background:#f8fafc; border-radius:8px; }
     @media print { .app-nav,.toolbar,.on-page,.review-sidebar,.review-thread,.selection-tools,.selection-color-menu,.review-composer { display:none !important; } .main { margin:0; } .doc-layout { display:block; width:100%; margin:0; } }
   </style>
 </head>
@@ -533,7 +552,7 @@
     <button id="block-plus" class="block-plus" type="button" aria-label="插入内容" title="插入">＋</button>
     <button id="block-drag" class="block-drag" type="button" aria-label="拖动区块" title="拖动排序" draggable="true">⠿</button>
   </div>
-  <div id="insert-menu" class="insert-menu" role="menu"><input id="insert-search" class="insert-search" type="search" placeholder="输入以筛选…" aria-label="筛选插入内容"><div class="insert-group">基本区块</div><button type="button" data-insert="text">T　文本</button><button type="button" data-insert="h1">H1　标题 1</button><button type="button" data-insert="h2">H2　标题 2</button><button type="button" data-insert="h3">H3　标题 3</button><button type="button" data-insert="bullet">•　项目符号列表</button><button type="button" data-insert="numbered">1.　编号列表</button><button type="button" data-insert="todo">☑　待办勾选</button><button type="button" data-insert="toggle">▸　折叠列表</button><button type="button" data-insert="page">▤　页面</button><button type="button" data-insert="note">▤　标注／备注</button><button type="button" data-insert="table">▦　插入表格</button><button type="button" data-insert="quote">❝　引用</button><button type="button" data-insert="highlight">✦　重点高亮</button><button type="button" data-insert="divider">—　分割线</button><div class="insert-group">媒体</div><button type="button" data-insert="image">▧　本地图片</button><button type="button" data-insert="image-url">▧　图片链接</button><button type="button" data-insert="video">▣　视频</button><button type="button" data-insert="audio">◖　音频</button><button type="button" data-insert="code">&lt;/&gt;　代码</button><button type="button" data-insert="file">♧　文件链接</button><button type="button" data-insert="bookmark">♧　网页书签</button></div>
+  <div id="insert-menu" class="insert-menu" role="menu"><input id="insert-search" class="insert-search" type="search" placeholder="输入以筛选…" aria-label="筛选插入内容"><div class="insert-group">基本区块</div><button type="button" data-insert="text">T　文本</button><button type="button" data-insert="h1">H1　标题 1</button><button type="button" data-insert="h2">H2　标题 2</button><button type="button" data-insert="h3">H3　标题 3</button><button type="button" data-insert="bullet">•　项目符号列表</button><button type="button" data-insert="numbered">1.　编号列表</button><button type="button" data-insert="todo">☑　待办勾选</button><button type="button" data-insert="toggle">▸　折叠列表</button><button type="button" data-insert="page">▤　页面</button><button type="button" data-insert="note">▤　标注／备注</button><button type="button" data-insert="table">▦　插入表格</button><button type="button" data-insert="quote">❝　引用</button><button type="button" data-insert="highlight">✦　重点高亮</button><button type="button" data-insert="divider">—　分割线</button><div class="insert-group">媒体</div><button type="button" data-insert="image">▧　本地图片</button><button type="button" data-insert="image-url">▧　图片链接</button><button type="button" data-insert="video">▣　视频</button><button type="button" data-insert="audio">◖　音频</button><button type="button" data-insert="code">&lt;/&gt;　代码</button><button type="button" data-insert="mermaid">◈　流程图</button><button type="button" data-insert="file">♧　文件链接</button><button type="button" data-insert="bookmark">♧　网页书签</button></div>
   <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <div id="prd-save-modal" class="prd-modal-mask" role="dialog" aria-modal="true" aria-labelledby="prd-save-modal-title" hidden>
     <div class="prd-modal">
@@ -1306,6 +1325,13 @@
       if (tag === 'p') return inlineToMd(el).trim();
       if (tag === 'hr') return '---';
       if (tag === 'blockquote') return inlineToMd(el).trim().split(/\n/).map(l => '> ' + l).join('\n');
+      if (el.classList && el.classList.contains('mermaid-block')) {
+        const src = el.querySelector('textarea.mermaid-source')?.value
+          || el.getAttribute('data-mermaid-source')
+          || el.querySelector('.mermaid-rendered')?.getAttribute('data-mermaid-source')
+          || '';
+        return '```mermaid\n' + String(src).trim() + '\n```';
+      }
       if (el.classList && el.classList.contains('mermaid-rendered')) {
         const src = el.getAttribute('data-mermaid-source') || '';
         return '```mermaid\n' + src + '\n```';
@@ -1673,9 +1699,27 @@
       } catch (_) {}
     }
 
+    function flattenMermaidBlocksIn(root) {
+      const scope = root || documentArea;
+      if (!scope) return;
+      scope.querySelectorAll('.mermaid-block').forEach(block => {
+        // 优先 data 属性：cloneNode 不一定带上 textarea 的当前 value
+        const code = (block.getAttribute('data-mermaid-source')
+          || block.querySelector('textarea.mermaid-source')?.value
+          || '').trim();
+        const pre = document.createElement('pre');
+        pre.className = 'mermaid';
+        pre.textContent = code;
+        block.replaceWith(pre);
+      });
+    }
     function commitCurrentPage() {
       const current = pageById(pageState.activeId);
-      if (current) current.content = documentArea.innerHTML;
+      if (!current) return;
+      // 克隆后扁平化，避免把正在编辑的流程图块拆掉
+      const clone = documentArea.cloneNode(true);
+      flattenMermaidBlocksIn(clone);
+      current.content = clone.innerHTML;
     }
 
     function showPrototypeFrame(url) {
@@ -2493,28 +2537,211 @@
     }
 
 
+    function canEditMermaid() {
+      return !READONLY && !(HOST_MODE && !hostEditable);
+    }
+
+    async function waitForMermaid(timeoutMs = 8000) {
+      if (window.mermaid) return true;
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        if (window.mermaid) return true;
+        await new Promise(r => setTimeout(r, 120));
+      }
+      return Boolean(window.mermaid);
+    }
+
+    async function paintMermaidSvg(holder, code) {
+      holder.setAttribute('data-mermaid-source', code);
+      const fabHtml = canEditMermaid()
+        ? '<button type="button" class="mermaid-edit-fab" data-mermaid-edit title="编辑流程图源码">编辑源码</button>'
+        : '';
+      if (!window.mermaid) {
+        holder.innerHTML = fabHtml
+          + '<pre class="mermaid-fallback-code"></pre>'
+          + '<p class="mermaid-hint">流程图库未加载（需联网）。仍可点「编辑源码」改 Mermaid 文本。</p>';
+        const pre = holder.querySelector('.mermaid-fallback-code');
+        if (pre) pre.textContent = code;
+        return false;
+      }
+      const rid = 'mmd-' + Math.random().toString(36).slice(2, 10);
+      try {
+        const out = await mermaid.render(rid, code);
+        holder.innerHTML = fabHtml + out.svg;
+        return true;
+      } catch (err) {
+        console.warn('mermaid render failed', err);
+        holder.innerHTML = fabHtml
+          + '<p class="mermaid-hint" style="color:#E11D48">流程图渲染失败，请检查上方 Mermaid 语法后点「应用」。</p>'
+          + '<pre class="mermaid-fallback-code"></pre>';
+        const pre = holder.querySelector('.mermaid-fallback-code');
+        if (pre) pre.textContent = code;
+        return false;
+      }
+    }
+
+    function closeMermaidEdit(block) {
+      if (!block) return;
+      block.classList.remove('is-editing');
+    }
+
+    function openMermaidEdit(block) {
+      if (!block || !canEditMermaid()) return;
+      documentArea.querySelectorAll('.mermaid-block.is-editing').forEach(other => {
+        if (other !== block) closeMermaidEdit(other);
+      });
+      block.classList.add('is-editing');
+      const ta = block.querySelector('textarea.mermaid-source');
+      if (ta) {
+        ta.value = block.getAttribute('data-mermaid-source') || ta.value || '';
+        setTimeout(() => {
+          try {
+            ta.focus();
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+            block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          } catch (_) {}
+        }, 0);
+      }
+    }
+
+    async function applyMermaidEdit(block, { close = false } = {}) {
+      if (!block) return;
+      const ta = block.querySelector('textarea.mermaid-source');
+      const holder = block.querySelector('.mermaid-rendered');
+      const code = (ta?.value || '').replace(/^\uFEFF/, '').trim();
+      block.setAttribute('data-mermaid-source', code);
+      if (holder) await paintMermaidSvg(holder, code || 'flowchart TB\n  A[空流程图]');
+      if (close) closeMermaidEdit(block);
+      persistDocument();
+    }
+
+    function wireMermaidBlock(block) {
+      if (!block || block.dataset.mermaidBound === '1') return;
+      block.dataset.mermaidBound = '1';
+      block.contentEditable = 'false';
+      const ta = block.querySelector('textarea.mermaid-source');
+      if (ta && !ta.dataset.bound) {
+        ta.dataset.bound = '1';
+        ta.spellcheck = false;
+        ta.addEventListener('keydown', event => {
+          event.stopPropagation();
+          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+            event.preventDefault();
+            void applyMermaidEdit(block, { close: true });
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            ta.value = block.getAttribute('data-mermaid-source') || '';
+            closeMermaidEdit(block);
+          }
+        });
+        ta.addEventListener('click', event => event.stopPropagation());
+        ta.addEventListener('input', () => {
+          block.setAttribute('data-mermaid-source', ta.value);
+        });
+      }
+      block.querySelectorAll('[data-mermaid-action]').forEach(btn => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          const action = btn.getAttribute('data-mermaid-action');
+          if (action === 'apply') void applyMermaidEdit(block, { close: false });
+          else if (action === 'done') void applyMermaidEdit(block, { close: true });
+          else if (action === 'cancel') {
+            if (ta) ta.value = block.getAttribute('data-mermaid-source') || '';
+            closeMermaidEdit(block);
+          }
+        });
+      });
+      const holder = block.querySelector('.mermaid-rendered');
+      if (holder && holder.dataset.bound !== '1') {
+        holder.dataset.bound = '1';
+        holder.title = canEditMermaid() ? '点击编辑流程图代码' : '流程图';
+        holder.addEventListener('click', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.target.closest('[data-mermaid-edit]')) {
+            openMermaidEdit(block);
+            return;
+          }
+          if (block.classList.contains('is-editing')) return;
+          openMermaidEdit(block);
+        });
+      }
+    }
+
+    function buildMermaidBlock(code) {
+      const block = document.createElement('div');
+      block.className = 'mermaid-block';
+      block.contentEditable = 'false';
+      block.setAttribute('data-mermaid-source', code);
+
+      const sourceWrap = document.createElement('div');
+      sourceWrap.className = 'mermaid-source-wrap';
+      const head = document.createElement('div');
+      head.className = 'mermaid-source-head';
+      head.innerHTML = '<span>Mermaid 源码（改完点「应用」，下方流程图同步）</span>';
+      const actions = document.createElement('div');
+      actions.className = 'mermaid-source-actions';
+      actions.innerHTML = '<button type="button" class="primary" data-mermaid-action="apply">应用</button>'
+        + '<button type="button" data-mermaid-action="done">完成</button>'
+        + '<button type="button" data-mermaid-action="cancel">取消</button>';
+      const ta = document.createElement('textarea');
+      ta.className = 'mermaid-source';
+      ta.value = code;
+      head.append(actions);
+      sourceWrap.append(head, ta);
+
+      const holder = document.createElement('div');
+      holder.className = 'mermaid-rendered';
+
+      const hint = document.createElement('p');
+      hint.className = 'mermaid-hint';
+      hint.textContent = canEditMermaid() ? '点击流程图或右上角「编辑源码」，在上方改 Mermaid 代码' : '';
+
+      block.append(sourceWrap, holder, hint);
+      wireMermaidBlock(block);
+      return { block, holder };
+    }
+
     async function renderMermaidIn(root) {
       const scope = root || documentArea;
-      if (!scope || !window.mermaid) return;
+      if (!scope) return;
+      await waitForMermaid(5000);
+
+      // 已有块（如切换版本 / 从 localStorage 恢复）：重绑事件并重绘
+      for (const block of [...scope.querySelectorAll('.mermaid-block')]) {
+        const code = (block.getAttribute('data-mermaid-source')
+          || block.querySelector('textarea.mermaid-source')?.value
+          || '').replace(/^\uFEFF/, '').trim();
+        if (!block.querySelector('.mermaid-source-wrap')) {
+          const rebuilt = buildMermaidBlock(code || 'flowchart TB\n  A[空流程图]');
+          block.replaceWith(rebuilt.block);
+          await paintMermaidSvg(rebuilt.holder, code || 'flowchart TB\n  A[空流程图]');
+          continue;
+        }
+        if (!block.querySelector('textarea.mermaid-source')) {
+          const wrap = block.querySelector('.mermaid-source-wrap');
+          const ta = document.createElement('textarea');
+          ta.className = 'mermaid-source';
+          ta.value = code;
+          wrap?.append(ta);
+        }
+        wireMermaidBlock(block);
+        const holder = block.querySelector('.mermaid-rendered');
+        if (holder) await paintMermaidSvg(holder, code || 'flowchart TB\n  A[空流程图]');
+      }
+
       const nodes = [...scope.querySelectorAll('pre.mermaid')];
       for (const el of nodes) {
-        if (el.dataset.mmdDone === '1') continue;
+        if (el.closest('.mermaid-block')) continue;
         const code = (el.textContent || '').replace(/^\uFEFF/, '').trim();
         if (!code) continue;
-        const holder = document.createElement('div');
-        holder.className = 'mermaid-rendered';
-        holder.setAttribute('data-mermaid-source', code);
-        const rid = 'mmd-' + Math.random().toString(36).slice(2, 10);
-        try {
-          const out = await mermaid.render(rid, code);
-          holder.innerHTML = out.svg;
-          el.dataset.mmdDone = '1';
-          el.replaceWith(holder);
-        } catch (err) {
-          console.warn('mermaid render failed', err);
-          el.dataset.mmdDone = '0';
-          el.title = '流程图渲染失败，请检查 Mermaid 语法';
-        }
+        const { block, holder } = buildMermaidBlock(code);
+        el.replaceWith(block);
+        await paintMermaidSvg(holder, code);
       }
     }
 
@@ -3576,7 +3803,8 @@
         note:'<div class="callout"><strong>备注</strong><br>请输入备注内容</div><p><br></p>',
         quote:'<blockquote>引用内容</blockquote><p><br></p>',
         highlight:'<p><mark>重点内容</mark></p><p><br></p>',
-        code:'<pre><code>代码内容</code></pre><p><br></p>'
+        code:'<pre><code>代码内容</code></pre><p><br></p>',
+        mermaid:'<pre class="mermaid">flowchart TB\n  A[开始] --> B[下一步]\n  B --> C[结束]</pre><p><br></p>'
       };
       const markup = blocks[type];
       if (!markup) return;
@@ -3586,6 +3814,7 @@
         activeBlock.remove();
         persistDocument();
       } else insertAfterActiveBlock(markup);
+      if (type === 'mermaid') void renderMermaidIn(documentArea);
     }
 
     let pendingImageBlock = null;
