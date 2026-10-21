@@ -7,6 +7,7 @@ import {
   listBugsByProject,
   listProjectRequirementOptions,
 } from "@/lib/db/local-store";
+import { resolveFeatureModules } from "@/lib/studio/project-modules";
 
 export default async function ProjectBugsPage({
   params,
@@ -42,6 +43,11 @@ export default async function ProjectBugsPage({
     getProjectMembers(pm.id),
     listProjectRequirementOptions(pm.id),
   ]);
+  const featureModules = resolveFeatureModules(
+    ctx.studio?.id ?? pm.id,
+    ctx.studio?.featureModules,
+    ctx.studio?.githubRepo
+  );
 
   return (
     <ProjectBugsClient
@@ -50,6 +56,7 @@ export default async function ProjectBugsPage({
       bugs={bugs}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
+      featureModules={featureModules}
       initialShowCreate={sp.new === "1" || Boolean(sp.req)}
       initialRequirementId={sp.req?.trim() || ""}
     />

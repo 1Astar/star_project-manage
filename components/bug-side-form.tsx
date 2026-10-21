@@ -13,6 +13,12 @@ import { BackLink } from "@/components/back-button";
 import { BugAttachmentsBlock } from "@/components/bug-attachments";
 import { assigneeRosterNames, PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
 import { BugTypeSelect } from "@/components/bug-type-select";
+import {
+  BUG_ENV_OPTIONS,
+  BUG_PRIORITY_LABELS,
+  BUG_PRIORITY_OPTIONS,
+  type BugPriority,
+} from "@/lib/bugs/fields";
 import type { Bug, BugAttachment, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
 import {
   BUG_SEVERITY_LABELS,
@@ -35,15 +41,99 @@ export type MemberOption = { name: string };
 
 type SharedFields = {
   title: string;
+  precondition: string;
   reproSteps: string;
+  expectedResult: string;
+  actualResult: string;
   description: string;
   suggestion: string;
+  modulePath: string;
+  foundVersion: string;
+  environments: string[];
+  priority: BugPriority | "";
   severity: BugSeverity;
   bugType: BugType;
   assignee: string;
   requirementId: string;
   status: TaskStatus;
 };
+
+const EMPTY_FIELDS = (overrides?: Partial<SharedFields>): SharedFields => ({
+  title: "",
+  precondition: "",
+  reproSteps: "",
+  expectedResult: "",
+  actualResult: "",
+  description: "",
+  suggestion: "",
+  modulePath: "",
+  foundVersion: "",
+  environments: [],
+  priority: "",
+  severity: 3,
+  bugType: "code",
+  assignee: "",
+  requirementId: "",
+  status: "pending",
+  ...overrides,
+});
+
+function toggleEnv(list: string[], tag: string): string[] {
+  return list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag];
+}
+
+function ReproTemplateFields({
+  value,
+  onChange,
+}: {
+  value: SharedFields;
+  onChange: (patch: Partial<SharedFields>) => void;
+}) {
+  return (
+    <>
+      <section className="space-y-1.5 border-t border-slate-100 pt-3">
+        <h4 className="text-xs font-semibold text-slate-500">前置条件</h4>
+        <textarea
+          value={value.precondition}
+          onChange={(e) => onChange({ precondition: e.target.value })}
+          rows={2}
+          placeholder={"1. …\n2. …"}
+          className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+        />
+      </section>
+      <section className="space-y-1.5 border-t border-slate-100 pt-3">
+        <h4 className="text-xs font-semibold text-slate-500">步骤</h4>
+        <textarea
+          value={value.reproSteps}
+          onChange={(e) => onChange({ reproSteps: e.target.value })}
+          rows={4}
+          placeholder={"1. …\n2. …"}
+          className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+        />
+      </section>
+      <section className="space-y-1.5 border-t border-slate-100 pt-3">
+        <h4 className="text-xs font-semibold text-slate-500">预期结果</h4>
+        <textarea
+          value={value.expectedResult}
+          onChange={(e) => onChange({ expectedResult: e.target.value })}
+          rows={3}
+          placeholder="应出现什么提示 / 状态…"
+          className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+        />
+      </section>
+      <section className="space-y-1.5 border-t border-slate-100 pt-3">
+        <h4 className="text-xs font-semibold text-slate-500">实际结果</h4>
+        <textarea
+          value={value.actualResult}
+          onChange={(e) => onChange({ actualResult: e.target.value })}
+          rows={3}
+          placeholder="实际看到了什么…"
+          className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+        />
+      </section>
+    </>
+  );
+}
 
 function SideLayout({
   left,
@@ -136,12 +226,14 @@ function MetaSelects({
   onChange,
   members,
   requirements,
+  featureModules = [],
   showStatus,
 }: {
   value: SharedFields;
   onChange: (patch: Partial<SharedFields>) => void;
   members: MemberOption[];
   requirements: BugFormOption[];
+  featureModules?: string[];
   showStatus?: boolean;
 }) {
   const roster = useMemo(() => assigneeRosterNames(members.map((m) => m.name)), [members]);
@@ -166,11 +258,30 @@ function MetaSelects({
           </label>
         ) : null}
         <label className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-slate-500">优先级</span>
+          <select
+            value={value.priority}
+            onChange={(e) =>
+              onChange({ priority: (e.target.value || "") as BugPriority | "" })
+            }
+            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
+            title="处理先后；与严重程度分开"
+          >
+            <option value="">未定</option>
+            {BUG_PRIORITY_OPTIONS.map((p) => (
+              <option key={p} value={p}>
+                {BUG_PRIORITY_LABELS[p]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">严重程度</span>
           <select
             value={value.severity}
             onChange={(e) => onChange({ severity: Number(e.target.value) as BugSeverity })}
             className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
+            title="影响面：致命…轻微；与优先级分开"
           >
             {SEVERITIES.map((s) => (
               <option key={s} value={s}>
@@ -179,6 +290,54 @@ function MetaSelects({
             ))}
           </select>
         </label>
+        <label className="block space-y-1">
+          <span className="text-slate-500">功能模块</span>
+          <input
+            list="bug-feature-modules"
+            value={value.modulePath}
+            onChange={(e) => onChange({ modulePath: e.target.value })}
+            placeholder="与项目板块一致，如 文件备份"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+          />
+          <datalist id="bug-feature-modules">
+            {featureModules.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-slate-500">发现版本</span>
+          <input
+            value={value.foundVersion}
+            onChange={(e) => onChange({ foundVersion: e.target.value })}
+            placeholder="如 NAS客户端重构V1.0 / v1.15.6"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+          />
+        </label>
+        <div className="space-y-1">
+          <span className="text-slate-500">环境</span>
+          <div className="flex flex-wrap gap-1.5">
+            {BUG_ENV_OPTIONS.map((tag) => {
+              const on = value.environments.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() =>
+                    onChange({ environments: toggleEnv(value.environments, tag) })
+                  }
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                    on
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-800"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">Bug 类型</span>
           <BugTypeSelect
@@ -216,6 +375,7 @@ export function BugCreateForm({
   projectSlug,
   members,
   requirements,
+  featureModules = [],
   initialRequirementId = "",
   initialTitle = "",
 }: {
@@ -223,23 +383,19 @@ export function BugCreateForm({
   projectSlug: string;
   members: MemberOption[];
   requirements: BugFormOption[];
+  featureModules?: string[];
   initialRequirementId?: string;
   initialTitle?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const [fields, setFields] = useState<SharedFields>({
-    title: initialTitle,
-    reproSteps: "",
-    description: "",
-    suggestion: "",
-    severity: 3,
-    bugType: "code",
-    assignee: "",
-    requirementId: initialRequirementId,
-    status: "pending",
-  });
+  const [fields, setFields] = useState<SharedFields>(() =>
+    EMPTY_FIELDS({
+      title: initialTitle,
+      requirementId: initialRequirementId,
+    })
+  );
 
   function patch(p: Partial<SharedFields>) {
     setFields((prev) => ({ ...prev, ...p }));
@@ -254,24 +410,21 @@ export function BugCreateForm({
           projectSlug,
           title: fields.title.trim(),
           description: fields.description.trim() || undefined,
+          precondition: fields.precondition.trim() || undefined,
           reproSteps: fields.reproSteps.trim() || undefined,
+          expectedResult: fields.expectedResult.trim() || undefined,
+          actualResult: fields.actualResult.trim() || undefined,
           suggestion: fields.suggestion.trim() || undefined,
+          modulePath: fields.modulePath.trim() || null,
+          foundVersion: fields.foundVersion.trim() || null,
+          environments: fields.environments,
+          priority: fields.priority || null,
           assignee: fields.assignee || undefined,
           requirementId: fields.requirementId || null,
           severity: fields.severity,
           bugType: fields.bugType,
         });
-        setFields({
-          title: "",
-          reproSteps: "",
-          description: "",
-          suggestion: "",
-          severity: 3,
-          bugType: "code",
-          assignee: "",
-          requirementId: "",
-          status: "pending",
-        });
+        setFields(EMPTY_FIELDS());
         setMessage("已提交");
         router.push(`/projects/${projectSlug}/bugs/${bug.id}`);
         router.refresh();
@@ -307,23 +460,14 @@ export function BugCreateForm({
               placeholder="Bug 标题"
               className="w-full border-0 bg-transparent text-lg font-bold text-slate-900 outline-none placeholder:text-slate-300"
             />
+            <ReproTemplateFields value={fields} onChange={patch} />
             <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">重现步骤</h4>
-              <textarea
-                value={fields.reproSteps}
-                onChange={(e) => patch({ reproSteps: e.target.value })}
-                rows={5}
-                placeholder={"[步骤]\n1. …\n[结果]\n…"}
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
-              />
-            </section>
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">描述 / 期望</h4>
+              <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
               <textarea
                 value={fields.description}
                 onChange={(e) => patch({ description: e.target.value })}
-                rows={4}
-                placeholder="期望结果、影响范围…"
+                rows={3}
+                placeholder="影响范围、其它上下文（可选）…"
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
@@ -345,6 +489,7 @@ export function BugCreateForm({
             onChange={patch}
             members={members}
             requirements={requirements}
+            featureModules={featureModules}
           />
         }
       />
@@ -359,6 +504,7 @@ export function BugDetailEditor({
   requirementTitle,
   members,
   requirements,
+  featureModules = [],
   comments,
   attachments = [],
 }: {
@@ -368,6 +514,7 @@ export function BugDetailEditor({
   requirementTitle?: string | null;
   members: MemberOption[];
   requirements: BugFormOption[];
+  featureModules?: string[];
   comments: BugComment[];
   attachments?: BugAttachment[];
 }) {
@@ -375,17 +522,26 @@ export function BugDetailEditor({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
-  const [fields, setFields] = useState<SharedFields>({
-    title: bug.title,
-    reproSteps: bug.repro_steps ?? "",
-    description: bug.description ?? "",
-    suggestion: bug.suggestion ?? "",
-    severity: bug.severity ?? 3,
-    bugType: bug.bug_type ?? "code",
-    assignee: bug.assignee ?? "",
-    requirementId: bug.requirement_id ?? "",
-    status: bug.status,
-  });
+  const [fields, setFields] = useState<SharedFields>(() =>
+    EMPTY_FIELDS({
+      title: bug.title,
+      precondition: bug.precondition ?? "",
+      reproSteps: bug.repro_steps ?? "",
+      expectedResult: bug.expected_result ?? "",
+      actualResult: bug.actual_result ?? "",
+      description: bug.description ?? "",
+      suggestion: bug.suggestion ?? "",
+      modulePath: bug.module_path ?? "",
+      foundVersion: bug.found_version ?? "",
+      environments: bug.environments ?? [],
+      priority: bug.priority ?? "",
+      severity: bug.severity ?? 3,
+      bugType: bug.bug_type ?? "code",
+      assignee: bug.assignee ?? "",
+      requirementId: bug.requirement_id ?? "",
+      status: bug.status,
+    })
+  );
   const [createdAtLocal, setCreatedAtLocal] = useState(() =>
     toDatetimeLocalValue(bug.created_at)
   );
@@ -436,8 +592,15 @@ export function BugDetailEditor({
           updates: {
             title: fields.title.trim(),
             description: fields.description.trim() || null,
+            precondition: fields.precondition.trim() || null,
             reproSteps: fields.reproSteps.trim() || null,
+            expectedResult: fields.expectedResult.trim() || null,
+            actualResult: fields.actualResult.trim() || null,
             suggestion: fields.suggestion.trim() || null,
+            modulePath: fields.modulePath.trim() || null,
+            foundVersion: fields.foundVersion.trim() || null,
+            environments: fields.environments,
+            priority: fields.priority || null,
             assignee: fields.assignee || null,
             requirementId: fields.requirementId || null,
             status: fields.status,
@@ -545,21 +708,20 @@ export function BugDetailEditor({
               onChange={(e) => patch({ title: e.target.value })}
               className="w-full border-0 bg-transparent text-xl font-bold text-slate-900 outline-none"
             />
+            <ReproTemplateFields value={fields} onChange={patch} />
+            <BugAttachmentsBlock
+              projectId={bug.project_id}
+              bugId={bug.id}
+              attachments={attachments}
+              variant="inline"
+            />
             <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">重现步骤</h4>
-              <textarea
-                value={fields.reproSteps}
-                onChange={(e) => patch({ reproSteps: e.target.value })}
-                rows={6}
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
-              />
-            </section>
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">描述 / 期望</h4>
+              <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
               <textarea
                 value={fields.description}
                 onChange={(e) => patch({ description: e.target.value })}
-                rows={4}
+                rows={3}
+                placeholder="影响范围、其它上下文（可选）…"
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
@@ -573,11 +735,6 @@ export function BugDetailEditor({
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
             </section>
-            <BugAttachmentsBlock
-              projectId={bug.project_id}
-              bugId={bug.id}
-              attachments={attachments}
-            />
             <section className="space-y-2 border-t border-slate-100 pt-3">
               <h4 className="text-xs font-semibold text-slate-500">补充与评论</h4>
               {comments.length === 0 ? (
@@ -641,6 +798,7 @@ export function BugDetailEditor({
               onChange={patch}
               members={members}
               requirements={requirements}
+              featureModules={featureModules}
               showStatus
             />
             <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">

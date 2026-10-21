@@ -15,8 +15,10 @@ MCP：`get_ai_rules` · `compare_sources` · `publish_release`
 
 | 域 | Skill |
 |----|--------|
-| MinisCloud / NAS · PRD/原型 | `miniscloud-prd-agents`（八章；Web 实现 + 原生窗观感）+ `miniscloud-ui-design` |
-| 通用 Star · PRD/方案 | `prd-prototype-rules` + `product-scheme-design` |
+| MinisCloud / NAS · PRD/原型 | `prd-authoring` + `miniscloud-prd-guided-writing` + `miniscloud-prd-agents`（八章；Web 实现 + 原生窗观感）+ `miniscloud-ui-design` |
+| 通用 Star · PRD/方案 | `prd-authoring` → 需要时 `prd-prototype-rules` + `product-scheme-design` |
+| 代码修改 | `code-editing` |
+| Word DOCX | `docx-generation` |
 | 文档 / 演示 / 高保真 Web 原型 | `doc-delivery-formats` → `content-architecture`（深做） |
 | Lab / 随心而行 UI | `mystic-lab-ui` |
 

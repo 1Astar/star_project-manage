@@ -83,6 +83,7 @@ export function PrdShareViewer({
           {(prd.versions ?? []).map((v) => (
             <option key={v.id} value={v.id}>
               {v.label}
+              {v.created_at ? ` · ${v.created_at.slice(0, 10)}` : ""}
             </option>
           ))}
         </select>
@@ -90,10 +91,23 @@ export function PrdShareViewer({
           <input
             type="checkbox"
             checked={showDiff}
+            disabled={!(prd.versions ?? []).length}
             onChange={(e) => setShowDiff(e.target.checked)}
           />
           标注相对上一版改动
         </label>
+        {showDiff && (prd.versions ?? []).length ? (
+          <span className="flex items-center gap-2 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500/30 ring-1 ring-emerald-600" />
+              新增
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500/25 ring-1 ring-rose-600" />
+              删除
+            </span>
+          </span>
+        ) : null}
       </header>
       <div className="min-h-0 flex-1">
         <PrdEditorFrame

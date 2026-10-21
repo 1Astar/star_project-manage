@@ -22,11 +22,15 @@ LINK_NAMES = [
     "verification-before-completion",
     "create-skill",
     "star-table-folder",
+    "prd-authoring",
     "prd-prototype-rules",
     "mystic-lab-ui",
     "miniscloud-prd-agents",
+    "miniscloud-prd-guided-writing",
     "miniscloud-ui-design",
     "content-architecture",
+    "code-editing",
+    "docx-generation",
 ]
 
 DST.mkdir(parents=True, exist_ok=True)

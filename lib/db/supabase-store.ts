@@ -17,6 +17,10 @@ import type {
 } from "@/lib/types";
 import { BUG_TYPE_LABELS } from "@/lib/types";
 import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
+import {
+  normalizeBugEnvironments,
+  normalizeBugPriority,
+} from "@/lib/bugs/fields";
 
 function normalizeBug(row: Record<string, unknown>): Bug {
   const severityRaw = Number(row.severity);
@@ -29,8 +33,15 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     requirement_id: (row.requirement_id as string | null) ?? null,
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
+    precondition: (row.precondition as string | null) ?? null,
     repro_steps: (row.repro_steps as string | null) ?? null,
+    expected_result: (row.expected_result as string | null) ?? null,
+    actual_result: (row.actual_result as string | null) ?? null,
     suggestion: (row.suggestion as string | null) ?? null,
+    module_path: (row.module_path as string | null) ?? null,
+    found_version: (row.found_version as string | null) ?? null,
+    environments: normalizeBugEnvironments(row.environments),
+    priority: normalizeBugPriority(row.priority),
     assignee: (row.assignee as string | null) ?? null,
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
@@ -272,10 +283,28 @@ async function upsertBugs(rows: DatabaseSnapshot["bugs"]) {
     await upsertRows("bugs", rows);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (/severity|bug_type|suggestion|schema cache|column/i.test(message)) {
+    if (
+      /severity|bug_type|suggestion|precondition|expected_result|actual_result|module_path|found_version|environments|priority|schema cache|column/i.test(
+        message
+      )
+    ) {
       await upsertRows(
         "bugs",
-        rows.map(({ severity: _s, bug_type: _t, suggestion: _sug, ...rest }) => rest)
+        rows.map(
+          ({
+            severity: _s,
+            bug_type: _t,
+            suggestion: _sug,
+            precondition: _p,
+            expected_result: _e,
+            actual_result: _a,
+            module_path: _m,
+            found_version: _f,
+            environments: _env,
+            priority: _pr,
+            ...rest
+          }) => rest
+        )
       );
       return;
     }

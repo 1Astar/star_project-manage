@@ -1,6 +1,9 @@
+import { downloadTextFile, htmlToMarkdown } from "@/lib/prds/html-to-markdown";
+
 /**
  * 导出可离线打开的 PRD：完整编辑壳（侧栏/选区工具/插入/建议/评论）+ 正文。
  * 仅替换 #document，不剥编辑能力。
+ * 正文保持语义 HTML（h1–h3 / ol·ul / table / p…），便于再导出 Markdown。
  */
 export function buildStandalonePrdHtml(shellHtml: string, bodyHtml: string): string {
   const mainOpen =
@@ -48,12 +51,26 @@ export async function downloadStandalonePrd(opts: {
   if (!res.ok) throw new Error("无法加载 PRD 编辑壳");
   const shell = await res.text();
   const html = buildStandalonePrdHtml(shell, opts.bodyHtml);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
   const safe = (opts.title || "PRD").replace(/[\\/:*?"<>|]+/g, "_").trim();
-  a.href = url;
-  a.download = `${safe}.html`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadTextFile(`${safe}.html`, html, "text/html");
+}
+
+/** 将当前正文导出为兼容 GFM 的 Markdown（.md） */
+export function downloadPrdMarkdown(opts: {
+  title: string;
+  bodyHtml: string;
+}): void {
+  const md = htmlToMarkdown(opts.bodyHtml);
+  const safe = (opts.title || "PRD").replace(/[\\/:*?"<>|]+/g, "_").trim();
+  downloadTextFile(`${safe}.md`, md, "text/markdown");
+}
+
+/** 同时导出可编辑 HTML + Markdown */
+export async function downloadPrdHtmlAndMarkdown(opts: {
+  title: string;
+  bodyHtml: string;
+  shellUrl?: string;
+}): Promise<void> {
+  await downloadStandalonePrd(opts);
+  downloadPrdMarkdown(opts);
 }

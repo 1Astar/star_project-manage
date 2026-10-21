@@ -8,8 +8,10 @@ NAMES=(
   doc-delivery-formats word-docx-professional ppt-consulting-visual product-scheme-design
   version-management safe-file-delete star-pm-write-release using-star-skills
   defer-scope-record brainstorming canvas verification-before-completion create-skill
-  star-table-folder mystic-lab-ui html-demo-nav writing-plans prd-prototype-rules
-  miniscloud-prd-agents miniscloud-ui-design content-architecture
+  star-table-folder mystic-lab-ui html-demo-nav writing-plans
+  prd-authoring prd-prototype-rules
+  miniscloud-prd-agents miniscloud-prd-guided-writing miniscloud-ui-design
+  content-architecture code-editing docx-generation
 )
 for name in "${NAMES[@]}"; do
   target="$SRC/$name"

@@ -39,6 +39,7 @@
 | **version-management** | 文档三位版本 / 软件 git 发版号 | [version-management/SKILL.md](./version-management/SKILL.md) |
 | **safe-file-delete** | 删文件硬约束 | [safe-file-delete/SKILL.md](./safe-file-delete/SKILL.md) |
 | **star-table-folder** | **表格/文件夹通用底线**：排序·筛选·移动·删除·父子；**当场要求优先于通用标准** | [star-table-folder/SKILL.md](./star-table-folder/SKILL.md) |
+| **prd-authoring** | **通用 PRD 写作 V2.0**：先定规则、独立可理解、语义保护、多形式表达；含回归用例 | [prd-authoring/SKILL.md](./prd-authoring/SKILL.md) |
 | **prd-prototype-rules** | **通用 Star PRD/原型**：先定规则清单再改交付物；规则变了先改清单 | [prd-prototype-rules/SKILL.md](./prd-prototype-rules/SKILL.md) |
 | **miniscloud-prd-agents** | **MinisCloud/NAS**：八章 PRD、四角色评审、HTML 原型（Web + 原生窗观感） | [miniscloud-prd-agents/SKILL.md](./miniscloud-prd-agents/SKILL.md) |
 | **miniscloud-ui-design** | **MinisCloud OS UI**：蓝主色 token/组件；正文 `reference.md` | [miniscloud-ui-design/SKILL.md](./miniscloud-ui-design/SKILL.md) |

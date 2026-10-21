@@ -45,8 +45,20 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     requirement_id: (row.requirement_id as string | null) ?? null,
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
+    precondition: (row.precondition as string | null) ?? null,
     repro_steps: (row.repro_steps as string | null) ?? null,
+    expected_result: (row.expected_result as string | null) ?? null,
+    actual_result: (row.actual_result as string | null) ?? null,
     suggestion: (row.suggestion as string | null) ?? null,
+    module_path: (row.module_path as string | null) ?? null,
+    found_version: (row.found_version as string | null) ?? null,
+    environments: Array.isArray(row.environments)
+      ? (row.environments as string[]).map(String).filter(Boolean)
+      : [],
+    priority: (() => {
+      const p = String(row.priority ?? "").toUpperCase();
+      return p === "P0" || p === "P1" || p === "P2" || p === "P3" ? p : null;
+    })(),
     assignee: (row.assignee as string | null) ?? null,
     status: (row.status as Bug["status"]) ?? "pending",
     severity,

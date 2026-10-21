@@ -47,6 +47,11 @@ import { isProductionLikeRuntime } from "@/lib/runtime/serverless";
 import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import {
+  defaultBugReproMeta,
+  normalizeBugEnvironments,
+  normalizeBugPriority,
+} from "@/lib/bugs/fields";
+import {
   AGENT_ACTOR_NAME,
   encodeAgentActivityNote,
   formatAgentInspiration,
@@ -187,8 +192,15 @@ function normalizeBugRow(bug: Bug): Bug {
     ...bug,
     requirement_id: bug.requirement_id ?? null,
     description: bug.description ?? null,
+    precondition: bug.precondition ?? null,
     repro_steps: bug.repro_steps ?? null,
+    expected_result: bug.expected_result ?? null,
+    actual_result: bug.actual_result ?? null,
     suggestion: bug.suggestion ?? null,
+    module_path: bug.module_path ?? null,
+    found_version: bug.found_version ?? null,
+    environments: normalizeBugEnvironments(bug.environments),
+    priority: normalizeBugPriority(bug.priority),
     assignee: bug.assignee ?? null,
     severity,
     bug_type,
@@ -1229,8 +1241,15 @@ export async function createBug(input: {
   requirement_id?: string | null;
   title: string;
   description?: string;
+  precondition?: string;
   repro_steps?: string;
+  expected_result?: string;
+  actual_result?: string;
   suggestion?: string;
+  module_path?: string | null;
+  found_version?: string | null;
+  environments?: string[];
+  priority?: Bug["priority"];
   assignee?: string;
   severity?: BugSeverity;
   bug_type?: BugType;
@@ -1250,8 +1269,15 @@ export async function createBug(input: {
       requirement_id: input.requirement_id ?? null,
       title: input.title,
       description: input.description ?? null,
+      precondition: input.precondition ?? null,
       repro_steps: input.repro_steps ?? null,
+      expected_result: input.expected_result ?? null,
+      actual_result: input.actual_result ?? null,
       suggestion: input.suggestion ?? null,
+      module_path: input.module_path?.trim() || null,
+      found_version: input.found_version?.trim() || null,
+      environments: normalizeBugEnvironments(input.environments),
+      priority: normalizeBugPriority(input.priority),
       assignee: input.assignee ?? null,
       status: input.status ?? "pending",
       severity: input.severity ?? 3,
@@ -1324,8 +1350,15 @@ export async function createBug(input: {
     requirement_id: input.requirement_id ?? null,
     title: input.title,
     description: input.description ?? null,
+    precondition: input.precondition ?? null,
     repro_steps: input.repro_steps ?? null,
+    expected_result: input.expected_result ?? null,
+    actual_result: input.actual_result ?? null,
     suggestion: input.suggestion ?? null,
+    module_path: input.module_path?.trim() || null,
+    found_version: input.found_version?.trim() || null,
+    environments: normalizeBugEnvironments(input.environments),
+    priority: normalizeBugPriority(input.priority),
     assignee: input.assignee ?? null,
     status: input.status ?? "pending",
     severity: input.severity ?? 3,
@@ -1385,8 +1418,15 @@ export async function updateBug(
   patch: Partial<{
     title: string;
     description: string | null;
+    precondition: string | null;
     repro_steps: string | null;
+    expected_result: string | null;
+    actual_result: string | null;
     suggestion: string | null;
+    module_path: string | null;
+    found_version: string | null;
+    environments: string[];
+    priority: Bug["priority"];
     assignee: string | null;
     requirement_id: string | null;
     status: TaskStatus;
@@ -1404,8 +1444,23 @@ export async function updateBug(
     const beforeAssignee = bug.assignee;
     if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
     if (patch.description !== undefined) bug.description = patch.description;
+    if (patch.precondition !== undefined) bug.precondition = patch.precondition;
     if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+    if (patch.expected_result !== undefined) bug.expected_result = patch.expected_result;
+    if (patch.actual_result !== undefined) bug.actual_result = patch.actual_result;
     if (patch.suggestion !== undefined) bug.suggestion = patch.suggestion;
+    if (patch.module_path !== undefined) {
+      bug.module_path = patch.module_path?.trim() || null;
+    }
+    if (patch.found_version !== undefined) {
+      bug.found_version = patch.found_version?.trim() || null;
+    }
+    if (patch.environments !== undefined) {
+      bug.environments = normalizeBugEnvironments(patch.environments);
+    }
+    if (patch.priority !== undefined) {
+      bug.priority = normalizeBugPriority(patch.priority);
+    }
     if (patch.assignee !== undefined) bug.assignee = patch.assignee;
     if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
     if (patch.status !== undefined) bug.status = patch.status;
@@ -1413,6 +1468,7 @@ export async function updateBug(
     if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
     if (bug.severity == null) bug.severity = 3;
     if (!bug.bug_type) bug.bug_type = "code";
+    if (!Array.isArray(bug.environments)) bug.environments = [];
     if (patch.created_at !== undefined && patch.created_at?.trim()) {
       bug.created_at = patch.created_at.trim();
     }
@@ -1484,8 +1540,23 @@ export async function updateBug(
   const beforeAssignee = bug.assignee;
   if (patch.title !== undefined) bug.title = patch.title.trim() || bug.title;
   if (patch.description !== undefined) bug.description = patch.description;
+  if (patch.precondition !== undefined) bug.precondition = patch.precondition;
   if (patch.repro_steps !== undefined) bug.repro_steps = patch.repro_steps;
+  if (patch.expected_result !== undefined) bug.expected_result = patch.expected_result;
+  if (patch.actual_result !== undefined) bug.actual_result = patch.actual_result;
   if (patch.suggestion !== undefined) bug.suggestion = patch.suggestion;
+  if (patch.module_path !== undefined) {
+    bug.module_path = patch.module_path?.trim() || null;
+  }
+  if (patch.found_version !== undefined) {
+    bug.found_version = patch.found_version?.trim() || null;
+  }
+  if (patch.environments !== undefined) {
+    bug.environments = normalizeBugEnvironments(patch.environments);
+  }
+  if (patch.priority !== undefined) {
+    bug.priority = normalizeBugPriority(patch.priority);
+  }
   if (patch.assignee !== undefined) bug.assignee = patch.assignee;
   if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
   if (patch.status !== undefined) bug.status = patch.status;
@@ -1493,6 +1564,7 @@ export async function updateBug(
   if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
   if (bug.severity == null) bug.severity = 3;
   if (!bug.bug_type) bug.bug_type = "code";
+  if (!Array.isArray(bug.environments)) bug.environments = [];
   if (patch.created_at !== undefined && patch.created_at?.trim()) {
     bug.created_at = patch.created_at.trim();
   }
@@ -1754,6 +1826,7 @@ export async function importBugs(
         bug_type: normalizeBugTypeKey(item.bug_type) as BugType,
         created_at: createdAt,
         updated_at: createdAt,
+        ...defaultBugReproMeta(),
       };
     });
 
