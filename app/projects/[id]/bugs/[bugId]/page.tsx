@@ -6,6 +6,7 @@ import {
   getProjectMembers,
   listProjectRequirementOptions,
 } from "@/lib/db/local-store";
+import { resolveFeatureModules } from "@/lib/studio/project-modules";
 
 export default async function BugDetailPage({
   params,
@@ -19,6 +20,11 @@ export default async function BugDetailPage({
 
   const members = await getProjectMembers(detail.project.id);
   const requirements = await listProjectRequirementOptions(detail.project.id);
+  const featureModules = resolveFeatureModules(
+    ctx.studio?.id ?? detail.project.id,
+    ctx.studio?.featureModules,
+    ctx.studio?.githubRepo
+  );
 
   return (
     <BugDetailEditor
@@ -28,6 +34,7 @@ export default async function BugDetailPage({
       requirementTitle={detail.requirement?.title ?? null}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
+      featureModules={featureModules}
       comments={detail.comments ?? []}
       attachments={detail.attachments ?? []}
     />

@@ -135,14 +135,14 @@ export function WorkbenchShell({
         </div>
       </aside>
 
-      <div className="flex-1 overflow-x-hidden">
-        <header className="border-b border-slate-200 bg-white px-6 py-4">
+      <div className="min-w-0 flex-1">
+        <header className="relative z-20 border-b border-slate-200 bg-white px-6 py-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-slate-900">{title}</h1>
               {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="relative z-30 flex shrink-0 items-center gap-2 overflow-visible">
               {actions}
               {effectiveRole === "guest" ? (
                 <Link
@@ -159,7 +159,7 @@ export function WorkbenchShell({
           </div>
           {nav ? <div className="mt-4">{nav}</div> : null}
         </header>
-        <main className="px-6 py-6">{children}</main>
+        <main className="overflow-x-hidden px-6 py-6">{children}</main>
         <div className="space-y-3 px-6 pb-6 md:hidden">
           {effectiveRole === "guest" ? (
             <Link

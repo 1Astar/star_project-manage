@@ -367,12 +367,30 @@ export interface Bug {
   requirement_id: string | null;
   title: string;
   description: string | null;
+  /** 前置条件 */
+  precondition: string | null;
+  /** 复现步骤 */
   repro_steps: string | null;
+  /** 预期结果 */
+  expected_result: string | null;
+  /** 实际结果 */
+  actual_result: string | null;
   /** 优化建议（给 +1 / 研发） */
   suggestion: string | null;
+  /** 功能模块（对齐项目板块 featureModules） */
+  module_path: string | null;
+  /** 发现版本（自由文本） */
+  found_version: string | null;
+  /** 环境标签 */
+  environments: string[];
+  /**
+   * 优先级 P0–P3（处理先后）
+   * 与 severity（严重程度 / 影响面）分开
+   */
+  priority: "P0" | "P1" | "P2" | "P3" | null;
   assignee: string | null;
   status: TaskStatus;
-  /** 1 最高 … 4 最低 */
+  /** 严重程度：1 致命 … 4 轻微 */
   severity: BugSeverity;
   bug_type: BugType;
   created_at: string;

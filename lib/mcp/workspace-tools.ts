@@ -1713,9 +1713,22 @@ export function registerWorkspaceTools(server: McpServer) {
         projectId: z.string().min(1),
         title: z.string().min(1),
         description: z.string().optional(),
-        reproSteps: z.string().optional(),
+        precondition: z.string().optional().describe("前置条件"),
+        reproSteps: z.string().optional().describe("复现步骤"),
+        expectedResult: z.string().optional().describe("预期结果"),
+        actualResult: z.string().optional().describe("实际结果"),
         suggestion: z.string().optional().describe("优化建议（给 +1 / 研发）"),
-        severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微，默认 3"),
+        modulePath: z.string().optional().describe("功能模块，对齐项目板块"),
+        foundVersion: z.string().optional().describe("发现版本"),
+        environments: z
+          .array(z.string())
+          .optional()
+          .describe("环境标签，如 Android/iOS/macOS/Windows/Web"),
+        priority: z
+          .enum(["P0", "P1", "P2", "P3"])
+          .optional()
+          .describe("优先级（与 severity 严重程度分开）"),
+        severity: z.number().int().min(1).max(4).optional().describe("严重程度 1致命…4轻微，默认 3"),
         bugType: bugTypeInputSchema.optional(),
         requirementId: z.string().nullable().optional(),
         assignee: z.string().optional(),
@@ -1746,8 +1759,15 @@ export function registerWorkspaceTools(server: McpServer) {
           requirement_id: input.requirementId ?? null,
           title: input.title.trim(),
           description: input.description,
+          precondition: input.precondition,
           repro_steps: input.reproSteps,
+          expected_result: input.expectedResult,
+          actual_result: input.actualResult,
           suggestion: input.suggestion,
+          module_path: input.modulePath,
+          found_version: input.foundVersion,
+          environments: input.environments,
+          priority: input.priority ?? null,
           assignee: input.assignee,
           severity: (input.severity as 1 | 2 | 3 | 4 | undefined) ?? 3,
           bug_type: input.bugType ?? "other",
@@ -1768,7 +1788,11 @@ export function registerWorkspaceTools(server: McpServer) {
             pmSlug: pm.slug,
             status: bug.status,
             severity: bug.severity,
+            priority: bug.priority,
             bugType: bug.bug_type,
+            modulePath: bug.module_path,
+            foundVersion: bug.found_version,
+            environments: bug.environments,
           },
         });
       } catch (error) {
@@ -2043,16 +2067,23 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Update Bug",
       description:
-        "更新 Bug 标题/描述/复现/优化建议/指派/关联需求/严重级别/类型/状态。标完成传 status:\"done\"。",
+        "更新 Bug 标题/描述/复现模板/模块/发现版本/环境/优先级/严重程度/指派/关联需求/类型/状态。标完成传 status:\"done\"。",
       inputSchema: {
         bugId: z.string().min(1),
         title: z.string().min(1).optional(),
         description: z.string().nullable().optional(),
+        precondition: z.string().nullable().optional(),
         reproSteps: z.string().nullable().optional(),
+        expectedResult: z.string().nullable().optional(),
+        actualResult: z.string().nullable().optional(),
         suggestion: z.string().nullable().optional().describe("优化建议"),
+        modulePath: z.string().nullable().optional(),
+        foundVersion: z.string().nullable().optional(),
+        environments: z.array(z.string()).optional(),
+        priority: z.enum(["P0", "P1", "P2", "P3"]).nullable().optional(),
         assignee: z.string().nullable().optional(),
         requirementId: z.string().nullable().optional(),
-        severity: z.number().int().min(1).max(4).optional().describe("1致命…4轻微"),
+        severity: z.number().int().min(1).max(4).optional().describe("严重程度 1致命…4轻微"),
         bugType: bugTypeInputSchema.optional(),
         status: z
           .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
@@ -2068,8 +2099,15 @@ export function registerWorkspaceTools(server: McpServer) {
         const patch: Parameters<typeof updateBug>[1] = {};
         if (input.title !== undefined) patch.title = input.title.trim();
         if (input.description !== undefined) patch.description = input.description;
+        if (input.precondition !== undefined) patch.precondition = input.precondition;
         if (input.reproSteps !== undefined) patch.repro_steps = input.reproSteps;
+        if (input.expectedResult !== undefined) patch.expected_result = input.expectedResult;
+        if (input.actualResult !== undefined) patch.actual_result = input.actualResult;
         if (input.suggestion !== undefined) patch.suggestion = input.suggestion;
+        if (input.modulePath !== undefined) patch.module_path = input.modulePath;
+        if (input.foundVersion !== undefined) patch.found_version = input.foundVersion;
+        if (input.environments !== undefined) patch.environments = input.environments;
+        if (input.priority !== undefined) patch.priority = input.priority;
         if (input.assignee !== undefined) patch.assignee = input.assignee;
         if (input.requirementId !== undefined) patch.requirement_id = input.requirementId;
         if (input.severity !== undefined) {
@@ -2099,10 +2137,17 @@ export function registerWorkspaceTools(server: McpServer) {
             pmSlug: linked?.project.slug ?? null,
             status: bug.status,
             severity: bug.severity,
+            priority: bug.priority,
             bugType: bug.bug_type,
             description: bug.description,
+            precondition: bug.precondition,
             reproSteps: bug.repro_steps,
+            expectedResult: bug.expected_result,
+            actualResult: bug.actual_result,
             suggestion: bug.suggestion,
+            modulePath: bug.module_path,
+            foundVersion: bug.found_version,
+            environments: bug.environments,
             assignee: bug.assignee,
             requirementId: bug.requirement_id,
             updatedAt: bug.updated_at,
@@ -2138,10 +2183,17 @@ export function registerWorkspaceTools(server: McpServer) {
             pmSlug: project.slug,
             status: bug.status,
             severity: bug.severity,
+            priority: bug.priority,
             bugType: bug.bug_type,
             description: bug.description,
+            precondition: bug.precondition,
             reproSteps: bug.repro_steps,
+            expectedResult: bug.expected_result,
+            actualResult: bug.actual_result,
             suggestion: bug.suggestion,
+            modulePath: bug.module_path,
+            foundVersion: bug.found_version,
+            environments: bug.environments,
             assignee: bug.assignee,
             requirementId: bug.requirement_id,
             requirementTitle: requirement?.title ?? null,

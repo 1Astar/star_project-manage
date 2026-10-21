@@ -10,6 +10,7 @@ import { matchRequirementForBug } from "@/lib/bugs/match-requirement";
 import { serverOpenAiCredentials } from "@/lib/studio/ai/openai-server-settings";
 import { uploadStudioAssetFile } from "@/lib/studio/asset-storage";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { defaultBugReproMeta } from "@/lib/bugs/fields";
 import type { ActivityLog, Bug, BugAttachment, Project } from "@/lib/types";
 
 export type BugFeedbackIngestInput = {
@@ -86,6 +87,7 @@ async function createBugLight(input: {
     bug_type: "other",
     created_at: createdAt,
     updated_at: createdAt,
+    ...defaultBugReproMeta(),
   };
 
   if (!isSupabaseConfigured()) {

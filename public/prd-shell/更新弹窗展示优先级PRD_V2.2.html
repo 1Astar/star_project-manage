@@ -83,11 +83,12 @@
     [contenteditable="true"]:focus { outline:none; }
     .editable:focus { box-shadow:0 0 0 3px rgba(61,134,248,.12); }
     .save-state { color:var(--muted); font-size:12px; white-space:nowrap; }
-    .block-controls { position:fixed; z-index:20; display:none; align-items:center; gap:2px; }
+    /* 加号在左、拖动在右；整组定位在正文左缘外侧（线外） */
+    .block-controls { position:fixed; z-index:20; display:none; flex-direction:row; align-items:center; gap:2px; }
     .block-controls.show { display:flex; }
     .block-plus,.block-drag { width:28px; height:28px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:18px; line-height:1; cursor:pointer; }
-    .block-plus { font-size:23px; }
-    .block-drag { cursor:grab; letter-spacing:-2px; font-size:14px; font-weight:700; }
+    .block-plus { order:1; font-size:23px; }
+    .block-drag { order:2; cursor:grab; letter-spacing:-2px; font-size:14px; font-weight:700; }
     .block-drag:active { cursor:grabbing; }
     .block-plus:hover,.block-drag:hover { color:var(--blue); background:rgba(61,134,248,.10); }
     .page > .block-drop-before { box-shadow:inset 0 2px 0 var(--blue); }
@@ -262,6 +263,9 @@
     .suggest-mark:hover,.suggest-mark.active { background:rgba(61,134,248,.25); }
     .suggest-mark[data-suggest-kind="delete"] { text-decoration:line-through; color:rgba(3,17,33,.55); }
     .suggest-mark[data-suggest-kind="insert"] { border-bottom-style:solid; }
+    /* 宿主「标注相对上一版改动」：块级增删（WPS 风，只读对比，不写回） */
+    .prd-rev-add { background:rgba(7,159,74,.12) !important; box-shadow:inset 3px 0 0 #079F4A; }
+    .prd-rev-del { background:rgba(225,29,72,.10) !important; box-shadow:inset 3px 0 0 #E11D48; text-decoration:line-through; color:rgba(3,17,33,.55); opacity:.92; }
     .suggest-card { position:fixed; z-index:34; display:none; width:min(300px,calc(100vw - 16px)); padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); }
     .suggest-card.show { display:block; }
     .suggest-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
@@ -305,7 +309,7 @@
 <table>
 <thead><tr><th>版本</th><th>日期</th><th>修改内容</th></tr></thead>
 <tbody>
-<tr><td>V2.2</td><td>2026-10-19</td><td>§8.2 通知摘要与二次校验厘清；规则树改为编号分层 1→a→i；无序并列仍用项目符号。</td></tr>
+<tr><td>V2.2</td><td>2026-10-19</td><td>§3／4.2 异常改为直接规则（有更新弹／无更新不弹／失败超时不弹；两侧无可更新且有异常仅手动提示）；OS 一般需重启；双份 HTML+MD。</td></tr>
 <tr><td>V2.1</td><td>2026-10-19</td><td>压缩交互／页面章节；明确单独弹窗、超时结果回传后端、通知副标题缺字段不展示；本期不做胶囊与通知入口。</td></tr>
 <tr><td>V2.0</td><td>2026-10-19</td><td>统一登录与手动检测入口；明确二期通知进入弹窗、三期设置更新模块；补充最新版本消息移除、端侧下载入口和依赖异常处理。</td></tr>
 <tr><td>V1.9</td><td>2026-10-16</td><td>将检测入口、首次弹窗、客户端续弹及异常反馈拆为分层规则，保持本期既定弹窗顺序。</td></tr>
@@ -317,11 +321,28 @@
 <p>本期只改编排，不改原弹窗的内容、按钮与更新流程。</p>
 
 <h2 id="section-3">3. 目标</h2>
-<ul>
-<li>两项同时有更新时：先展示 OS 更新弹窗；OS 流程结束后再自动展示客户端更新弹窗；<strong>两个弹窗不重叠</strong>。</li>
-<li>登录进入主屏幕且可展示单独弹窗时，或用户手动「检查更新」时，重新拉取本轮 OS／客户端结果；只按本轮结果决定是否弹窗。</li>
-<li>检测失败或超时：只展示已确认有更新的项；两项都未确认有更新且至少一项异常时，仅手动检查给出失败提示。</li>
-</ul>
+<ol>
+<li>客户端与 OS 同时有更新时：
+<ol>
+<li>先展示 OS 更新弹窗；</li>
+<li>OS 更新流程结束后（一般需重启），再展示客户端更新弹窗；</li>
+<li>两个弹窗不重叠。</li>
+</ol>
+</li>
+<li>版本检查与展示：
+<ol>
+<li>登录进入主屏幕后，自动检查当前是否有 OS／客户端更新；有更新则弹窗。</li>
+<li>用户手动点击「检查更新」时，重新检查是否有 OS／客户端更新；有更新则弹窗。</li>
+</ol>
+</li>
+<li>检测结果：
+<ol>
+<li>有更新：展示对应更新弹窗。</li>
+<li>无更新：不弹该侧。</li>
+<li>失败或超时：不弹该侧；两侧都没有可更新且至少一侧失败或超时 → 仅手动检查提示失败，登录检查不提示。</li>
+</ol>
+</li>
+</ol>
 
 <h2 id="section-4">4. 核心功能</h2>
 <table>
@@ -345,31 +366,22 @@
 <li>每次重新登录均重新检查。关闭弹窗不等于忽略版本；选择「忽略本次更新」后按原忽略规则过滤该版本。</li>
 </ol>
 
-<h3 id="section-6">4.2 检测异常与手动检查反馈</h3>
-<table>
-<thead><tr><th>本轮 OS 结果</th><th>本轮客户端结果</th><th>首次弹窗</th></tr></thead>
-<tbody>
-<tr><td>有更新</td><td>有更新</td><td>OS 更新弹窗</td></tr>
-<tr><td>有更新</td><td>无更新／失败／超时</td><td>OS 更新弹窗</td></tr>
-<tr><td>无更新／失败／超时</td><td>有更新</td><td>客户端更新弹窗</td></tr>
-<tr><td>无更新</td><td>无更新</td><td>不展示</td></tr>
-<tr><td>无更新／失败／超时</td><td>无更新／失败／超时</td><td>不展示更新弹窗；异常反馈见下</td></tr>
-</tbody>
-</table>
+<h3 id="section-6">4.2 检测结果与异常</h3>
 <ol>
-<li>仅一项确认有更新、另一项失败或超时：只展示已确认项；失败／超时项不进入待展示队列。</li>
-<li><strong>超时结果</strong>（检测超时终态，或旧轮次超时结果在新轮次到达）：不追加弹窗；写日志并回传后端；不参与当前轮次判定。</li>
-<li>两项均未确认有更新，且至少一项失败或超时：
+<li>有更新：按 4.1／4.3 展示对应弹窗。</li>
+<li>无更新：不弹该侧。</li>
+<li>失败或超时：不弹该侧；超时写日志并回传后端；旧轮次超时结果不参与当前轮次判定。</li>
+<li>两侧都没有可更新，且至少一侧失败或超时：
 <ol>
-<li>登录检查：不弹失败提示。</li>
-<li>手动检查：显示一次「检查更新失败，请稍后重试」。有现有失败反馈载体则用该载体，否则用居中 Toast。</li>
+<li>登录检查：不提示。</li>
+<li>手动检查：显示一次「检查更新失败，请稍后重试」（有现有载体用现有，否则居中 Toast）。</li>
 </ol>
 </li>
-<li>OS／客户端<strong>安装失败</strong>属各自更新流程，走原结果弹窗，不按检测失败处理。</li>
+<li>OS／客户端<strong>安装失败</strong>走原更新流程结果弹窗，不按检测失败处理。</li>
 </ol>
 
 <h3 id="section-7">4.3 两项更新的弹窗顺序与操作</h3>
-<p>两项均确认有更新时，<strong>先展示 OS 弹窗</strong>。OS 弹窗及其结果弹窗均已关闭、主屏幕可再次展示单独弹窗后，<strong>自动展示本轮客户端原更新弹窗</strong>。当前弹窗未退出前不得叠加下一弹窗。</p>
+<p>两项均确认有更新时，<strong>先展示 OS 弹窗</strong>。OS 更新流程结束后（一般需重启；未重启时须 OS 弹窗及结果态均已关闭、主屏幕可再次展示单独弹窗），<strong>再展示本轮客户端原更新弹窗</strong>。两个弹窗不重叠。</p>
 <table>
 <thead><tr><th>OS 流程状态</th><th>客户端弹窗处理</th></tr></thead>
 <tbody>
@@ -435,8 +447,8 @@
 <tr><td>单项／双项</td><td>仅 OS／仅客户端／双有／双无</td><td>按 4.2；双有时 OS 后客户端，不重叠</td></tr>
 <tr><td>关闭／忽略 OS</td><td>双项有更新</td><td>OS 结束后自动出客户端；OS 忽略不替客户端忽略</td></tr>
 <tr><td>OS 失败／成功／重启</td><td>双项有更新</td><td>失败结果关闭后或成功未重启可展示后出客户端；结果未关或重启中不出；重启后重检</td></tr>
-<tr><td>单项检测异常</td><td>一项有更新，另一项失败／超时</td><td>只展示已确认项；超时结果写日志回传后端，不续弹</td></tr>
-<tr><td>无确认且异常</td><td>登录 vs 手动检查</td><td>登录静默；手动检查一次失败反馈</td></tr>
+<tr><td>一侧有更新、一侧失败／超时</td><td>另一侧无更新或不影响</td><td>只弹有更新那一侧；失败／超时不弹</td></tr>
+<tr><td>两侧都无可更新且有失败／超时</td><td>登录 vs 手动检查</td><td>登录不提示；手动检查一次失败反馈</td></tr>
 <tr><td>重新检查</td><td>前轮未结束时手动检查</td><td>废弃前轮待展示，只按新轮结果</td></tr>
 <tr><td>通知消息</td><td>本轮有更新</td><td>不新增通知消息；不出现通知浮窗</td></tr>
 </tbody>
@@ -618,7 +630,7 @@
     const STORAGE_KEY = 'minis-prd-export-stable-更新弹窗展示优先级-PRD';
     const PREVIOUS_STORAGE_KEY = 'minis-prd-export-stable-更新弹窗展示优先级-PRD-none';
     /* 导出时写入；与 localStorage 不一致时用文件正文覆盖根页，避免旧缓存盖住新导出 */
-    const DOCUMENT_STAMP = 'h1g2951v';
+    const DOCUMENT_STAMP = 'hhitcd4';
     const HOST_MODE = new URLSearchParams(location.search).get('host') === '1';
     const READONLY = new URLSearchParams(location.search).get('readonly') === '1';
     let hostEditable = !READONLY;
@@ -997,16 +1009,59 @@
         const selection = window.getSelection();
         if (!selection?.rangeCount) return;
         const range = selection.getRangeAt(0);
+        const edge = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        /* 在「新增」建议内删字：直接缩短该条，不另开删减建议 */
+        if (edge?.closest?.('.suggest-mark[data-suggest-kind="insert"]')) {
+          requestAnimationFrame(() => {
+            const mark = edge.closest('.suggest-mark[data-suggest-kind="insert"]');
+            const page = pageById(pageState.activeId);
+            const item = page?.suggestions?.find(s => s.id === mark?.dataset?.suggestId);
+            if (!mark) return;
+            if (!mark.textContent) {
+              const id = mark.dataset.suggestId;
+              mark.remove();
+              if (page) page.suggestions = (page.suggestions || []).filter(s => s.id !== id);
+              closeSuggestCard();
+            } else if (item) {
+              item.quote = mark.textContent;
+              showSuggestCard(mark.dataset.suggestId);
+            }
+            commitCurrentPage(); savePageState(); persistDocument();
+          });
+          return;
+        }
+        /* 空列表项：退格交给列表结构，不打删减建议 */
+        const listItem = edge?.closest?.('li');
+        if (listItem && range.collapsed) {
+          const ownText = [...listItem.childNodes]
+            .filter(child => !['OL', 'UL'].includes(child.nodeName))
+            .map(child => child.textContent || '')
+            .join('')
+            .replace(/\u200b/g, '')
+            .trim();
+          if (!ownText) return;
+        }
         if (range.collapsed) {
           const direction = event.inputType === 'deleteContentForward' ? 'forward' : 'backward';
           try {
             selection.modify('extend', direction, 'character');
           } catch (_) { return; }
           if (selection.isCollapsed) return;
+          const ext = selection.getRangeAt(0);
+          /* 跨列表项／块删除会破坏结构：放行浏览器默认行为 */
+          const a = ext.startContainer.nodeType === Node.TEXT_NODE ? ext.startContainer.parentElement : ext.startContainer;
+          const b = ext.endContainer.nodeType === Node.TEXT_NODE ? ext.endContainer.parentElement : ext.endContainer;
+          if (a?.closest?.('li') !== b?.closest?.('li') || a?.closest?.('p,h1,h2,h3,li,td,th') !== b?.closest?.('p,h1,h2,h3,li,td,th')) {
+            selection.collapseToStart();
+            return;
+          }
           event.preventDefault();
-          createDeleteSuggestion(selection.getRangeAt(0).cloneRange());
+          createDeleteSuggestion(ext.cloneRange());
           return;
         }
+        const a = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        const b = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+        if (a?.closest?.('li') !== b?.closest?.('li') || a?.closest?.('p,h1,h2,h3,li,td,th') !== b?.closest?.('p,h1,h2,h3,li,td,th')) return;
         event.preventDefault();
         createDeleteSuggestion(range.cloneRange());
         return;
@@ -1016,17 +1071,16 @@
         createInsertSuggestion(event.data);
         return;
       }
-      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
-        event.preventDefault();
-        createInsertSuggestion('\n');
-      }
+      /* 回车/换行：放行，走列表续写／退级或正常拆段；禁止做成「新增 \\n」建议（会打断列表） */
+      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') return;
     });
     documentArea.addEventListener('input', event => {
       persistDocument();
       const block = getBlock(window.getSelection().anchorNode);
       if (block?.tagName === 'P' && block.textContent.trim() === '/') openInsertMenu(block);
     });
-    // 粘贴：保留标题/列表/表格等结构；字号与布局仍丢弃。调色板文字色/背景色保留（含编辑器内复制的 data-* 与可映射的 style 色）。
+    // 粘贴：保留标题/列表/表格等结构；字号与布局仍丢弃。
+    // 颜色：编辑器调色板 data-* 优先；外部 HTML 的 color / background-color 在无法映射时也保留为安全内联色。
     documentArea.addEventListener('paste', event => {
       const clipboard = event.clipboardData;
       if (!clipboard) return;
@@ -1141,16 +1195,28 @@
       event.preventDefault();
       const parentItem = list.parentElement.closest?.('li');
       if (parentItem) {
-        parentItem.after(item);
-        if (!list.children.length) list.remove();
-        focusListItem(item);
+        moveListItemKeepingCaret(item, () => {
+          parentItem.after(item);
+          if (!list.children.length) list.remove();
+        });
       } else if (item === list.lastElementChild) {
         const paragraph = document.createElement('p'); paragraph.innerHTML = '<br>';
         list.after(paragraph); item.remove();
         if (!list.children.length) list.remove();
         focusListItem(paragraph);
+        persistDocument();
+      } else {
+        /* 空项在中间：拆成 上半列表 + 段落 + 下半列表，禁止把 <p> 留在 <ol>/<ul> 里 */
+        const afterList = document.createElement(list.tagName.toLowerCase());
+        while (item.nextElementSibling) afterList.append(item.nextElementSibling);
+        const paragraph = document.createElement('p'); paragraph.innerHTML = '<br>';
+        list.after(paragraph);
+        if (afterList.children.length) paragraph.after(afterList);
+        item.remove();
+        if (!list.children.length) list.remove();
+        focusListItem(paragraph);
+        persistDocument();
       }
-      persistDocument();
       return true;
     }
     documentArea.addEventListener('change', event => { if (event.target.matches('input[type="checkbox"]')) persistDocument(); });
@@ -1279,28 +1345,58 @@
         const dist = (rgb[0]-p[0])**2 + (rgb[1]-p[1])**2 + (rgb[2]-p[2])**2;
         if (dist < bestDist) { bestDist = dist; best = name; }
       });
-      /* 色差过大则视为非调色板色，不保留，避免把整页主题色带进来 */
-      return bestDist <= 35**2 ? best : '';
+      /* 接近调色板则归并到命名色；否则交给外链色保留逻辑 */
+      return bestDist <= 40**2 ? best : '';
+    }
+    function cssColorToSafeInline(value) {
+      const rgb = parseCssColorToRgb(value);
+      if (!rgb) return '';
+      return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+    }
+    function colorDistanceSq(a, b) {
+      if (!a || !b) return Infinity;
+      return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2;
     }
     function resolvePastedSpanColors(node) {
       const colorName = /^(default|gray|brown|orange|yellow|green|blue|purple|pink|red)$/;
       const dataText = colorName.test(node.dataset?.textColor || '') ? node.dataset.textColor : '';
       const dataBg = colorName.test(node.dataset?.bgColor || '') ? node.dataset.bgColor : '';
-      const styleText = nearestEditorColorName(node.style?.color || node.getAttribute?.('color'), EDITOR_TEXT_COLORS);
-      const styleBg = nearestEditorColorName(node.style?.backgroundColor || node.style?.background, EDITOR_BG_COLORS);
+      const rawText = node.style?.color || node.getAttribute?.('color') || '';
+      const rawBgAttr = node.style?.backgroundColor || '';
+      const rawBgFallback = !rawBgAttr && node.style?.background && !/url\s*\(/i.test(node.style.background)
+        ? node.style.background
+        : '';
+      const rawBg = rawBgAttr || rawBgFallback;
+      const styleText = nearestEditorColorName(rawText, EDITOR_TEXT_COLORS);
+      const styleBg = nearestEditorColorName(rawBg, EDITOR_BG_COLORS);
       const textName = dataText || styleText;
       const bgName = dataBg || styleBg;
       let textAttr = '', bgAttr = '', inline = '';
       if (textName && textName !== 'default') {
         textAttr = ` data-text-color="${textName}"`;
         inline += `color:${EDITOR_TEXT_COLORS[textName]};`;
+      } else if (!textName && rawText) {
+        const safe = cssColorToSafeInline(rawText);
+        const rgb = parseCssColorToRgb(rawText);
+        const ink = parseCssColorToRgb(EDITOR_TEXT_COLORS.default);
+        /* 接近正文黑/灰则不必写死，避免整页被刷成黑色 */
+        if (safe && colorDistanceSq(rgb, ink) > 28**2) inline += `color:${safe};`;
       }
       if (bgName && bgName !== 'default') {
         bgAttr = ` data-bg-color="${bgName}"`;
         inline += `background-color:${EDITOR_BG_COLORS[bgName]};`;
+      } else if (!bgName && rawBg) {
+        const safe = cssColorToSafeInline(rawBg);
+        const rgb = parseCssColorToRgb(rawBg);
+        const white = parseCssColorToRgb(EDITOR_BG_COLORS.default);
+        if (safe && colorDistanceSq(rgb, white) > 18**2) inline += `background-color:${safe};`;
       }
       return { textAttr, bgAttr, styleAttr: inline ? ` style="${inline}"` : '' };
     }
+    const COLOR_BEARING_TAGS = new Set([
+      'span','font','strong','b','em','i','u','mark','a','code','del','s',
+      'p','h1','h2','h3','li','td','th','blockquote','label'
+    ]);
     function sanitizePastedHtml(html, preserveEditorContent = false, allowPastedImages = false) {
       if (!html) return '';
       const source = new DOMParser().parseFromString(html, 'text/html');
@@ -1330,20 +1426,26 @@
           const reviewId = hasReviewAnchor && /^[a-zA-Z0-9-]+$/.test(node.dataset.reviewId || '') ? ` data-review-id="${node.dataset.reviewId}"` : '';
           const suggestId = hasSuggestMark && /^[a-zA-Z0-9-]+$/.test(node.dataset.suggestId || '') ? ` data-suggest-id="${node.dataset.suggestId}"` : '';
           const suggestKind = hasSuggestMark && /^(insert|delete)$/.test(node.dataset.suggestKind || '') ? ` data-suggest-kind="${node.dataset.suggestKind}"` : '';
-          /* 粘贴与本地持久化都保留调色板色；任意来源的 style 色映射到最近调色板名 */
-          const pastedColors = tag === 'span' ? resolvePastedSpanColors(node) : { textAttr:'', bgAttr:'', styleAttr:'' };
+          /* 粘贴与本地持久化：调色板 data-* + 无法映射的外部内联色 */
+          const pastedColors = COLOR_BEARING_TAGS.has(tag) ? resolvePastedSpanColors(node) : { textAttr:'', bgAttr:'', styleAttr:'' };
           const open = tag === 'details' && node.hasAttribute('open') ? ' open' : '';
           const controls = preserveEditorContent && ['video','audio'].includes(tag) ? ' controls' : '';
           if (tag === 'img' || tag === 'source') return src ? `<${tag}${src}${ownClass}>` : '';
           return `<${tag}${href}${src}${ownClass}${reviewId}${suggestId}${suggestKind}${pastedColors.textAttr}${pastedColors.bgAttr}${pastedColors.styleAttr}${open}${controls}>${content}</${tag}>`;
         }
-        // Word、飞书、Notion 等常用 div 包裹：升成段落；font 上的色映射后包一层 span
+        // Word、飞书、Notion 等常用 div 包裹：升成段落；font / 带色 div 包一层 span
         if (tag === 'font') {
           const colors = resolvePastedSpanColors(node);
-          if (colors.textAttr || colors.bgAttr) return `<span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span>`;
+          if (colors.textAttr || colors.bgAttr || colors.styleAttr) return `<span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span>`;
           return content;
         }
-        if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) return `<p>${content}</p>`;
+        if (tag === 'div' && content && ![...node.children].some(child => blocks.has(child.tagName.toLowerCase()))) {
+          const colors = resolvePastedSpanColors(node);
+          if (colors.textAttr || colors.bgAttr || colors.styleAttr) {
+            return `<p><span${colors.textAttr}${colors.bgAttr}${colors.styleAttr}>${content}</span></p>`;
+          }
+          return `<p>${content}</p>`;
+        }
         return content;
       }
       return normalizeDocumentWhitespace([...source.body.childNodes].map(cleanNode).join(''));
@@ -1478,12 +1580,16 @@
 
     function positionBlockPlus(block) {
       if (window.innerWidth < 700 || !block || !blockControls) return;
-      const rect = block.getBoundingClientRect();
       activeBlock = block;
-      const width = blockControls.offsetWidth || 58;
-      blockControls.style.left = `${Math.max(6, rect.left - width - 8)}px`;
-      blockControls.style.top = `${rect.top + Math.min(4, Math.max(0, rect.height / 2 - 14))}px`;
+      /* 先显示再量宽，避免 display:none 时 width=0 估错，把拖动顶进正文线内 */
       blockControls.classList.add('show');
+      const blockRect = block.getBoundingClientRect();
+      const pageRect = documentArea.getBoundingClientRect();
+      const width = blockControls.offsetWidth || 64;
+      const gap = 8;
+      /* 相对正文左缘（线）外侧排布：＋ 左、⠿ 右；不跟 li 缩进往里跑 */
+      blockControls.style.left = `${Math.max(6, pageRect.left - width - gap)}px`;
+      blockControls.style.top = `${blockRect.top + Math.min(4, Math.max(0, blockRect.height / 2 - 14))}px`;
     }
 
     function showTableContext(table, cell) {
@@ -1520,14 +1626,18 @@
       }
     }
 
+    function isHoveringTableChrome() {
+      return [tableContext, tableRowInline, tableColumnInline, tableSelectInline, tableCellInline]
+        .some(el => el?.matches?.(':hover'));
+    }
     documentArea.addEventListener('mousemove', event => {
       const table = event.target.closest?.('table');
       if (table) {
         blockControls?.classList.remove('show');
         showTableContext(table, event.target.closest('td,th'));
-      } else {
-        tableContext.classList.remove('show');
-        [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
+      } else if (!isHoveringTableChrome()) {
+        /* 移向左侧「－行」等控件时勿强制隐藏，否则点不到删行 */
+        hideTableContext();
       }
     });
     documentArea.addEventListener('mouseleave', () => setTimeout(() => { hideInsertControls(); hideTableContext(); }, 100));
@@ -1538,6 +1648,7 @@
         showTableContext(cell.closest('table'), cell);
         return;
       }
+      if (isHoveringTableChrome()) return;
       tableContext.classList.remove('show');
       [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
       const selection = window.getSelection();
@@ -1655,7 +1766,7 @@
         const action = button.dataset.tableAction;
         if (action === 'add-row') addRow();
         if (action === 'add-column') addColumn();
-        if (action === 'remove-row') removeRow();
+        if (action === 'remove-row') removeRow(activeCell?.closest('tr'), activeTable);
         if (action === 'remove-column') removeColumn();
         if (action === 'delete-table') deleteTable();
       });
@@ -1665,7 +1776,7 @@
       button.addEventListener('click', () => {
         const action = button.dataset.tableInline;
         if (action === 'add-row') addRow();
-        if (action === 'remove-row') removeRow();
+        if (action === 'remove-row') removeRow(activeCell?.closest('tr'), activeTable);
         if (action === 'add-column') addColumn();
         if (action === 'remove-column') removeColumn();
         if (action === 'select-table') selectTableForDelete(activeTable);
@@ -2399,12 +2510,20 @@
       if (!event.target.closest('.review-menu-wrap')) document.querySelectorAll('.review-menu.show').forEach(menu => menu.classList.remove('show'));
     });
 
+    function blockInsertAnchor(block = activeBlock) {
+      if (!block || !documentArea.contains(block)) return null;
+      /* li 内插入时锚到整份 ul/ol，避免把表格/新列表插成 li 的兄弟节点（非法结构） */
+      if (block.closest?.('li')) return block.closest('ul,ol') || block;
+      if (block.closest?.('td,th')) return block.closest('table') || block;
+      return block;
+    }
     function insertAfterActiveBlock(markup) {
-      if (!activeBlock || !documentArea.contains(activeBlock)) {
+      const anchor = blockInsertAnchor(activeBlock);
+      if (!anchor) {
         documentArea.focus();
         document.execCommand('insertHTML', false, markup);
       } else {
-        activeBlock.insertAdjacentHTML('afterend', markup);
+        anchor.insertAdjacentHTML('afterend', markup);
       }
       persistDocument();
     }
@@ -2428,16 +2547,34 @@
       if (['h1','h2','h3'].includes(type)) return convertOrInsertHeading(type);
       if (['image-url','video','audio','file','bookmark'].includes(type)) return insertMedia(type);
       if (type === 'numbered' || type === 'bullet') {
+        const wantTag = type === 'numbered' ? 'OL' : 'UL';
         const item = activeBlock?.closest?.('li');
         const list = item?.parentElement;
-        if (list?.tagName === (type === 'numbered' ? 'OL' : 'UL')) {
+        if (list?.matches('ol,ul')) {
+          if (list.tagName === wantTag) {
+            const next = document.createElement('li'); next.innerHTML = '<br>';
+            item.after(next); focusListItem(next); persistDocument(); return;
+          }
+          /* 在另一类列表中：在整份列表后新建目标类型，不插进当前 ul/ol 内部 */
+          const newList = document.createElement(wantTag.toLowerCase());
           const next = document.createElement('li'); next.innerHTML = '<br>';
-          item.after(next); focusListItem(next); persistDocument(); return;
+          newList.append(next);
+          list.after(newList);
+          focusListItem(next); persistDocument(); return;
         }
         const preceding = activeBlock?.previousElementSibling;
-        if (activeBlock?.tagName === 'P' && !activeBlock.textContent.trim() && preceding?.tagName === (type === 'numbered' ? 'OL' : 'UL')) {
+        if (activeBlock?.tagName === 'P' && !activeBlock.textContent.trim() && preceding?.tagName === wantTag) {
           const next = document.createElement('li'); next.innerHTML = '<br>';
           preceding.append(next); activeBlock.remove(); focusListItem(next); persistDocument(); return;
+        }
+        /* 有内容的段落：就地转为列表，避免在下方再插一份空列表 */
+        if (activeBlock?.tagName === 'P' && activeBlock.textContent.trim() && activeBlock.textContent.trim() !== '/') {
+          const newList = document.createElement(wantTag.toLowerCase());
+          const li = document.createElement('li');
+          li.innerHTML = activeBlock.innerHTML || '<br>';
+          newList.append(li);
+          activeBlock.replaceWith(newList);
+          focusListItem(li); persistDocument(); return;
         }
       }
       const blocks = {
@@ -2817,13 +2954,16 @@
     }
 
     function removeRow(rowOverride, tableOverride) {
-      const cell = selectedCell() || activeCell;
-      const table = tableOverride || selectedTable() || activeTable;
-      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
-      const row = rowOverride || cell.closest('tr');
+      const table = tableOverride || activeTable || selectedTable();
+      const row = rowOverride || selectedRowForDelete || (selectedCell() || activeCell)?.closest('tr');
+      if (!table || !row || !table.contains(row)) return alert('请先将光标放入需要删除的表格行。');
       if (table.rows.length === 1) return alert('表格至少保留一行。');
+      const nextFocus = row.nextElementSibling || row.previousElementSibling;
       row.remove();
+      activeCell = nextFocus?.querySelector?.('td,th') || table.querySelector('td,th');
+      activeTable = table;
       persistDocument();
+      if (activeCell) showTableInlineControls(table, activeCell);
     }
 
     function removeColumn() {

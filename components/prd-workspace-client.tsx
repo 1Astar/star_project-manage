@@ -11,7 +11,11 @@ import {
   updatePrdAction,
 } from "@/lib/actions";
 import { annotateHtmlDiff } from "@/lib/prds/html-diff";
-import { downloadStandalonePrd } from "@/lib/prds/export-standalone";
+import {
+  downloadPrdHtmlAndMarkdown,
+  downloadPrdMarkdown,
+  downloadStandalonePrd,
+} from "@/lib/prds/export-standalone";
 import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type {
   PrdReviewComment,
@@ -101,6 +105,17 @@ export function PrdWorkspaceClient({
   }, [selected, viewVersionId, currentHtml, showDiff]);
 
   const editingCurrent = viewVersionId === "current" && !showDiff;
+
+  const diffAgainstLabel = useMemo(() => {
+    const vers = selected?.versions ?? [];
+    if (!showDiff || !vers.length) return null;
+    if (viewVersionId === "current") {
+      return vers[vers.length - 1]?.label ?? null;
+    }
+    const index = vers.findIndex((v) => v.id === viewVersionId);
+    if (index <= 0) return null;
+    return vers[index - 1]?.label ?? null;
+  }, [showDiff, selected?.versions, viewVersionId]);
 
   const hostPages: PrdHostPage[] = useMemo(() => {
     if (!selected) return [];
@@ -309,7 +324,7 @@ export function PrdWorkspaceClient({
         <div>
           <h2 className="text-base font-semibold text-slate-900">PRD</h2>
           <p className="mt-1 text-sm text-slate-500">
-            左侧列表 = 多份 PRD（文档级）。打开后侧栏「＋ 页面」再建一份 PRD，「＋ 原型」挂原型。顶栏「当前稿 / 小版本」= 整份文档快照（可自命名），不是章节切换。正文里「版本记录」表是产品文案，与顶栏快照分开。
+            左侧列表 = 多份 PRD。顶栏「当前稿 / 小版本」= 整份文档快照（可命名、对比、还原）；勾选标注后绿=相对上一版新增、红删除线=已删。正文里「版本记录」表是产品文案，不是顶栏快照。
           </p>
         </div>
         <button
@@ -463,79 +478,162 @@ export function PrdWorkspaceClient({
                   })
                 }
               />
-              <select
-                className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
-                value={viewVersionId}
-                onChange={(e) =>
-                  setViewVersionId(e.target.value as string | "current")
-                }
-              >
-                <option value="current">当前稿</option>
-                {(selected.versions ?? []).map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-              <label className="flex items-center gap-1 text-xs text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={showDiff}
-                  onChange={(e) => setShowDiff(e.target.checked)}
-                />
-                标注相对上一版改动
-              </label>
-              <button
-                type="button"
-                className="rounded-lg border px-2 py-1 text-sm"
-                disabled={pending || !editingCurrent}
-                onClick={() => {
-                  const suggested = (() => {
+              <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2 py-1">
+                <span className="text-[11px] font-medium text-slate-500">
+                  小版本
+                </span>
+                <select
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+                  value={viewVersionId}
+                  onChange={(e) =>
+                    setViewVersionId(e.target.value as string | "current")
+                  }
+                  title="同一文档的快照历史（1.0 / 1.0.1…），不是左侧换文档"
+                >
+                  <option value="current">当前稿（可编辑）</option>
+                  {(selected.versions ?? []).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                      {v.created_at
+                        ? ` · ${v.created_at.slice(0, 10)}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+                <label
+                  className="flex items-center gap-1 text-xs text-slate-600"
+                  title={
+                    (selected.versions ?? []).length
+                      ? "相对相邻上一小版本做块级增删标注"
+                      : "请先「保存为小版本」后再标注"
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={showDiff}
+                    disabled={!(selected.versions ?? []).length}
+                    onChange={(e) => setShowDiff(e.target.checked)}
+                  />
+                  标注改动
+                  {diffAgainstLabel ? (
+                    <span className="text-slate-400">相对 {diffAgainstLabel}</span>
+                  ) : null}
+                </label>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+                  disabled={pending || !editingCurrent}
+                  onClick={() => {
                     const vers = selected.versions ?? [];
                     const last = vers[vers.length - 1]?.label ?? "1.0";
                     const m = last.match(/^(\d+)\.(\d+)(?:\.(\d+))?$/);
-                    if (!m) return `快照 ${vers.length + 1}`;
-                    const patch = m[3] != null ? Number(m[3]) + 1 : 1;
-                    return `${m[1]}.${m[2]}.${patch}`;
-                  })();
-                  const label = window.prompt(
-                    "小版本名称（可改；取消则不保存）",
-                    suggested
-                  );
-                  if (label === null) return;
-                  persist(selected.id, {
-                    prdId: selected.id,
-                    projectSlug,
-                    htmlContent: draftHtml,
-                    snapshotVersion: true,
-                    snapshotVersionLabel: label.trim() || suggested,
-                  });
-                }}
-              >
-                保存为小版本
-              </button>
-              {viewVersionId !== "current" ? (
-                <button
-                  type="button"
-                  className="rounded-lg border px-2 py-1 text-sm"
-                  disabled={pending}
-                  onClick={() => {
-                    const version = (selected.versions ?? []).find(
-                      (v) => v.id === viewVersionId
+                    const suggested = !m
+                      ? `快照 ${vers.length + 1}`
+                      : `${m[1]}.${m[2]}.${m[3] != null ? Number(m[3]) + 1 : 1}`;
+                    const label = window.prompt(
+                      "保存当前稿为小版本（可改名；取消则不保存）",
+                      suggested
                     );
-                    if (!version) return;
-                    setDraftHtml(version.html_content);
-                    setViewVersionId("current");
-                    setShowDiff(false);
+                    if (label === null) return;
                     persist(selected.id, {
                       prdId: selected.id,
                       projectSlug,
-                      htmlContent: version.html_content,
+                      htmlContent: draftHtml,
+                      snapshotVersion: true,
+                      snapshotVersionLabel: label.trim() || suggested,
                     });
+                    setMessage(`已保存小版本「${label.trim() || suggested}」`);
                   }}
                 >
-                  还原为此版本
+                  保存为小版本
                 </button>
+                {viewVersionId !== "current" ? (
+                  <>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+                      disabled={pending}
+                      onClick={() => {
+                        const version = (selected.versions ?? []).find(
+                          (v) => v.id === viewVersionId
+                        );
+                        if (!version) return;
+                        const next = window.prompt("重命名此小版本", version.label);
+                        if (next === null) return;
+                        const label = next.trim();
+                        if (!label) return;
+                        persist(selected.id, {
+                          prdId: selected.id,
+                          projectSlug,
+                          versions: (selected.versions ?? []).map((v) =>
+                            v.id === version.id ? { ...v, label } : v
+                          ),
+                        });
+                      }}
+                    >
+                      重命名
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm"
+                      disabled={pending}
+                      onClick={() => {
+                        const version = (selected.versions ?? []).find(
+                          (v) => v.id === viewVersionId
+                        );
+                        if (!version) return;
+                        setDraftHtml(version.html_content);
+                        setViewVersionId("current");
+                        setShowDiff(false);
+                        persist(selected.id, {
+                          prdId: selected.id,
+                          projectSlug,
+                          htmlContent: version.html_content,
+                        });
+                      }}
+                    >
+                      还原为此版本
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-200 bg-white px-2 py-1 text-sm text-rose-600"
+                      disabled={pending}
+                      onClick={() => {
+                        const version = (selected.versions ?? []).find(
+                          (v) => v.id === viewVersionId
+                        );
+                        if (!version) return;
+                        if (!confirm(`删除小版本「${version.label}」？不可恢复。`)) {
+                          return;
+                        }
+                        const nextVersions = (selected.versions ?? []).filter(
+                          (v) => v.id !== version.id
+                        );
+                        setViewVersionId("current");
+                        setShowDiff(false);
+                        persist(selected.id, {
+                          prdId: selected.id,
+                          projectSlug,
+                          versions: nextVersions,
+                        });
+                      }}
+                    >
+                      删除此版
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              {showDiff && diffAgainstLabel ? (
+                <span className="flex items-center gap-2 text-[11px] text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500/30 ring-1 ring-emerald-600" />
+                    新增
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-500/25 ring-1 ring-rose-600" />
+                    删除
+                  </span>
+                </span>
               ) : null}
               <button
                 type="button"
@@ -607,6 +705,11 @@ export function PrdWorkspaceClient({
                 type="button"
                 className="rounded-lg border px-2 py-1 text-sm"
                 disabled={pending}
+                title={
+                  viewVersionId === "current"
+                    ? "导出当前稿（可编辑 HTML）"
+                    : "导出当前所选小版本（可编辑 HTML）"
+                }
                 onClick={() => {
                   startTransition(async () => {
                     try {
@@ -624,6 +727,48 @@ export function PrdWorkspaceClient({
                 }}
               >
                 导出 HTML
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border px-2 py-1 text-sm"
+                disabled={pending}
+                title="导出兼容 Markdown 的 .md（表格 / 列表 / 标题）"
+                onClick={() => {
+                  try {
+                    downloadPrdMarkdown({
+                      title: selected.title || "PRD",
+                      bodyHtml: editorHtml,
+                    });
+                    setMessage("已导出 Markdown");
+                  } catch (e) {
+                    setMessage(e instanceof Error ? e.message : "导出失败");
+                  }
+                }}
+              >
+                导出 MD
+              </button>
+              <button
+                type="button"
+                className="rounded-lg border px-2 py-1 text-sm"
+                disabled={pending}
+                title="同时导出 HTML + Markdown"
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      await downloadPrdHtmlAndMarkdown({
+                        title: selected.title || "PRD",
+                        bodyHtml: editorHtml,
+                      });
+                      setMessage("已导出 HTML + Markdown");
+                    } catch (e) {
+                      setMessage(
+                        e instanceof Error ? e.message : "导出失败"
+                      );
+                    }
+                  });
+                }}
+              >
+                导出 HTML+MD
               </button>
               <button
                 type="button"
@@ -665,7 +810,7 @@ export function PrdWorkspaceClient({
               </p>
             ) : (
               <p className="border-b border-slate-100 px-4 py-1 text-[11px] text-slate-500">
-                粘贴会保留标题/列表/表格/加粗等语义格式，并去掉 Word/网页带来的字号颜色，避免把外站样式带进 PRD。
+                粘贴保留标题/列表/表格/加粗与文字色、背景色；字号与复杂版式仍会丢弃，避免整页被外站样式污染。
               </p>
             )}
             <div className="min-h-0 flex-1">

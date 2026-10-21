@@ -10,10 +10,23 @@
     body { margin:0; background:#fff; color:var(--ink); font:15px/1.75 "PingFang SC",-apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif; }
     .app-nav { position:fixed; inset:0 auto 0 0; z-index:10; display:flex; flex-direction:column; width:288px; overflow:auto; padding:18px 16px 28px; background:var(--sidebar); border-right:1px solid var(--line); transition:transform 250ms cubic-bezier(0,0,.2,1); }
     .app-brand { padding:0 0 26px; font-size:16px; font-weight:600; border-bottom:1px solid var(--line); }
-    .nav-section { margin-top:22px; color:var(--muted); font-size:13px; font-weight:500; outline:none; border-radius:6px; padding:2px 4px; }
+    .nav-section-row { display:flex; align-items:center; gap:4px; margin-top:22px; min-height:28px; }
+    .nav-section-caret { width:18px; flex:none; border:0; background:transparent; color:var(--muted); padding:0; font-size:13px; cursor:pointer; line-height:1; }
+    .nav-section-caret:hover { color:var(--blue); }
+    .nav-section { flex:1; min-width:0; color:var(--muted); font-size:13px; font-weight:500; outline:none; border-radius:6px; padding:2px 4px; }
+    .nav-tree.section-collapsed { display:none; }
     .nav-section:focus,.nav-section[contenteditable="true"]:hover { background:rgba(61,134,248,.08); color:var(--ink); }
+    .nav-section:empty:before { content:attr(data-placeholder); color:rgba(3,17,33,.35); pointer-events:none; }
+    .nav-section-actions { display:flex; align-items:center; gap:2px; opacity:0; flex:none; }
+    .nav-section-row:hover .nav-section-actions,.nav-section-row:focus-within .nav-section-actions { opacity:1; }
+    .nav-section-actions button,.page-row .tree-actions button { width:26px; height:26px; border:0; border-radius:6px; background:transparent; color:var(--muted); font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .nav-section-actions button:hover,.page-row .tree-actions button:hover { color:var(--blue); background:rgba(61,134,248,.12); }
+    .nav-section-actions button.danger:hover,.page-row .tree-actions button.danger:hover,.page-row.phase-row .phase-tree-actions button.danger:hover,
+    .phase-picker-menu .phase-picker-delete:hover { color:#E11D48; background:rgba(225,29,72,.10); }
     .page-row-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-radius:4px; padding:0 2px; }
     .page-row-title[contenteditable="true"] { outline:none; background:rgba(61,134,248,.08); white-space:normal; }
+    .page-row .tree-actions { margin-left:auto; display:flex; align-items:center; gap:2px; opacity:0; flex:none; }
+    .page-row:hover .tree-actions,.page-row.active .tree-actions { opacity:1; }
     .nav-item { display:block; margin:6px 0; padding:7px 11px; color:var(--ink); text-decoration:none; border-radius:8px; font-size:14px; }
     .nav-item.sub { padding-left:22px; color:var(--muted); }
     .nav-item.active { color:var(--blue); background:rgba(61,134,248,.10); font-weight:500; }
@@ -28,6 +41,11 @@
     .tree-caret { width:18px; border:0; background:transparent; color:var(--muted); padding:0; font-size:13px; cursor:pointer; }
     .tree-caret.empty { visibility:hidden; }
     .page-row-external { margin-left:auto; color:var(--muted); font-size:16px; line-height:1; }
+    .page-row.phase-row { font-weight:500; }
+    .page-row.phase-row .phase-tree-actions { margin-left:auto; display:flex; align-items:center; gap:2px; opacity:0; }
+    .page-row.phase-row:hover .phase-tree-actions,.page-row.phase-row.active .phase-tree-actions { opacity:1; }
+    .page-row.phase-row .phase-tree-actions button { width:26px; height:26px; border:0; border-radius:6px; background:transparent; color:var(--muted); font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .page-row.phase-row .phase-tree-actions button:hover { color:var(--blue); background:rgba(61,134,248,.12); }
     .nav-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
     .nav-actions button { border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; cursor:pointer; }
     .nav-actions button:hover { color:var(--blue); border-color:var(--blue); }
@@ -83,11 +101,12 @@
     [contenteditable="true"]:focus { outline:none; }
     .editable:focus { box-shadow:0 0 0 3px rgba(61,134,248,.12); }
     .save-state { color:var(--muted); font-size:12px; white-space:nowrap; }
-    .block-controls { position:fixed; z-index:20; display:none; align-items:center; gap:2px; }
+    /* 加号在左、拖动在右；整组定位在正文左缘外侧（线外） */
+    .block-controls { position:fixed; z-index:20; display:none; flex-direction:row; align-items:center; gap:2px; }
     .block-controls.show { display:flex; }
     .block-plus,.block-drag { width:28px; height:28px; border:0; border-radius:7px; color:var(--muted); background:transparent; font-size:18px; line-height:1; cursor:pointer; }
-    .block-plus { font-size:23px; }
-    .block-drag { cursor:grab; letter-spacing:-2px; font-size:14px; font-weight:700; }
+    .block-plus { order:1; font-size:23px; }
+    .block-drag { order:2; cursor:grab; letter-spacing:-2px; font-size:14px; font-weight:700; }
     .block-drag:active { cursor:grabbing; }
     .block-plus:hover,.block-drag:hover { color:var(--blue); background:rgba(61,134,248,.10); }
     .page > .block-drop-before { box-shadow:inset 0 2px 0 var(--blue); }
@@ -157,7 +176,57 @@
     .undo-toast button:hover { background:rgba(255,255,255,.28); }
     .review-toggle { padding:7px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:14px "PingFang SC",sans-serif; cursor:pointer; }
     .review-toggle.active { border-color:var(--blue); background:rgba(61,134,248,.10); color:var(--blue); }
-    .review-actions { display:flex; align-items:center; gap:8px; }
+    .review-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .doc-version-bar { display:flex; align-items:center; gap:6px; margin-right:4px; position:relative; }
+    .doc-version-bar > button.export-btn { padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .doc-version-bar > button.export-btn:hover { color:var(--blue); border-color:var(--blue); }
+    body.host-mode .doc-version-bar { display:none; }
+    .phase-picker { position:relative; }
+    .phase-picker-trigger { display:inline-flex; align-items:center; gap:8px; max-width:240px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; cursor:pointer; box-shadow:0 1px 2px rgba(3,17,33,.04); }
+    .phase-picker-trigger:hover,.phase-picker.open .phase-picker-trigger { border-color:rgba(61,134,248,.45); color:var(--blue); }
+    .phase-picker-trigger .phase-picker-check { color:var(--blue); font-weight:700; }
+    .phase-picker-trigger .phase-picker-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .phase-picker-trigger .phase-picker-caret { color:var(--muted); font-size:11px; }
+    .phase-picker-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:60; display:none; min-width:220px; padding:6px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 12px 32px rgba(3,17,33,.14); }
+    .phase-picker.open .phase-picker-menu { display:block; }
+    .phase-picker-menu .phase-picker-row { display:flex; align-items:center; gap:2px; border-radius:8px; }
+    .phase-picker-menu .phase-picker-row:hover,.phase-picker-menu .phase-picker-row.active { background:rgba(61,134,248,.08); }
+    .phase-picker-menu .phase-picker-row.active { background:rgba(61,134,248,.12); }
+    .phase-picker-menu button { display:flex; align-items:center; gap:8px; border:0; border-radius:8px; background:transparent; color:var(--ink); text-align:left; font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .phase-picker-menu .phase-picker-pick { flex:1; min-width:0; padding:8px 6px 8px 10px; }
+    .phase-picker-menu .phase-picker-pick .tick { width:14px; flex:none; color:transparent; font-weight:700; }
+    .phase-picker-menu .phase-picker-row.active .phase-picker-pick .tick { color:var(--blue); }
+    .phase-picker-menu .phase-picker-pick span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .phase-picker-menu .phase-picker-rename,
+    .phase-picker-menu .phase-picker-delete { flex:none; width:32px; height:32px; justify-content:center; color:var(--muted); opacity:0; }
+    .phase-picker-menu .phase-picker-row:hover .phase-picker-rename,
+    .phase-picker-menu .phase-picker-row.active .phase-picker-rename,
+    .phase-picker-menu .phase-picker-row:hover .phase-picker-delete,
+    .phase-picker-menu .phase-picker-row.active .phase-picker-delete { opacity:1; }
+    .phase-picker-menu .phase-picker-rename:hover { color:var(--blue); background:rgba(61,134,248,.12); }
+    .phase-picker-menu .phase-picker-divider { height:1px; margin:4px 6px; background:var(--line); }
+    .phase-picker-menu .phase-picker-action { width:100%; padding:8px 10px; color:var(--muted); }
+    .phase-picker-menu .phase-picker-action:hover { color:var(--blue); background:rgba(61,134,248,.08); }
+    .prd-modal-mask { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; background:rgba(3,17,33,.35); }
+    .prd-modal-mask.show { display:flex !important; }
+    .prd-modal { width:min(420px,calc(100vw - 32px)); padding:18px 18px 14px; border-radius:14px; background:#fff; box-shadow:0 18px 48px rgba(3,17,33,.22); }
+    .prd-modal h3 { margin:0 0 8px; font-size:16px; }
+    .prd-modal p { margin:0 0 12px; color:var(--muted); font-size:13px; }
+    .prd-modal input { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:14px "PingFang SC",sans-serif; }
+    .prd-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; flex-wrap:wrap; }
+    .prd-modal-actions button { padding:7px 14px; border:1px solid var(--line); border-radius:8px; background:#fff; font:13px "PingFang SC",sans-serif; cursor:pointer; }
+    .prd-modal-actions button.primary { border-color:var(--blue); background:var(--blue); color:#fff; }
+    .prd-modal-actions button.linkish { margin-right:auto; border:0; color:var(--blue); background:transparent; }
+    .phase-pager { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:min(850px,calc(100% - 80px)); margin:8px auto 72px; }
+    .phase-pager:empty { display:none; }
+    .phase-pager a { display:block; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:#fafbfc; color:var(--ink); text-decoration:none; transition:border-color .15s, background .15s; }
+    .phase-pager a:hover { border-color:rgba(61,134,248,.45); background:#f3f8ff; }
+    .phase-pager a .phase-pager-label { display:block; margin-bottom:4px; color:var(--muted); font-size:12px; }
+    .phase-pager a .phase-pager-title { display:block; color:var(--blue); font-size:15px; font-weight:500; }
+    .phase-pager a.next { text-align:right; }
+    .phase-pager a.disabled { visibility:hidden; pointer-events:none; }
+    /* 本页目录：默认可见细标记；悬停展开标题（避免误以为右侧「没了」） */
+    .on-page { opacity:1; }
     .review-comments-toggle { display:none; padding:7px 12px; border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); font:14px "PingFang SC",sans-serif; cursor:pointer; }
     body.review-open .review-comments-toggle,body.has-review-comments .review-comments-toggle,
     body.host-mode .review-comments-toggle { display:inline-flex; }
@@ -262,6 +331,9 @@
     .suggest-mark:hover,.suggest-mark.active { background:rgba(61,134,248,.25); }
     .suggest-mark[data-suggest-kind="delete"] { text-decoration:line-through; color:rgba(3,17,33,.55); }
     .suggest-mark[data-suggest-kind="insert"] { border-bottom-style:solid; }
+    /* 宿主「标注相对上一版改动」：块级增删（WPS 风，只读对比，不写回） */
+    .prd-rev-add { background:rgba(7,159,74,.12) !important; box-shadow:inset 3px 0 0 #079F4A; }
+    .prd-rev-del { background:rgba(225,29,72,.10) !important; box-shadow:inset 3px 0 0 #E11D48; text-decoration:line-through; color:rgba(3,17,33,.55); opacity:.92; }
     .suggest-card { position:fixed; z-index:34; display:none; width:min(300px,calc(100vw - 16px)); padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); }
     .suggest-card.show { display:block; }
     .suggest-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
@@ -277,8 +349,12 @@
     .suggest-hint { position:fixed; z-index:34; display:none; max-width:min(320px,calc(100vw - 24px)); padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; box-shadow:0 8px 40px rgba(0,0,0,.12); color:var(--muted); font:13px/1.5 "PingFang SC",sans-serif; }
     .suggest-hint.show { display:block; }
     .page img.editor-media,.page video.editor-media,.page audio.editor-media { display:block; max-width:100%; margin:12px 0; }
-    @media (max-width:1050px) { .app-nav { width:220px; } .sidebar-collapse { left:194px; } .main { margin-left:220px; } body.nav-collapsed .app-nav { transform:translateX(-220px); } .doc-layout { width:min(850px,calc(100% - 56px)); } .on-page { display:none; } }
+    @media (max-width:1050px) { .app-nav { width:220px; } .sidebar-collapse { left:194px; } .main { margin-left:220px; } body.nav-collapsed .app-nav { transform:translateX(-220px); } .doc-layout { width:min(850px,calc(100% - 56px)); } }
+    @media (max-width:720px) { .on-page { display:none; } .phase-pager { width:calc(100% - 40px); grid-template-columns:1fr; } }
     @media (max-width:700px) { .app-nav,.sidebar-collapse { display:none; } .main,body.review-comments-open .main,body.review-composing .main { margin-left:0; margin-right:0; } .toolbar { padding:0 16px; } .doc-layout { width:calc(100% - 40px); margin:32px auto 56px; } h1 { font-size:27px; margin-bottom:34px; } h2 { font-size:20px; margin-top:42px; padding-top:28px; } table { display:block; overflow-x:auto; } .brand { display:none; } }
+    pre.mermaid { white-space:pre-wrap; overflow:auto; padding:14px 16px; border:1px solid var(--line); border-radius:12px; background:#f8fafc; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; color:#334155; }
+    .mermaid-rendered { margin:12px 0 20px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; overflow:auto; text-align:center; }
+    .mermaid-rendered svg { max-width:100%; height:auto; }
     @media print { .app-nav,.toolbar,.on-page,.review-sidebar,.review-thread,.selection-tools,.selection-color-menu,.review-composer { display:none !important; } .main { margin:0; } .doc-layout { display:block; width:100%; margin:0; } }
   </style>
 </head>
@@ -286,308 +362,169 @@
   <button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="收起侧边栏" title="收起侧边栏">‹</button>
   <aside class="app-nav" aria-label="文档导航">
     <div class="app-brand">MinisCloud Design</div>
-    <div class="nav-section" id="nav-section" contenteditable="true" spellcheck="false" title="双击后可改，失焦保存">APP 重构 1.0（纯视觉）</div>
+    <div class="nav-section-row">
+      <button type="button" class="nav-section-caret" id="nav-section-caret" title="展开／收起子页面" aria-label="展开／收起子页面">⌄</button>
+      <div class="nav-section" id="nav-section" contenteditable="true" spellcheck="false" title="点击后可改名，失焦保存" data-placeholder="未命名板块"></div>
+      <div class="nav-section-actions">
+        <button type="button" id="nav-section-delete" class="danger" title="删除板块" aria-label="删除板块">×</button>
+      </div>
+    </div>
     <nav id="page-tree" class="nav-tree" aria-label="页面目录"></nav>
     <div class="nav-actions"><button id="new-page" type="button">＋ 页面</button><button id="new-child-page" type="button">＋ 子页面</button><button id="new-prototype" type="button">＋ 原型</button></div>
   </aside>
   <div class="main">
   <header class="toolbar">
     <div class="brand">产品设计 / 更新</div>
-    <div class="review-actions"><button id="review-comments-toggle" class="review-comments-toggle" type="button" aria-expanded="false" aria-controls="review-sidebar">评论</button><button id="review-toggle" class="review-toggle" type="button" aria-pressed="false">开始建议</button></div>
+    <div class="review-actions">
+      <div class="doc-version-bar" id="doc-version-bar" title="期次：在下拉内切换 / 重命名 / 新建">
+        <div class="phase-picker" id="phase-picker">
+          <button type="button" class="phase-picker-trigger" id="phase-picker-trigger" aria-haspopup="listbox" aria-expanded="false">
+            <span class="phase-picker-check">✓</span>
+            <span class="phase-picker-label" id="phase-picker-label">V2.8</span>
+            <span class="phase-picker-caret">▾</span>
+          </button>
+          <div class="phase-picker-menu" id="phase-picker-menu" role="listbox" hidden></div>
+        </div>
+        <button id="doc-export-md" class="export-btn" type="button" title="另存为 Markdown 文件">另存为 MD</button>
+        <button id="doc-export-html" class="export-btn" type="button" title="另存为可编辑 HTML 文件">另存为 HTML</button>
+      </div>
+      <button id="review-comments-toggle" class="review-comments-toggle" type="button" aria-expanded="false" aria-controls="review-sidebar">评论</button>
+      <button id="review-toggle" class="review-toggle" type="button" aria-pressed="false">开始建议</button>
+    </div>
   </header>
 
   <div class="doc-layout">
   <main class="page editable" id="document" contenteditable="true">
-<h1>更新弹窗展示优先级 PRD</h1>
+<h1>更新弹窗展示优先级 PRD V2.7</h1>
 <h2>1. 版本记录</h2>
-<table>
-<thead>
-<tr>
-<th>版本</th>
-<th>日期</th>
-<th>修改内容</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>V1.9</td>
-<td>2026-10-16</td>
-<td>将检测入口、首次弹窗、客户端续弹及异常反馈拆为分层规则，保持本期既定弹窗顺序。</td>
-</tr>
-</tbody></table>
+<table><thead><tr><th>版本</th><th>日期</th><th>修改内容</th></tr></thead><tbody><tr><td>V2.6</td><td>2026-10-19</td><td>原版本</td></tr><tr><td>V2.7</td><td>2026-10-20</td><td>基于 V2.6 调整检测及展示规则，统一术语；修正流程图、页面说明和验收标准。</td></tr></tbody></table>
 <h2>2. 背景</h2>
-<p>OS 与客户端分别检查更新并使用各自的更新弹窗。两项同时有更新时，需要确定弹窗顺序及 OS 流程结束后客户端弹窗的触发条件。本期只调整两类更新弹窗的编排，沿用原弹窗的内容、按钮和更新流程。</p>
-<p>本期不实现胶囊、“稍后提醒”、跨登录轮换及版本组合更新。</p>
+<p>MinisCloud OS 的 OS 更新与客户端更新分别具有独立的检测及更新流程，现有产品已具备对应的更新弹窗和系统设置中的版本状态展示功能。</p>
+<p>当前用户登录进入桌面时，系统会自动检测 OS 与客户端的更新状态；进入系统设置页面时，也会自动检测并更新版本状态。用户还可以在系统设置页面手动检查指定项目的更新情况。</p>
+<p>由于 OS 与客户端可能同时存在更新，需要明确桌面更新弹窗的展示优先级。同时，需要明确系统设置页面中自动检测、手动单项检查的结果反馈方式。</p>
+<p>本文档基于现有更新功能，仅规范更新检测触发、检测结果反馈、OS 与客户端更新弹窗的展示优先级。原有更新弹窗内容、下载、安装及更新执行流程不在本次调整范围内。</p>
 <h2>3. 目标</h2>
-<ol>
-<li>两项更新同时可用时，先展示 OS 更新弹窗，OS 流程结束后自动展示客户端更新弹窗；两个弹窗不重叠。</li>
-<li>每次登录进入主屏幕或手动点击“检查更新”时，都重新获取 OS 与客户端的更新结果；两项检查结束后，仅依据此次结果决定弹窗。</li>
-<li>检测失败或超时时，只展示已确认有更新的项目；两项都未确认有更新且至少一项检测异常时，手动检查显示失败提示，登录时检查不弹提示。</li>
-</ol>
-<h2>4. 核心功能</h2>
-<h3>4.1 检测入口与首次弹窗</h3>
-<ol>
-<li>触发版本检查：
-<ol>
-<li>登录进入 OS 主屏幕后，检查 OS 和客户端版本。</li>
-<li>用户点击现有“检查更新”入口时，重新检查 OS 和客户端版本。</li>
-<li>两种入口均只检测版本，不自动下载或安装更新。</li>
-</ol></li>
-<li>收集本轮结果：
-<ol>
-<li>每次触发形成独立轮次；OS、客户端分别返回“有更新”“无更新”“检测失败”或“检测超时”。</li>
-<li>两项都进入上述终态后，才依据本轮结果决定首次弹窗；“未返回”不参与判定。</li>
-<li>检测超时采用现有检查流程的终态，不新增固定 10 秒截止。</li>
-</ol></li>
-<li>处理新旧轮次：
-<ol>
-<li>新一轮开始时清除上一轮尚未展示的客户端弹窗。</li>
-<li>上一轮迟到的检测结果不改变新一轮判断，也不追加弹窗。</li>
-</ol></li>
-</ol>
-<table>
-<thead>
-<tr>
-<th>本轮 OS 结果</th>
-<th>本轮客户端结果</th>
-<th>首次弹窗</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>有更新</td>
-<td>有更新</td>
-<td>OS 更新弹窗</td>
-</tr>
-<tr>
-<td>有更新</td>
-<td>无更新／检测失败／检测超时</td>
-<td>OS 更新弹窗</td>
-</tr>
-<tr>
-<td>无更新／检测失败／检测超时</td>
-<td>有更新</td>
-<td>客户端更新弹窗</td>
-</tr>
-<tr>
-<td>无更新</td>
-<td>无更新</td>
-<td>不展示</td>
-</tr>
-<tr>
-<td>无更新／检测失败／检测超时</td>
-<td>无更新／检测失败／检测超时，且至少一项检测异常</td>
-<td>不展示更新弹窗；检测异常反馈按 4.3</td>
-</tr>
-</tbody></table>
-<ul>
-<li>“检测失败／超时”表示更新信息未知，不等于“已是最新版本”。</li>
-<li>如现有检查流程无法让未返回的项目进入“检测超时”终态，研发评审需先确认该项目如何结束检查；终态未确定时，不用“未返回”或旧轮次结果判定首次弹窗。</li>
-</ul>
-<h3>4.2 两项更新的弹窗顺序与操作</h3>
-<ol>
-<li>首次展示：同一轮 OS、客户端均确认有更新时，<strong>先展示 OS 更新弹窗</strong>。</li>
-<li>客户端续弹条件：
-<ol>
-<li>OS 更新弹窗及其结果弹窗均已关闭。</li>
-<li>OS 主屏幕恢复交互，且设备没有进入重启流程。</li>
-</ol></li>
-<li>满足条件后，<strong>自动展示本轮客户端原有更新弹窗</strong>，用户无需再次点击入口；当前弹窗退出前不展示下一弹窗。</li>
-</ol>
-<table>
-<thead>
-<tr>
-<th>OS 流程状态</th>
-<th>客户端弹窗处理</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>用户关闭 OS 更新弹窗</td>
-<td>回到主屏幕后自动展示。</td>
-</tr>
-<tr>
-<td>用户选择“忽略本次更新”</td>
-<td>只忽略 OS 的本次更新，不取消本轮客户端弹窗；OS 弹窗退出后自动展示客户端更新弹窗。</td>
-</tr>
-<tr>
-<td>用户取消 OS 更新，原流程已退出</td>
-<td>回到主屏幕后自动展示。</td>
-</tr>
-<tr>
-<td>OS 更新失败，结果弹窗仍在显示</td>
-<td>等用户按原流程关闭失败结果弹窗；回到主屏幕后自动展示。</td>
-</tr>
-<tr>
-<td>OS 更新成功，原流程不重启且已返回主屏幕</td>
-<td>自动展示。</td>
-</tr>
-<tr>
-<td>OS 更新进行中、结果弹窗未关闭或设备正在重启</td>
-<td>暂不展示。重启结束后不恢复旧轮次；重新登录时按 4.1 重新检查。</td>
-</tr>
-</tbody></table>
-<ul>
-<li>“忽略本次更新”只影响被操作的更新项；客户端弹窗的关闭、忽略、立即更新及手动下载其他版本沿用原规则。</li>
-<li>OS 强制更新限制仍按原流程执行；若 OS 弹窗无法退出，客户端弹窗继续等待。</li>
-<li>两种更新存在版本依赖时，沿用各自现有检查结果；本期不新增版本依赖判定。</li>
-</ul>
-<h3>4.3 检测异常与手动检查反馈</h3>
-<ol>
-<li>仅一项确认有更新，另一项检测失败或超时：
-<ol>
-<li>只展示已确认有更新的项目。</li>
-<li>未知项目不进入待展示队列；迟到结果不追加弹窗。</li>
-</ol></li>
-<li>两项均未确认有更新，且至少一项检测失败或超时：
-<ol>
-<li>登录时检查：不弹出失败提示。</li>
-<li>手动检查：显示一次“检查更新失败，请稍后重试”；沿用现有反馈载体，如现有流程没有反馈载体，则使用居中 Toast。</li>
-</ol></li>
-</ol>
-<ul>
-<li>OS 或客户端<strong>安装失败</strong>属于对应的更新流程，按原结果弹窗处理，不作为“检测失败”。</li>
-<li>用户再次手动检查或下次登录时，按 4.1 发起新一轮检查；本期不保存跨登录待展示客户端弹窗，也不保证下次登录优先展示客户端。</li>
-</ul>
-<h3>4.4 通知消息与状态边界</h3>
-<ul>
-<li>触发来源：本期更新弹窗由 OS 和客户端的版本检查结果触发。</li>
-<li>通知边界：<strong>不生成通知消息列表项</strong>，也不借用桌面新消息浮窗；本期无通知消息的过期时间、点击跳转及过期后点击行为。</li>
-<li>既有依赖：若现有更新入口实际依赖通知消息投递，研发评审需说明现状，由产品补充通知消息规则后再接入。</li>
-</ul>
-<table>
-<thead>
-<tr>
-<th>逻辑状态</th>
-<th>取值</th>
-<th>初始／为空时处理</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>检查来源</td>
-<td>登录进入主屏幕、手动点击“检查更新”</td>
-<td>无来源时不启动本需求的检查。</td>
-</tr>
-<tr>
-<td>OS／客户端检测结果</td>
-<td>未返回、有更新、无更新、检测失败、检测超时</td>
-<td>每轮初始为未返回；未返回不参与判定。</td>
-</tr>
-<tr>
-<td>待展示客户端弹窗</td>
-<td>无、待展示、已展示</td>
-<td>每轮初始为无；两项确认有更新时设为待展示，OS 流程结束后展示一次；重启或新轮检查时清除。</td>
-</tr>
-</tbody></table>
-<h2>5. 交互流程</h2>
-<h3>5.1 更新弹窗弹出规则及相关业务操作</h3>
-<ol>
-<li>发起检查：
-<ol>
-<li>登录进入主屏幕，或手动点击“检查更新”，形成新一轮版本检查。</li>
-<li>只检查 OS 和客户端版本，不自动下载或安装。</li>
-</ol></li>
-<li>决定首次弹窗：
-<ol>
-<li>等待 OS 和客户端检查都进入终态，按 4.1 的本轮结果表判定。</li>
-<li>仅一项有更新，直接打开该项原弹窗；均无确认更新，按 4.3 处理。</li>
-</ol></li>
-<li>处理两项都有更新：
-<ol>
-<li>先打开 OS 弹窗；用户沿用原弹窗执行更新、忽略、取消或关闭，结果弹窗按原流程处理。</li>
-<li>OS 弹窗及结果弹窗关闭、主屏幕恢复交互后，自动打开本轮客户端原弹窗。</li>
-<li>客户端弹窗退出后，本轮弹窗流程结束。</li>
-</ol></li>
-<li>中断或重新检查：
-<ol>
-<li>设备重启后清除尚未展示的客户端弹窗；下次登录重新检查。</li>
-<li>用户再次点击“检查更新”时，清除上一轮待展示状态，重新检查 OS 和客户端版本。</li>
-</ol></li>
-</ol>
-<h2>6. 页面详情</h2>
-<h3>6.1 OS 主屏幕</h3>
-<ul>
-<li>用途与入口：
-<ul>
-<li>登录后承载版本检查结果；用户也可从现有“检查更新”入口手动检查。</li>
-<li>仅在主屏幕可展示时打开更新弹窗；本期不新增胶囊或通知消息入口。</li>
-</ul></li>
-<li>状态与异常：
-<ul>
-<li>检查中等待 OS 和客户端都进入终态。</li>
-<li>手动检查无确认更新且至少一项检测异常时，按 4.3 展示失败反馈。</li>
-<li>设备重启后不恢复旧轮次的待展示弹窗。</li>
-</ul></li>
-</ul>
-<h3>6.2 OS 更新弹窗</h3>
-<ul>
-<li>展示条件：本轮 OS 确认有更新时展示；客户端也有更新时，OS 弹窗先展示。</li>
-<li>原有组件与操作：
-<ul>
-<li>保留“手动下载其他版本”“忽略本次更新”“立即更新”、右上角关闭、进度条及结果弹窗。</li>
-<li>各按钮行为与文案沿用原弹窗，不在本期修改。</li>
-</ul></li>
-<li>退出与异常：关闭、忽略、取消、成功和失败的续弹结果见 4.2；失败结果弹窗未关闭时不展示客户端弹窗。</li>
-</ul>
-<h3>6.3 客户端更新弹窗</h3>
-<ul>
-<li>展示条件：
-<ul>
-<li>仅客户端有更新时，直接作为首次弹窗。</li>
-<li>两项均有更新时，满足 4.2 的续弹条件后自动打开。</li>
-</ul></li>
-<li>组件与操作：按钮、文案、进度、结果反馈及关闭逻辑沿用原弹窗。</li>
-<li>状态与异常：同一轮最多展示一次；OS 更新导致设备重启时，不跨登录恢复旧轮次待展示的客户端弹窗。</li>
-</ul>
-<h2>7. 验收标准</h2>
-<table>
-<thead>
-<tr>
-<th>场景</th>
-<th>条件／操作</th>
-<th>预期结果</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>登录时检查</td>
-<td>登录进入主屏幕</td>
-<td>检查两项更新；有更新按 4.1 展示首次弹窗，无更新不弹；不自动下载或安装。</td>
-</tr>
-<tr>
-<td>单项／双项更新</td>
-<td>分别模拟仅 OS、仅客户端、两项都有、两项都无</td>
-<td>按 4.1 展示首次弹窗；双项按 OS 后客户端顺序显示，绝不重叠。</td>
-</tr>
-<tr>
-<td>关闭／忽略 OS</td>
-<td>两项有更新，关闭 OS 弹窗或忽略 OS 本次更新</td>
-<td>OS 流程结束回到主屏幕后自动展示客户端原弹窗；OS 忽略不替客户端忽略。</td>
-</tr>
-<tr>
-<td>OS 失败／成功</td>
-<td>两项有更新，分别模拟失败结果、成功无重启及重启</td>
-<td>失败结果关闭后、成功无重启返回主屏幕后自动展示客户端；结果仍在显示或正在重启时不展示，重启后重新检查。</td>
-</tr>
-<tr>
-<td>单项检测异常</td>
-<td>一项有更新，另一项检测失败／超时</td>
-<td>只展示已确认项；未知项及迟到结果不续弹。</td>
-</tr>
-<tr>
-<td>无确认更新且检测异常</td>
-<td>登录进入主屏幕与手动检查分别触发</td>
-<td>登录静默；手动检查显示一次指定失败反馈。</td>
-</tr>
-<tr>
-<td>重新检查</td>
-<td>前轮 OS 弹窗退出前或客户端待展示时手动检查</td>
-<td>废弃前轮待展示状态，只按新轮结果决定弹窗。</td>
-</tr>
-<tr>
-<td>通知消息</td>
-<td>本轮有更新</td>
-<td>不向通知消息列表新增更新项，也不出现新消息浮窗或通知跳转。</td>
-</tr>
-</tbody></table>
-<p>原有 OS 和客户端弹窗的按钮、下载、安装、进度及强制更新限制仍按各自既有流程验收。</p>
+<ol><li>统一 OS 与客户端更新检测的触发方式、结果反馈及弹窗展示规则。</li><li>明确桌面与系统设置页面的检测范围和反馈方式。</li><li>明确 OS 与客户端均有更新时的弹窗展示优先级。</li><li>统一异常（失败、超时）的处理口径，避免单项异常影响另一项已确认的更新。</li><li>明确各检测场景、更新状态和展示结果，供研发实现与测试验收使用。</li></ol>
+<h2>4. 规则定义</h2>
+<h3>4.1 检测触发规则</h3>
+<p><strong>触发规则</strong></p>
+<ol><li>用户登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>用户进入「设置」→「系统设置」后，自动检测 OS 与客户端的更新状态，并更新页面版本信息。</li><li>用户在系统设置页面手动检查 OS 或客户端时，仅检测所选项目。</li></ol>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>触发场景</th><th>检测范围</th><th>反馈方式</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端的更新状态</td><td>根据展示优先级规则展示更新弹窗，OS与客户端皆有更新时，优先展示OS弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新页面中 OS 与客户端的版本状态</td></tr><tr><td>在系统设置页面手动检测 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；点击更新时展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检测客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；点击更新时展示客户端更新弹窗</td></tr></tbody></table>
+<h3>4.2 展示优先级规则</h3>
+<p>检测结果包括有更新、无更新和异常（失败、超时）。<strong>检测结果对应展示：</strong></p>
+<ul><li>仅OS有更新：展示OS更新弹窗。</li><li>仅客户端有更新：展示客户端更新弹窗。</li><li>OS和客户端均有更新：优先OS更新弹窗。</li><li>接口返回异常（失败、超时）时：按现有业务进行提示。</li></ul>
+<p>本规则适用于登录进入桌面后的自动更新检测。根据 OS 与客户端的检测结果决定更新弹窗的展示顺序；OS 弹窗结束后的后续展示按 4.3 执行。</p>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>OS检测结果</th><th>客户端检测结果</th><th>弹窗展示结果</th></tr></thead><tbody><tr><td>有更新</td><td>有更新</td><td>优先展示 OS 更新弹窗；OS 更新弹窗结束后，按 4.3 规则处理客户端更新弹窗</td></tr><tr><td>有更新</td><td>无更新</td><td>只展示 OS 更新弹窗</td></tr><tr><td>有更新</td><td>异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>无更新</td><td>有更新</td><td>只展示客户端更新弹窗</td></tr><tr><td>异常（失败、超时）</td><td>有更新</td><td>展示客户端更新弹窗，弹窗关闭或更新流程结束后，展示 OS 异常 Toast</td></tr><tr><td>无更新</td><td>无更新</td><td>无更新弹窗</td></tr><tr><td>无更新</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示（弹窗关闭或更新流程结束后，展示 客户端 异常 Toast）</td></tr><tr><td>异常（失败、超时）</td><td>无更新</td><td>无更新弹窗，直接展示 OS 异常 Toast</td></tr><tr><td>异常（失败、超时）</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示</td></tr></tbody></table>
+<h3>4.3 弹窗展示规则</h3>
+<p>OS更新弹窗处理完成后，根据以下情况被动触发弹窗展示规则：</p>
+<ul><li><strong>更新完成并重启：</strong> 重新进入桌面后，触发展示规则。</li><li><strong>关闭或忽略本次更新：</strong> 返回桌面后，触发展示规则。</li></ul>
+<p><strong>OS 更新状态机</strong>：</p>
+<table><thead><tr><th>OS 弹窗处理结果</th><th>触发条件</th><th>状态转换后的处理</th></tr></thead><tbody><tr><td>更新弹窗展示中 → 更新完成</td><td>OS 更新完成，系统重启并重新进入桌面</td><td>触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr><tr><td>更新弹窗展示中 → 已关闭</td><td>用户关闭 OS 更新弹窗</td><td>返回桌面，触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr><tr><td>更新弹窗展示中 → 已忽略</td><td>用户选择「忽略本次版本更新」</td><td>退出弹窗并返回桌面，触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr></tbody></table>
+<h3>4.4 展示流程</h3>
+<ol><li>登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>OS 与客户端均有更新时，优先展示 OS 更新弹窗</li><li>返回桌面后，触发展示优先级规则。</li></ol>
+<p><strong>更新检测与弹窗展示流程图：</strong></p>
+<pre class="mermaid">flowchart TB
+    %%{init: {&#x27;theme&#x27;: &#x27;default&#x27;}}%%
+
+    A[&quot;触发更新检测&quot;] --&gt; B{&quot;触发场景&quot;}
+
+    B --&gt; C
+    B --&gt; S
+
+    subgraph Desktop[&quot;分支一：登录进入桌面&quot;]
+        direction TB
+
+        C[&quot;自动检测 OS 与客户端更新状态&quot;]
+        C --&gt; D{&quot;OS 检测结果&quot;}
+
+        D --&gt;|有更新| E[&quot;展示 OS 更新弹窗&quot;]
+        D --&gt;|无更新或异常| F{&quot;客户端检测结果&quot;}
+
+        E --&gt; G{&quot;OS 弹窗状态机&quot;}
+        G --&gt;|更新完成并重启| H[&quot;重新进入桌面&quot;]
+        G --&gt;|关闭或忽略| I[&quot;返回桌面&quot;]
+
+        H --&gt; J[&quot;触发弹窗展示规则&quot;]
+        I --&gt; J
+        J --&gt; F
+
+        F --&gt;|有更新| K[&quot;展示客户端更新弹窗&quot;]
+        F --&gt;|无更新或异常| L[&quot;不展示客户端更新弹窗&quot;]
+
+        C -.-&gt; M[&quot;检测异常时按 4.5 规则反馈&quot;]
+    end
+
+    subgraph Settings[&quot;分支二：进入系统设置&quot;]
+        direction TB
+
+        S[&quot;自动检测 OS 与客户端更新状态&quot;]
+        S --&gt; T[&quot;分别更新版本信息行&quot;]
+        T --&gt; U{&quot;用户操作&quot;}
+
+        U --&gt;|手动检查 OS| W[&quot;仅检测 OS&quot;]
+        U --&gt;|手动检查客户端| X[&quot;仅检测客户端&quot;]
+
+        W --&gt; Y[&quot;更新 OS 版本状态&quot;]
+        X --&gt; Z[&quot;更新客户端版本状态&quot;]
+
+        Y --&gt; AA[&quot;点击 OS 更新入口&quot;]
+        Z --&gt; AB[&quot;点击客户端更新入口&quot;]
+
+        AA --&gt;|是| AC[&quot;展示 OS 更新弹窗&quot;]
+    
+
+        AB --&gt;|是| AD[&quot;展示客户端更新弹窗&quot;]
+
+        S -.-&gt; |有异常|AE[&quot;检测异常时按 4.5 规则反馈&quot;]
+        W -.-&gt; AE
+        X -.-&gt; AE
+    end
+
+
+    %% 强制注入样式
+    classDef default fill:#ffffff,stroke:#64748b,stroke-width:1.5px,color:#333;
+    classDef subGraphStyle fill:#f8fafc,stroke:#cbd5e1,stroke-width:1px,color:#64748b;
+    class Desktop,Settings subGraphStyle;</pre>
+<h3>4.5 检测异常（失败、超时）反馈</h3>
+<p>根据检测结果，按以下规则处理异常结果：</p>
+<ol><li><strong>桌面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项已确认更新的正常展示；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li><li><strong>系统设置页面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项的状态更新；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li></ol>
+<p>* <strong>版本信息行文案展示：</strong> 接口返回异常（失败、超时）项，对应版本信息行展示异常状态；具体文案沿用现有页面规范。</p>
+<table><thead><tr><th>检测结果</th><th>版本信息行状态展示</th></tr></thead><tbody><tr><td>有更新</td><td>展示对应项目的更新信息，沿用现有更新操作方式</td></tr><tr><td>无更新</td><td>「当前已是最新版本」</td></tr><tr><td>接口返回异常（失败、超时）</td><td>检测失败：「检查更新失败，请稍后重试」（如接口返回具体失败原因，则展示具体失败原因）</td></tr></tbody></table>
+<ol><li><strong>异常 Toast 展示规则：</strong>（待确认）</li></ol>
+<p>1. OS 与客户端检测结果独立处理，任一项目检测异常不影响另一项目的正常更新流程。</p>
+<p>2. 当存在更新弹窗时，异常 Toast 延后至更新弹窗及更新流程结束、返回桌面后展示，不打断正常更新流程。</p>
+<p>3. 同一轮检测中，OS 与客户端均异常时，合并展示一条 Toast：</p>
+<p>* 异常类型相同：统一提示对应异常类型。</p>
+<p>* 异常类型不同：分别说明 OS 与客户端的异常类型。</p>
+<p>4. 仅一项检测异常时，展示该项目对应的异常 Toast。</p>
+<table><thead><tr><th>OS 检测</th><th>客户端检测</th><th>Toast 展示</th></tr></thead><tbody><tr><td>失败</td><td>失败</td><td>1 条：「OS 与客户端更新检测失败」</td></tr><tr><td>超时</td><td>超时</td><td>1 条：「OS 与客户端更新检测超时」</td></tr><tr><td>失败</td><td>超时</td><td>1 条：「OS 检测失败，客户端检测超时」</td></tr><tr><td>超时</td><td>失败</td><td>1 条：「OS 检测超时，客户端检测失败」</td></tr></tbody></table>
+<h2>5. 页面说明</h2>
+<h3>5.1 客户端更新弹窗（沿用现状）</h3>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>标题栏</td><td>展示「客户端更新」标题及关闭按钮。</td></tr><tr><td>版本信息</td><td>展示更新版本号、安装包大小及发布时间。</td></tr><tr><td>更新内容</td><td>按功能分类展示更新说明，内容超出可视区域时支持在区域内滚动。</td></tr><tr><td>手动下载其他版本</td><td>仅 Android 端展示，位于弹窗左下方。</td></tr><tr><td>忽略本次更新</td><td>展示「忽略本次更新」按钮。</td></tr><tr><td>立即更新</td><td>展示「立即更新」按钮。</td></tr></tbody></table>
+<p><strong>更新内容展示规则</strong></p>
+<ol><li><strong>内容结构：</strong> 按功能分类展示，每个分类包含功能标题及对应的更新描述。</li><li><strong>功能标题：</strong> 使用加粗文本，标识本次更新涉及的功能模块，例如「智能相册」「外部存储」「国际化优化」。</li><li><strong>更新描述：</strong> 位于功能标题下方，说明该模块的具体更新内容；同一模块支持展示多项更新说明。</li><li><strong>排列方式：</strong> 各功能分类纵向排列，按照实际更新内容依次展示。</li><li><strong>滚动规则：</strong> 更新内容区域高度受弹窗布局限制，内容超出可视区域时仅在该区域内滚动，不撑开弹窗。</li></ol>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>操作入口</th><th>触发操作</th><th>处理结果</th></tr></thead><tbody><tr><td>关闭按钮</td><td>点击右上角「×」</td><td>关闭当前更新弹窗。</td></tr><tr><td>手动下载其他版本</td><td>点击对应入口（仅 Android）</td><td>进入现有其他版本下载流程。</td></tr><tr><td>忽略本次更新</td><td>点击「忽略本次更新」</td><td>关闭弹窗，忽略本次版本更新。</td></tr><tr><td>立即更新</td><td>点击「立即更新」</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>说明</strong></p>
+<ul><li>更新内容以当前版本实际提供的更新说明为准。</li><li>功能标题和更新描述的具体字号、间距等视觉参数沿用现有设计规范。</li><li>本期不调整客户端更新弹窗原有的下载、安装及更新执行流程。</li></ul>
+<h3>5.2 系统设置 — 系统版本</h3>
+<p><strong>页面说明</strong></p>
+<p>系统版本区域用于展示 OS 与客户端的当前版本信息、更新检测结果，并提供对应的更新操作入口。</p>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>系统版本区域</td><td>位于「设置」→「系统设置」→「系统信息」页面，包含 OS 版本和客户端版本两行。</td></tr><tr><td>OS 版本</td><td>展示当前 OS 版本号、更新状态及对应操作入口。</td></tr><tr><td>客户端版本</td><td>展示当前客户端版本号、更新状态及对应操作入口。</td></tr><tr><td>更新状态</td><td>位于版本信息行右侧，根据对应项目的检测结果展示状态文案。</td></tr></tbody></table>
+<p><strong>状态展示</strong></p>
+<table><thead><tr><th>检测结果</th><th>页面展示</th><th>操作入口</th></tr></thead><tbody><tr><td>有更新</td><td>展示「发现新版本」、更新包大小及操作提示</td><td>展示对应更新入口，如「点击下载」</td></tr><tr><td>无更新</td><td>展示「已是最新版本」</td><td>不展示更新下载入口</td></tr><tr><td>异常（失败、超时）</td><td>在对应版本信息行展示异常状态，具体文案沿用现有页面规范</td><td>未明确的操作方式待确认</td></tr></tbody></table>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>触发操作</th><th>检测范围</th><th>处理结果</th></tr></thead><tbody><tr><td>进入系统设置页面</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新 OS 与客户端的版本状态，不主动弹出更新弹窗。</td></tr><tr><td>手动检查 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；用户点击更新入口后展示 OS 更新弹窗。</td></tr><tr><td>手动检查客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；用户点击更新入口后展示客户端更新弹窗。</td></tr><tr><td>点击 OS 更新入口</td><td>OS</td><td>进入现有 OS 更新流程。</td></tr><tr><td>点击客户端更新入口</td><td>客户端</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>补充说明</strong></p>
+<ol><li>OS 与客户端的检测结果独立展示，一项检测异常不影响另一项的状态更新。</li><li>版本信息行展示异常状态，同时按异常 Toast 规则提示。</li><li>更新弹窗的展示及后续操作遵循第 4 章相关规则，原有更新执行流程不在本期调整范围内。</li></ol>
+<h2>6. 验收标准</h2>
+<table><thead><tr><th>场景</th><th>预期结果</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端更新状态，并根据展示优先级规则展示更新弹窗</td></tr><tr><td>OS 与客户端均有更新</td><td>优先展示 OS 更新弹窗</td></tr><tr><td>OS 有更新，客户端无更新或异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>OS 无更新或异常（失败、超时），客户端有更新</td><td>展示客户端更新弹窗</td></tr><tr><td>OS 与客户端均无更新</td><td>无更新弹窗</td></tr><tr><td>OS 与客户端均返回异常（失败、超时）</td><td>按现有业务进行提示</td></tr><tr><td>OS 更新完成并重启</td><td>返回桌面后触发展示规则，客户端有更新时展示客户端更新弹窗</td></tr><tr><td>OS 更新弹窗关闭或用户忽略本次更新</td><td>客户端有更新时直接展示客户端更新弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端，并分别更新版本信息行</td></tr><tr><td>在系统设置页面手动检查 OS</td><td>仅检测 OS；结果更新在 OS 版本信息行；有更新时点击「发现新版本，点击下载」展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检查客户端</td><td>仅检测客户端；结果更新在客户端版本信息行；有更新时点击「发现新版本，点击下载」展示客户端更新弹窗</td></tr><tr><td>手动检查结果为无更新</td><td>对应版本信息行展示「已是最新版本」</td></tr><tr><td>手动检查结果为异常（失败、超时）</td><td>对应版本信息行展示异常状态</td></tr><tr><td>手动检查所选项目有更新，点击「发现新版本，点击下载」</td><td>点击对应更新入口后展示该项目的更新弹窗</td></tr></tbody></table>
   </main>
+  <nav id="phase-pager" class="phase-pager" aria-label="期次快捷跳转"></nav>
   <aside class="on-page" aria-label="本页索引"><p class="on-page-title">本页目录</p><nav id="on-page-links"></nav></aside>
   <aside id="review-sidebar" class="review-sidebar" aria-label="审阅评论与本页目录"><div class="review-head"><div class="review-tabs" role="tablist" aria-label="侧栏内容"><button id="review-tab-comments" class="active" type="button" role="tab" aria-selected="true">评论 <span id="review-count"></span></button><button id="review-tab-index" type="button" role="tab" aria-selected="false">本页目录</button></div><button id="review-close" type="button" aria-label="收起侧栏">✕</button></div><div id="review-list" class="review-list" role="tabpanel"></div><nav id="review-index" class="review-index" aria-label="本页目录"></nav></aside>
   </div>
@@ -598,6 +535,18 @@
   </div>
   <div id="insert-menu" class="insert-menu" role="menu"><input id="insert-search" class="insert-search" type="search" placeholder="输入以筛选…" aria-label="筛选插入内容"><div class="insert-group">基本区块</div><button type="button" data-insert="text">T　文本</button><button type="button" data-insert="h1">H1　标题 1</button><button type="button" data-insert="h2">H2　标题 2</button><button type="button" data-insert="h3">H3　标题 3</button><button type="button" data-insert="bullet">•　项目符号列表</button><button type="button" data-insert="numbered">1.　编号列表</button><button type="button" data-insert="todo">☑　待办勾选</button><button type="button" data-insert="toggle">▸　折叠列表</button><button type="button" data-insert="page">▤　页面</button><button type="button" data-insert="note">▤　标注／备注</button><button type="button" data-insert="table">▦　插入表格</button><button type="button" data-insert="quote">❝　引用</button><button type="button" data-insert="highlight">✦　重点高亮</button><button type="button" data-insert="divider">—　分割线</button><div class="insert-group">媒体</div><button type="button" data-insert="image">▧　本地图片</button><button type="button" data-insert="image-url">▧　图片链接</button><button type="button" data-insert="video">▣　视频</button><button type="button" data-insert="audio">◖　音频</button><button type="button" data-insert="code">&lt;/&gt;　代码</button><button type="button" data-insert="file">♧　文件链接</button><button type="button" data-insert="bookmark">♧　网页书签</button></div>
   <input id="image-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+  <div id="prd-save-modal" class="prd-modal-mask" role="dialog" aria-modal="true" aria-labelledby="prd-save-modal-title" hidden>
+    <div class="prd-modal">
+      <h3 id="prd-save-modal-title">重命名</h3>
+      <p id="prd-save-modal-hint">为本期内容命名，可与文档标题一致。</p>
+      <input id="prd-save-modal-input" type="text" autocomplete="off" />
+      <div class="prd-modal-actions">
+        <button id="prd-save-modal-use-title" class="linkish" type="button" title="把正文 H1 填进输入框（仅作建议，仍只改版本名）">用文档标题作参考</button>
+        <button id="prd-save-modal-cancel" type="button">取消</button>
+        <button id="prd-save-modal-ok" class="primary" type="button">确定</button>
+      </div>
+    </div>
+  </div>
   <div id="selection-tools" class="selection-tools" role="toolbar" aria-label="选中文字操作"><button id="selection-color-button" type="button" title="文字颜色 / 背景高亮" aria-haspopup="true" aria-expanded="false">A</button><select id="selection-block" aria-label="文字类型"><option value="text">普通文本</option><option value="h1">标题 1</option><option value="h2">标题 2</option><option value="h3">标题 3</option></select><button type="button" data-selection-action="bold" title="加粗"><b>B</b></button><button type="button" data-selection-action="italic" title="斜体"><i>I</i></button><button type="button" data-selection-action="underline" title="下划线"><u>U</u></button><button type="button" data-selection-action="text" title="清除格式">T×</button><button type="button" data-selection-action="link" title="插入链接">♧</button><button type="button" data-selection-action="strike" title="删除线"><s>S</s></button><button type="button" data-selection-action="code" title="行内代码">&lt;/&gt;</button><button type="button" data-selection-action="highlight" title="高亮选中文字">✦</button><button type="button" class="tool-comment" data-selection-action="comment" title="添加评论">▤ 评论</button></div>
   <div id="selection-color-menu" class="selection-color-menu" aria-label="文字与背景颜色"><p>文字颜色</p><div id="text-color-grid" class="selection-color-grid"></div><p>背景颜色</p><div id="background-color-grid" class="selection-color-grid"></div></div>
   <div id="review-composer" class="review-composer"><p id="review-selected-quote"></p><textarea id="review-input" placeholder="对选中的文字添加评论" aria-label="评论内容"></textarea><div class="review-composer-actions"><button id="review-cancel" type="button">取消</button><button id="review-submit" type="button">评论</button></div></div>
@@ -610,7 +559,314 @@
   <div id="table-select-inline" class="table-inline table-select"><button type="button" data-table-inline="select-table">▦ 选中表格</button></div>
   <div id="table-cell-inline" class="table-inline table-cell" aria-label="单元格操作"><button type="button" data-table-inline="merge-selected">合并选区</button><button type="button" data-table-inline="split-cell">拆分</button></div>
   <div id="undo-toast" class="undo-toast" role="status">已删除表格 <button id="undo-delete" type="button">撤销</button></div>
-  <script>
+  <template id="prd-phase-v27-content">
+<h1>更新弹窗展示优先级 PRD V2.7</h1>
+<h2>1. 版本记录</h2>
+<table><thead><tr><th>版本</th><th>日期</th><th>修改内容</th></tr></thead><tbody><tr><td>V2.6</td><td>2026-10-19</td><td>原版本</td></tr><tr><td>V2.7</td><td>2026-10-20</td><td>基于 V2.6 调整检测及展示规则，统一术语；修正流程图、页面说明和验收标准。</td></tr></tbody></table>
+<h2>2. 背景</h2>
+<p>MinisCloud OS 的 OS 更新与客户端更新分别具有独立的检测及更新流程，现有产品已具备对应的更新弹窗和系统设置中的版本状态展示功能。</p>
+<p>当前用户登录进入桌面时，系统会自动检测 OS 与客户端的更新状态；进入系统设置页面时，也会自动检测并更新版本状态。用户还可以在系统设置页面手动检查指定项目的更新情况。</p>
+<p>由于 OS 与客户端可能同时存在更新，需要明确桌面更新弹窗的展示优先级。同时，需要明确系统设置页面中自动检测、手动单项检查的结果反馈方式。</p>
+<p>本文档基于现有更新功能，仅规范更新检测触发、检测结果反馈、OS 与客户端更新弹窗的展示优先级。原有更新弹窗内容、下载、安装及更新执行流程不在本次调整范围内。</p>
+<h2>3. 目标</h2>
+<ol><li>统一 OS 与客户端更新检测的触发方式、结果反馈及弹窗展示规则。</li><li>明确桌面与系统设置页面的检测范围和反馈方式。</li><li>明确 OS 与客户端均有更新时的弹窗展示优先级。</li><li>统一异常（失败、超时）的处理口径，避免单项异常影响另一项已确认的更新。</li><li>明确各检测场景、更新状态和展示结果，供研发实现与测试验收使用。</li></ol>
+<h2>4. 规则定义</h2>
+<h3>4.1 检测触发规则</h3>
+<p><strong>触发规则</strong></p>
+<ol><li>用户登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>用户进入「设置」→「系统设置」后，自动检测 OS 与客户端的更新状态，并更新页面版本信息。</li><li>用户在系统设置页面手动检查 OS 或客户端时，仅检测所选项目。</li></ol>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>触发场景</th><th>检测范围</th><th>反馈方式</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端的更新状态</td><td>根据展示优先级规则展示更新弹窗，OS与客户端皆有更新时，优先展示OS弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新页面中 OS 与客户端的版本状态</td></tr><tr><td>在系统设置页面手动检测 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；点击更新时展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检测客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；点击更新时展示客户端更新弹窗</td></tr></tbody></table>
+<h3>4.2 展示优先级规则</h3>
+<p>检测结果包括有更新、无更新和异常（失败、超时）。<strong>检测结果对应展示：</strong></p>
+<ul><li>仅OS有更新：展示OS更新弹窗。</li><li>仅客户端有更新：展示客户端更新弹窗。</li><li>OS和客户端均有更新：优先OS更新弹窗。</li><li>接口返回异常（失败、超时）时：按现有业务进行提示。</li></ul>
+<p>本规则适用于登录进入桌面后的自动更新检测。根据 OS 与客户端的检测结果决定更新弹窗的展示顺序；OS 弹窗结束后的后续展示按 4.3 执行。</p>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>OS检测结果</th><th>客户端检测结果</th><th>弹窗展示结果</th></tr></thead><tbody><tr><td>有更新</td><td>有更新</td><td>优先展示 OS 更新弹窗；OS 更新弹窗结束后，按 4.3 规则处理客户端更新弹窗</td></tr><tr><td>有更新</td><td>无更新</td><td>只展示 OS 更新弹窗</td></tr><tr><td>有更新</td><td>异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>无更新</td><td>有更新</td><td>只展示客户端更新弹窗</td></tr><tr><td>异常（失败、超时）</td><td>有更新</td><td>展示客户端更新弹窗，弹窗关闭或更新流程结束后，展示 OS 异常 Toast</td></tr><tr><td>无更新</td><td>无更新</td><td>无更新弹窗</td></tr><tr><td>无更新</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示（弹窗关闭或更新流程结束后，展示 客户端 异常 Toast）</td></tr><tr><td>异常（失败、超时）</td><td>无更新</td><td>无更新弹窗，直接展示 OS 异常 Toast</td></tr><tr><td>异常（失败、超时）</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示</td></tr></tbody></table>
+<h3>4.3 弹窗展示规则</h3>
+<p>OS更新弹窗处理完成后，根据以下情况被动触发弹窗展示规则：</p>
+<ul><li><strong>更新完成并重启：</strong> 重新进入桌面后，触发展示规则。</li><li><strong>关闭或忽略本次更新：</strong> 返回桌面后，触发展示规则。</li></ul>
+<p><strong>OS 更新状态机</strong>：</p>
+<table><thead><tr><th>OS 弹窗处理结果</th><th>触发条件</th><th>状态转换后的处理</th></tr></thead><tbody><tr><td>更新弹窗展示中 → 更新完成</td><td>OS 更新完成，系统重启并重新进入桌面</td><td>触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr><tr><td>更新弹窗展示中 → 已关闭</td><td>用户关闭 OS 更新弹窗</td><td>返回桌面，触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr><tr><td>更新弹窗展示中 → 已忽略</td><td>用户选择「忽略本次版本更新」</td><td>退出弹窗并返回桌面，触发弹窗展示规则；若客户端有更新，则展示客户端更新弹窗</td></tr></tbody></table>
+<h3>4.4 展示流程</h3>
+<ol><li>登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>OS 与客户端均有更新时，优先展示 OS 更新弹窗</li><li>返回桌面后，触发展示优先级规则。</li></ol>
+<p><strong>更新检测与弹窗展示流程图：</strong></p>
+<pre class="mermaid">flowchart TB
+    %%{init: {&#x27;theme&#x27;: &#x27;default&#x27;}}%%
+
+    A[&quot;触发更新检测&quot;] --&gt; B{&quot;触发场景&quot;}
+
+    B --&gt; C
+    B --&gt; S
+
+    subgraph Desktop[&quot;分支一：登录进入桌面&quot;]
+        direction TB
+
+        C[&quot;自动检测 OS 与客户端更新状态&quot;]
+        C --&gt; D{&quot;OS 检测结果&quot;}
+
+        D --&gt;|有更新| E[&quot;展示 OS 更新弹窗&quot;]
+        D --&gt;|无更新或异常| F{&quot;客户端检测结果&quot;}
+
+        E --&gt; G{&quot;OS 弹窗状态机&quot;}
+        G --&gt;|更新完成并重启| H[&quot;重新进入桌面&quot;]
+        G --&gt;|关闭或忽略| I[&quot;返回桌面&quot;]
+
+        H --&gt; J[&quot;触发弹窗展示规则&quot;]
+        I --&gt; J
+        J --&gt; F
+
+        F --&gt;|有更新| K[&quot;展示客户端更新弹窗&quot;]
+        F --&gt;|无更新或异常| L[&quot;不展示客户端更新弹窗&quot;]
+
+        C -.-&gt; M[&quot;检测异常时按 4.5 规则反馈&quot;]
+    end
+
+    subgraph Settings[&quot;分支二：进入系统设置&quot;]
+        direction TB
+
+        S[&quot;自动检测 OS 与客户端更新状态&quot;]
+        S --&gt; T[&quot;分别更新版本信息行&quot;]
+        T --&gt; U{&quot;用户操作&quot;}
+
+        U --&gt;|手动检查 OS| W[&quot;仅检测 OS&quot;]
+        U --&gt;|手动检查客户端| X[&quot;仅检测客户端&quot;]
+
+        W --&gt; Y[&quot;更新 OS 版本状态&quot;]
+        X --&gt; Z[&quot;更新客户端版本状态&quot;]
+
+        Y --&gt; AA[&quot;点击 OS 更新入口&quot;]
+        Z --&gt; AB[&quot;点击客户端更新入口&quot;]
+
+        AA --&gt;|是| AC[&quot;展示 OS 更新弹窗&quot;]
+    
+
+        AB --&gt;|是| AD[&quot;展示客户端更新弹窗&quot;]
+
+        S -.-&gt; |有异常|AE[&quot;检测异常时按 4.5 规则反馈&quot;]
+        W -.-&gt; AE
+        X -.-&gt; AE
+    end
+
+
+    %% 强制注入样式
+    classDef default fill:#ffffff,stroke:#64748b,stroke-width:1.5px,color:#333;
+    classDef subGraphStyle fill:#f8fafc,stroke:#cbd5e1,stroke-width:1px,color:#64748b;
+    class Desktop,Settings subGraphStyle;</pre>
+<h3>4.5 检测异常（失败、超时）反馈</h3>
+<p>根据检测结果，按以下规则处理异常结果：</p>
+<ol><li><strong>桌面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项已确认更新的正常展示；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li><li><strong>系统设置页面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项的状态更新；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li></ol>
+<p>* <strong>版本信息行文案展示：</strong> 接口返回异常（失败、超时）项，对应版本信息行展示异常状态；具体文案沿用现有页面规范。</p>
+<table><thead><tr><th>检测结果</th><th>版本信息行状态展示</th></tr></thead><tbody><tr><td>有更新</td><td>展示对应项目的更新信息，沿用现有更新操作方式</td></tr><tr><td>无更新</td><td>「当前已是最新版本」</td></tr><tr><td>接口返回异常（失败、超时）</td><td>检测失败：「检查更新失败，请稍后重试」（如接口返回具体失败原因，则展示具体失败原因）</td></tr></tbody></table>
+<ol><li><strong>异常 Toast 展示规则：</strong>（待确认）</li></ol>
+<p>1. OS 与客户端检测结果独立处理，任一项目检测异常不影响另一项目的正常更新流程。</p>
+<p>2. 当存在更新弹窗时，异常 Toast 延后至更新弹窗及更新流程结束、返回桌面后展示，不打断正常更新流程。</p>
+<p>3. 同一轮检测中，OS 与客户端均异常时，合并展示一条 Toast：</p>
+<p>* 异常类型相同：统一提示对应异常类型。</p>
+<p>* 异常类型不同：分别说明 OS 与客户端的异常类型。</p>
+<p>4. 仅一项检测异常时，展示该项目对应的异常 Toast。</p>
+<table><thead><tr><th>OS 检测</th><th>客户端检测</th><th>Toast 展示</th></tr></thead><tbody><tr><td>失败</td><td>失败</td><td>1 条：「OS 与客户端更新检测失败」</td></tr><tr><td>超时</td><td>超时</td><td>1 条：「OS 与客户端更新检测超时」</td></tr><tr><td>失败</td><td>超时</td><td>1 条：「OS 检测失败，客户端检测超时」</td></tr><tr><td>超时</td><td>失败</td><td>1 条：「OS 检测超时，客户端检测失败」</td></tr></tbody></table>
+<h2>5. 页面说明</h2>
+<h3>5.1 客户端更新弹窗（沿用现状）</h3>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>标题栏</td><td>展示「客户端更新」标题及关闭按钮。</td></tr><tr><td>版本信息</td><td>展示更新版本号、安装包大小及发布时间。</td></tr><tr><td>更新内容</td><td>按功能分类展示更新说明，内容超出可视区域时支持在区域内滚动。</td></tr><tr><td>手动下载其他版本</td><td>仅 Android 端展示，位于弹窗左下方。</td></tr><tr><td>忽略本次更新</td><td>展示「忽略本次更新」按钮。</td></tr><tr><td>立即更新</td><td>展示「立即更新」按钮。</td></tr></tbody></table>
+<p><strong>更新内容展示规则</strong></p>
+<ol><li><strong>内容结构：</strong> 按功能分类展示，每个分类包含功能标题及对应的更新描述。</li><li><strong>功能标题：</strong> 使用加粗文本，标识本次更新涉及的功能模块，例如「智能相册」「外部存储」「国际化优化」。</li><li><strong>更新描述：</strong> 位于功能标题下方，说明该模块的具体更新内容；同一模块支持展示多项更新说明。</li><li><strong>排列方式：</strong> 各功能分类纵向排列，按照实际更新内容依次展示。</li><li><strong>滚动规则：</strong> 更新内容区域高度受弹窗布局限制，内容超出可视区域时仅在该区域内滚动，不撑开弹窗。</li></ol>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>操作入口</th><th>触发操作</th><th>处理结果</th></tr></thead><tbody><tr><td>关闭按钮</td><td>点击右上角「×」</td><td>关闭当前更新弹窗。</td></tr><tr><td>手动下载其他版本</td><td>点击对应入口（仅 Android）</td><td>进入现有其他版本下载流程。</td></tr><tr><td>忽略本次更新</td><td>点击「忽略本次更新」</td><td>关闭弹窗，忽略本次版本更新。</td></tr><tr><td>立即更新</td><td>点击「立即更新」</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>说明</strong></p>
+<ul><li>更新内容以当前版本实际提供的更新说明为准。</li><li>功能标题和更新描述的具体字号、间距等视觉参数沿用现有设计规范。</li><li>本期不调整客户端更新弹窗原有的下载、安装及更新执行流程。</li></ul>
+<h3>5.2 系统设置 — 系统版本</h3>
+<p><strong>页面说明</strong></p>
+<p>系统版本区域用于展示 OS 与客户端的当前版本信息、更新检测结果，并提供对应的更新操作入口。</p>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>系统版本区域</td><td>位于「设置」→「系统设置」→「系统信息」页面，包含 OS 版本和客户端版本两行。</td></tr><tr><td>OS 版本</td><td>展示当前 OS 版本号、更新状态及对应操作入口。</td></tr><tr><td>客户端版本</td><td>展示当前客户端版本号、更新状态及对应操作入口。</td></tr><tr><td>更新状态</td><td>位于版本信息行右侧，根据对应项目的检测结果展示状态文案。</td></tr></tbody></table>
+<p><strong>状态展示</strong></p>
+<table><thead><tr><th>检测结果</th><th>页面展示</th><th>操作入口</th></tr></thead><tbody><tr><td>有更新</td><td>展示「发现新版本」、更新包大小及操作提示</td><td>展示对应更新入口，如「点击下载」</td></tr><tr><td>无更新</td><td>展示「已是最新版本」</td><td>不展示更新下载入口</td></tr><tr><td>异常（失败、超时）</td><td>在对应版本信息行展示异常状态，具体文案沿用现有页面规范</td><td>未明确的操作方式待确认</td></tr></tbody></table>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>触发操作</th><th>检测范围</th><th>处理结果</th></tr></thead><tbody><tr><td>进入系统设置页面</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新 OS 与客户端的版本状态，不主动弹出更新弹窗。</td></tr><tr><td>手动检查 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；用户点击更新入口后展示 OS 更新弹窗。</td></tr><tr><td>手动检查客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；用户点击更新入口后展示客户端更新弹窗。</td></tr><tr><td>点击 OS 更新入口</td><td>OS</td><td>进入现有 OS 更新流程。</td></tr><tr><td>点击客户端更新入口</td><td>客户端</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>补充说明</strong></p>
+<ol><li>OS 与客户端的检测结果独立展示，一项检测异常不影响另一项的状态更新。</li><li>版本信息行展示异常状态，同时按异常 Toast 规则提示。</li><li>更新弹窗的展示及后续操作遵循第 4 章相关规则，原有更新执行流程不在本期调整范围内。</li></ol>
+<h2>6. 验收标准</h2>
+<table><thead><tr><th>场景</th><th>预期结果</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端更新状态，并根据展示优先级规则展示更新弹窗</td></tr><tr><td>OS 与客户端均有更新</td><td>优先展示 OS 更新弹窗</td></tr><tr><td>OS 有更新，客户端无更新或异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>OS 无更新或异常（失败、超时），客户端有更新</td><td>展示客户端更新弹窗</td></tr><tr><td>OS 与客户端均无更新</td><td>无更新弹窗</td></tr><tr><td>OS 与客户端均返回异常（失败、超时）</td><td>按现有业务进行提示</td></tr><tr><td>OS 更新完成并重启</td><td>返回桌面后触发展示规则，客户端有更新时展示客户端更新弹窗</td></tr><tr><td>OS 更新弹窗关闭或用户忽略本次更新</td><td>客户端有更新时直接展示客户端更新弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端，并分别更新版本信息行</td></tr><tr><td>在系统设置页面手动检查 OS</td><td>仅检测 OS；结果更新在 OS 版本信息行；有更新时点击「发现新版本，点击下载」展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检查客户端</td><td>仅检测客户端；结果更新在客户端版本信息行；有更新时点击「发现新版本，点击下载」展示客户端更新弹窗</td></tr><tr><td>手动检查结果为无更新</td><td>对应版本信息行展示「已是最新版本」</td></tr><tr><td>手动检查结果为异常（失败、超时）</td><td>对应版本信息行展示异常状态</td></tr><tr><td>手动检查所选项目有更新，点击「发现新版本，点击下载」</td><td>点击对应更新入口后展示该项目的更新弹窗</td></tr></tbody></table>
+  </template>
+<template id="prd-phase-v28-content">
+<h1>更新弹窗展示优先级 PRD V2.8</h1>
+<h2>1. 版本记录</h2>
+<table><thead><tr><th>版本</th><th>日期</th><th>修改内容</th></tr></thead><tbody><tr><td>V2.6</td><td>2026-10-19</td><td>原版本</td></tr><tr><td>V2.7</td><td>2026-10-20</td><td>基于 V2.6 调整检测及展示规则，统一术语；修正流程图、页面说明和验收标准。</td></tr><tr><td>V2.8</td><td>2026-10-21</td><td>二期：客户端自动提醒改为胶囊浮窗；关闭/忽略 OS 后客户端出胶囊；OS/客户端均可进入通知列表再次点开；异常 Toast 不变。浮窗交互以通知消息 PRD 为准，正文仅钉 4500ms / 可关 / 点开弹窗。</td></tr></tbody></table>
+<h2>2. 背景</h2>
+<p>MinisCloud OS 的 OS 更新与客户端更新分别具有独立的检测及更新流程，现有产品已具备对应的更新弹窗和系统设置中的版本状态展示功能。</p>
+<p>当前用户登录进入桌面时，系统会自动检测 OS 与客户端的更新状态；进入系统设置页面时，也会自动检测并更新版本状态。用户还可以在系统设置页面手动检查指定项目的更新情况。</p>
+<p>由于 OS 与客户端可能同时存在更新，需要明确桌面更新弹窗的展示优先级。同时，需要明确系统设置页面中自动检测、手动单项检查的结果反馈方式。</p>
+<p>本文档基于现有更新功能，规范更新检测触发、检测结果反馈、OS 与客户端更新的展示优先级与提醒形态。V2.7（一期）定优先级与弹窗编排；V2.8（二期）在一期规则不变的前提下，将客户端<strong>自动提醒</strong>由更新弹窗改为右上角胶囊浮窗，并支持进入通知列表后再次点开。原有更新弹窗内容、下载、安装及更新执行流程不在本期调整范围内。</p><p><strong>二期要解决的问题：</strong>一期 OS 与客户端均使用同类更新弹窗，用户易认为是同一更新反复出现。</p>
+<h2>3. 目标</h2>
+<ol><li>一期规则保持不变：检测触发、展示优先级判断、异常 Toast 口径不改。</li><li>将客户端自动提醒改为右上角胶囊浮窗；用户点击胶囊后再打开原客户端更新弹窗。</li><li>OS 更新弹窗关闭或忽略后，OS 进入通知列表；客户端胶囊关闭或 4500ms 自动消失后，客户端进入通知列表；列表项可再次点击打开对应更新弹窗。</li><li>系统设置手动检查仍点入口直接出对应更新弹窗（不出胶囊）。</li><li>浮窗队列、悬停暂停等交互以通知消息 PRD 为准；本 PRD 仅钉默认 4500ms、可关闭、点开弹窗。</li></ol>
+<h2>4. 规则定义</h2>
+<h3>4.1 检测触发规则</h3>
+<p><strong>触发规则</strong></p>
+<ol><li>用户登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>用户进入「设置」→「系统设置」后，自动检测 OS 与客户端的更新状态，并更新页面版本信息。</li><li>用户在系统设置页面手动检查 OS 或客户端时，仅检测所选项目。</li></ol>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>触发场景</th><th>检测范围</th><th>反馈方式</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端的更新状态</td><td>根据展示优先级规则展示更新弹窗，OS与客户端皆有更新时，优先展示OS弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新页面中 OS 与客户端的版本状态</td></tr><tr><td>在系统设置页面手动检测 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；点击更新时展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检测客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；点击更新时展示客户端更新弹窗</td></tr></tbody></table>
+<h3>4.2 展示优先级规则</h3>
+<p>检测结果包括有更新、无更新和异常（失败、超时）。<strong>检测结果对应展示：</strong></p>
+<ul><li>仅 OS 有更新：展示 OS 更新弹窗。</li><li>仅客户端有更新：展示客户端更新<strong>胶囊</strong>（不出客户端更新弹窗）。</li><li>OS 和客户端均有更新：优先展示 OS 更新弹窗；OS 弹窗结束后的客户端提醒按 4.3 以胶囊展示。</li><li>接口返回异常（失败、超时）时：异常 Toast 口径与一期一致，不变。</li></ul><p><strong>二期相对一期：</strong>优先级判断不变，仅客户端自动提醒的展示形态由更新弹窗改为胶囊。</p>
+<p>本规则适用于登录进入桌面后的自动更新检测。根据 OS 与客户端的检测结果决定更新弹窗的展示顺序；OS 弹窗结束后的后续展示按 4.3 执行。</p>
+<p><strong>具体表现见下表：</strong></p>
+<table><thead><tr><th>OS检测结果</th><th>客户端检测结果</th><th>弹窗展示结果</th></tr></thead><tbody><tr><td>有更新</td><td>有更新</td><td>优先展示 OS 更新弹窗；OS 更新弹窗结束后，按 4.3 规则展示客户端胶囊，并将 OS 写入通知列表（若用户关闭或忽略）</td></tr><tr><td>有更新</td><td>无更新</td><td>只展示 OS 更新弹窗</td></tr><tr><td>有更新</td><td>异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>无更新</td><td>有更新</td><td>展示客户端更新胶囊</td></tr><tr><td>异常（失败、超时）</td><td>有更新</td><td>展示客户端更新胶囊；胶囊关闭或消失后客户端进入通知列表；OS 异常 Toast 按一期口径</td></tr><tr><td>无更新</td><td>无更新</td><td>无更新弹窗</td></tr><tr><td>无更新</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示（弹窗关闭或更新流程结束后，展示 客户端 异常 Toast）</td></tr><tr><td>异常（失败、超时）</td><td>无更新</td><td>无更新弹窗，直接展示 OS 异常 Toast</td></tr><tr><td>异常（失败、超时）</td><td>异常（失败、超时）</td><td>无更新弹窗，按现有业务进行提示</td></tr></tbody></table>
+<h3>4.3 弹窗展示规则</h3>
+<p>OS更新弹窗处理完成后，根据以下情况被动触发弹窗展示规则：</p>
+<ul><li><strong>更新完成并重启：</strong> 重新进入桌面后，触发展示规则。</li><li><strong>关闭或忽略本次更新：</strong> 返回桌面后，触发展示规则。</li></ul>
+<p><strong>OS 更新状态机</strong>：</p>
+<table><thead><tr><th>OS 弹窗处理结果</th><th>触发条件</th><th>状态转换后的处理</th></tr></thead><tbody><tr><td>更新弹窗展示中 → 更新完成</td><td>OS 更新完成，系统重启并重新进入桌面</td><td>触发展示规则；若客户端有更新，则展示客户端更新胶囊</td></tr><tr><td>更新弹窗展示中 → 已关闭</td><td>用户关闭 OS 更新弹窗</td><td>返回桌面，触发展示规则；若客户端有更新，则展示客户端更新胶囊</td></tr><tr><td>更新弹窗展示中 → 已忽略</td><td>用户选择「忽略本次版本更新」</td><td>退出弹窗并返回桌面，触发展示规则；若客户端有更新，则展示客户端更新胶囊</td></tr></tbody></table>
+<h3>4.4 展示流程</h3>
+<ol><li>登录进入桌面后，自动检测 OS 与客户端的更新状态。</li><li>OS 与客户端均有更新时，优先展示 OS 更新弹窗</li><li>返回桌面后，触发展示优先级规则。</li></ol>
+<p><strong>更新检测与弹窗展示流程图：</strong></p>
+<pre class="mermaid">flowchart TB
+    %%{init: {&#x27;theme&#x27;: &#x27;default&#x27;}}%%
+
+    A[&quot;触发更新检测&quot;] --&gt; B{&quot;触发场景&quot;}
+
+    B --&gt; C
+    B --&gt; S
+
+    subgraph Desktop[&quot;分支一：登录进入桌面&quot;]
+        direction TB
+
+        C[&quot;自动检测 OS 与客户端更新状态&quot;]
+        C --&gt; D{&quot;OS 检测结果&quot;}
+
+        D --&gt;|有更新| E[&quot;展示 OS 更新弹窗&quot;]
+        D --&gt;|无更新或异常| F{&quot;客户端检测结果&quot;}
+
+        E --&gt; G{&quot;OS 弹窗状态机&quot;}
+        G --&gt;|更新完成并重启| H[&quot;重新进入桌面&quot;]
+        G --&gt;|关闭或忽略| I[&quot;返回桌面&quot;]
+
+        H --&gt; J[&quot;触发弹窗展示规则&quot;]
+        I --&gt; J
+        J --&gt; F
+
+        F --&gt;|有更新| K[&quot;展示客户端更新弹窗&quot;]
+        F --&gt;|无更新或异常| L[&quot;不展示客户端更新弹窗&quot;]
+
+        C -.-&gt; M[&quot;检测异常时按 4.5 规则反馈&quot;]
+    end
+
+    subgraph Settings[&quot;分支二：进入系统设置&quot;]
+        direction TB
+
+        S[&quot;自动检测 OS 与客户端更新状态&quot;]
+        S --&gt; T[&quot;分别更新版本信息行&quot;]
+        T --&gt; U{&quot;用户操作&quot;}
+
+        U --&gt;|手动检查 OS| W[&quot;仅检测 OS&quot;]
+        U --&gt;|手动检查客户端| X[&quot;仅检测客户端&quot;]
+
+        W --&gt; Y[&quot;更新 OS 版本状态&quot;]
+        X --&gt; Z[&quot;更新客户端版本状态&quot;]
+
+        Y --&gt; AA[&quot;点击 OS 更新入口&quot;]
+        Z --&gt; AB[&quot;点击客户端更新入口&quot;]
+
+        AA --&gt;|是| AC[&quot;展示 OS 更新弹窗&quot;]
+    
+
+        AB --&gt;|是| AD[&quot;展示客户端更新弹窗&quot;]
+
+        S -.-&gt; |有异常|AE[&quot;检测异常时按 4.5 规则反馈&quot;]
+        W -.-&gt; AE
+        X -.-&gt; AE
+    end
+
+
+    %% 强制注入样式
+    classDef default fill:#ffffff,stroke:#64748b,stroke-width:1.5px,color:#333;
+    classDef subGraphStyle fill:#f8fafc,stroke:#cbd5e1,stroke-width:1px,color:#64748b;
+    class Desktop,Settings subGraphStyle;</pre>
+<h3>4.5 检测异常（失败、超时）反馈</h3>
+<p>根据检测结果，按以下规则处理异常结果：</p>
+<ol><li><strong>桌面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项已确认更新的正常展示；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li><li><strong>系统设置页面自动检测：</strong> 接口返回异常（失败、超时）项，不展示更新弹窗，不影响另一项的状态更新；按现有业务toast进行提示，具体提示文案及展示样式沿用现有客户端规范。</li></ol>
+<p>* <strong>版本信息行文案展示：</strong> 接口返回异常（失败、超时）项，对应版本信息行展示异常状态；具体文案沿用现有页面规范。</p>
+<table><thead><tr><th>检测结果</th><th>版本信息行状态展示</th></tr></thead><tbody><tr><td>有更新</td><td>展示对应项目的更新信息，沿用现有更新操作方式</td></tr><tr><td>无更新</td><td>「当前已是最新版本」</td></tr><tr><td>接口返回异常（失败、超时）</td><td>检测失败：「检查更新失败，请稍后重试」（如接口返回具体失败原因，则展示具体失败原因）</td></tr></tbody></table>
+<ol><li><strong>异常 Toast 展示规则：</strong>（待确认）</li></ol>
+<p>1. OS 与客户端检测结果独立处理，任一项目检测异常不影响另一项目的正常更新流程。</p>
+<p>2. 当存在更新弹窗时，异常 Toast 延后至更新弹窗及更新流程结束、返回桌面后展示，不打断正常更新流程。</p>
+<p>3. 同一轮检测中，OS 与客户端均异常时，合并展示一条 Toast：</p>
+<p>* 异常类型相同：统一提示对应异常类型。</p>
+<p>* 异常类型不同：分别说明 OS 与客户端的异常类型。</p>
+<p>4. 仅一项检测异常时，展示该项目对应的异常 Toast。</p>
+<table><thead><tr><th>OS 检测</th><th>客户端检测</th><th>Toast 展示</th></tr></thead><tbody><tr><td>失败</td><td>失败</td><td>1 条：「OS 与客户端更新检测失败」</td></tr><tr><td>超时</td><td>超时</td><td>1 条：「OS 与客户端更新检测超时」</td></tr><tr><td>失败</td><td>超时</td><td>1 条：「OS 检测失败，客户端检测超时」</td></tr><tr><td>超时</td><td>失败</td><td>1 条：「OS 检测超时，客户端检测失败」</td></tr></tbody></table>
+
+<h3>4.6 客户端胶囊与通知列表（二期）</h3>
+<p><strong>适用范围：</strong>桌面自动检测后的客户端自动提醒；不改变系统设置手动检查「点入口直接出弹窗」。</p>
+<p><strong>胶囊规则</strong></p>
+<ol>
+<li>仅客户端有更新时：直接在桌面右上角展示客户端更新胶囊。</li>
+<li>OS 与客户端均有更新时：先展示 OS 更新弹窗；用户关闭或忽略 OS 更新弹窗后，若本轮客户端有更新，再展示客户端更新胶囊。</li>
+<li>用户点击胶囊主体：打开原有客户端更新弹窗。</li>
+<li>胶囊默认展示 4500ms 后自动消失；用户也可点击胶囊右上角关闭。</li>
+<li>关闭胶囊或 4500ms 自动消失 ≠ 忽略该版本；「忽略本次更新」仍仅在客户端更新弹窗内按原规则执行。</li>
+<li>浮窗队列、悬停暂停计时、多浮窗间隔等交互以通知消息 PRD 为准；本 PRD 仅钉：默认 4500ms、可关闭、点击打开更新弹窗。</li>
+</ol>
+<p><strong>通知列表规则</strong></p>
+<ol>
+<li>用户关闭或忽略 OS 更新弹窗后：OS 进入通知列表，提示 OS 有更新；用户点击列表项可再次打开 OS 更新弹窗。</li>
+<li>客户端胶囊被关闭或 4500ms 自动消失后：客户端进入通知列表；用户点击列表项可再次打开客户端更新弹窗。</li>
+<li>通知列表中的 OS / 客户端条目均可再次点击弹出对应更新弹窗。</li>
+</ol>
+<p><strong>手动检查：</strong>系统设置中手动检查 OS 或客户端后，用户点击更新入口仍直接展示对应更新弹窗，不出胶囊。</p>
+<p><strong>异常 Toast：</strong>与一期一致，二期不调整。</p>
+<h2>5. 页面说明</h2>
+
+<h3>5.0 客户端更新胶囊（二期）</h3>
+<p><strong>页面用途</strong></p>
+<p>在桌面自动检测确认客户端有可用更新时，以非打断式右上角胶囊提醒用户；点击后再进入原有客户端更新弹窗。</p>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody>
+<tr><td>胶囊主体</td><td>展示客户端有更新可用的提示文案；点击后打开客户端更新弹窗。</td></tr>
+<tr><td>关闭按钮</td><td>位于胶囊右上角；点击后收起本次浮窗，客户端进入通知列表。</td></tr>
+</tbody></table>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>操作</th><th>结果</th></tr></thead><tbody>
+<tr><td>点击胶囊主体</td><td>打开客户端更新弹窗</td></tr>
+<tr><td>点击关闭 / 展示满 4500ms</td><td>收起胶囊；客户端提醒保留在通知列表，可再点开</td></tr>
+</tbody></table>
+<h3>5.1 客户端更新弹窗（沿用现状）</h3>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>标题栏</td><td>展示「客户端更新」标题及关闭按钮。</td></tr><tr><td>版本信息</td><td>展示更新版本号、安装包大小及发布时间。</td></tr><tr><td>更新内容</td><td>按功能分类展示更新说明，内容超出可视区域时支持在区域内滚动。</td></tr><tr><td>手动下载其他版本</td><td>仅 Android 端展示，位于弹窗左下方。</td></tr><tr><td>忽略本次更新</td><td>展示「忽略本次更新」按钮。</td></tr><tr><td>立即更新</td><td>展示「立即更新」按钮。</td></tr></tbody></table>
+<p><strong>更新内容展示规则</strong></p>
+<ol><li><strong>内容结构：</strong> 按功能分类展示，每个分类包含功能标题及对应的更新描述。</li><li><strong>功能标题：</strong> 使用加粗文本，标识本次更新涉及的功能模块，例如「智能相册」「外部存储」「国际化优化」。</li><li><strong>更新描述：</strong> 位于功能标题下方，说明该模块的具体更新内容；同一模块支持展示多项更新说明。</li><li><strong>排列方式：</strong> 各功能分类纵向排列，按照实际更新内容依次展示。</li><li><strong>滚动规则：</strong> 更新内容区域高度受弹窗布局限制，内容超出可视区域时仅在该区域内滚动，不撑开弹窗。</li></ol>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>操作入口</th><th>触发操作</th><th>处理结果</th></tr></thead><tbody><tr><td>关闭按钮</td><td>点击右上角「×」</td><td>关闭当前更新弹窗。</td></tr><tr><td>手动下载其他版本</td><td>点击对应入口（仅 Android）</td><td>进入现有其他版本下载流程。</td></tr><tr><td>忽略本次更新</td><td>点击「忽略本次更新」</td><td>关闭弹窗，忽略本次版本更新。</td></tr><tr><td>立即更新</td><td>点击「立即更新」</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>说明</strong></p>
+<ul><li>更新内容以当前版本实际提供的更新说明为准。</li><li>功能标题和更新描述的具体字号、间距等视觉参数沿用现有设计规范。</li><li>本期不调整客户端更新弹窗原有的下载、安装及更新执行流程。</li></ul>
+<h3>5.2 系统设置 — 系统版本</h3>
+<p><strong>页面说明</strong></p>
+<p>系统版本区域用于展示 OS 与客户端的当前版本信息、更新检测结果，并提供对应的更新操作入口。</p>
+<p><strong>组件说明</strong></p>
+<table><thead><tr><th>组件</th><th>展示内容与要求</th></tr></thead><tbody><tr><td>系统版本区域</td><td>位于「设置」→「系统设置」→「系统信息」页面，包含 OS 版本和客户端版本两行。</td></tr><tr><td>OS 版本</td><td>展示当前 OS 版本号、更新状态及对应操作入口。</td></tr><tr><td>客户端版本</td><td>展示当前客户端版本号、更新状态及对应操作入口。</td></tr><tr><td>更新状态</td><td>位于版本信息行右侧，根据对应项目的检测结果展示状态文案。</td></tr></tbody></table>
+<p><strong>状态展示</strong></p>
+<table><thead><tr><th>检测结果</th><th>页面展示</th><th>操作入口</th></tr></thead><tbody><tr><td>有更新</td><td>展示「发现新版本」、更新包大小及操作提示</td><td>展示对应更新入口，如「点击下载」</td></tr><tr><td>无更新</td><td>展示「已是最新版本」</td><td>不展示更新下载入口</td></tr><tr><td>异常（失败、超时）</td><td>在对应版本信息行展示异常状态，具体文案沿用现有页面规范</td><td>未明确的操作方式待确认</td></tr></tbody></table>
+<p><strong>操作逻辑</strong></p>
+<table><thead><tr><th>触发操作</th><th>检测范围</th><th>处理结果</th></tr></thead><tbody><tr><td>进入系统设置页面</td><td>自动检测 OS 与客户端的更新状态</td><td>分别更新 OS 与客户端的版本状态，不主动弹出更新弹窗。</td></tr><tr><td>手动检查 OS</td><td>仅检测 OS</td><td>更新 OS 对应的版本状态；用户点击更新入口后展示 OS 更新弹窗。</td></tr><tr><td>手动检查客户端</td><td>仅检测客户端</td><td>更新客户端对应的版本状态；用户点击更新入口后展示客户端更新弹窗。</td></tr><tr><td>点击 OS 更新入口</td><td>OS</td><td>进入现有 OS 更新流程。</td></tr><tr><td>点击客户端更新入口</td><td>客户端</td><td>进入现有客户端更新流程。</td></tr></tbody></table>
+<p><strong>补充说明</strong></p>
+<ol><li>OS 与客户端的检测结果独立展示，一项检测异常不影响另一项的状态更新。</li><li>版本信息行展示异常状态，同时按异常 Toast 规则提示。</li><li>更新弹窗的展示及后续操作遵循第 4 章相关规则，原有更新执行流程不在本期调整范围内。</li></ol>
+<h2>6. 验收标准</h2>
+<table><thead><tr><th>场景</th><th>预期结果</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端更新状态，并根据展示优先级规则展示更新弹窗</td></tr><tr><td>OS 与客户端均有更新</td><td>优先展示 OS 更新弹窗</td></tr><tr><td>OS 有更新，客户端无更新或异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>OS 无更新或异常（失败、超时），客户端有更新</td><td>展示客户端更新胶囊</td></tr><tr><td>OS 与客户端均无更新</td><td>无更新弹窗</td></tr><tr><td>OS 与客户端均返回异常（失败、超时）</td><td>按现有业务进行提示</td></tr><tr><td>OS 更新完成并重启</td><td>返回桌面后整轮再走展示规则；客户端有更新时展示客户端更新胶囊</td></tr><tr><td>OS 更新弹窗关闭或用户忽略本次更新</td><td>OS 进入通知列表；客户端有更新时展示客户端更新胶囊</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端，并分别更新版本信息行</td></tr><tr><td>在系统设置页面手动检查 OS</td><td>仅检测 OS；结果更新在 OS 版本信息行；有更新时点击「发现新版本，点击下载」展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检查客户端</td><td>仅检测客户端；结果更新在客户端版本信息行；有更新时点击「发现新版本，点击下载」展示客户端更新弹窗</td></tr><tr><td>手动检查结果为无更新</td><td>对应版本信息行展示「已是最新版本」</td></tr><tr><td>手动检查结果为异常（失败、超时）</td><td>对应版本信息行展示异常状态</td></tr><tr><td>手动检查所选项目有更新，点击「发现新版本，点击下载」</td><td>点击对应更新入口后展示该项目的更新弹窗</td></tr><tr><td>仅客户端有更新</td><td>直接展示客户端更新胶囊，不直接弹出客户端更新弹窗</td></tr><tr><td>点击客户端胶囊</td><td>打开客户端更新弹窗</td></tr><tr><td>胶囊关闭或 4500ms 自动消失</td><td>客户端进入通知列表；可再次点击打开客户端更新弹窗</td></tr><tr><td>通知列表点击 OS / 客户端条目</td><td>分别打开对应更新弹窗</td></tr><tr><td>系统设置手动检查有更新并点入口</td><td>直接展示对应更新弹窗，不出胶囊</td></tr><tr><td>异常 Toast</td><td>与一期一致，二期不改</td></tr></tbody></table>
+  </template>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  try {
+    if (window.mermaid) {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: { htmlLabels: true, curve: 'basis' }
+      });
+    }
+  } catch (e) { console.warn('mermaid init', e); }
+</script>
+<script>
     const documentArea = document.getElementById('document');
     const blockControls = document.getElementById('block-controls');
     const blockPlus = document.getElementById('block-plus');
@@ -637,10 +893,10 @@
     let deletedTable = null;
     let undoTimer = null;
     let activeReviewId = null;
-    const STORAGE_KEY = 'minis-prd-page-library-v4-7';
-    const PREVIOUS_STORAGE_KEY = 'minis-prd-page-library-v4-6';
+    const STORAGE_KEY = 'minis-prd-page-library-v4-9';
+    const PREVIOUS_STORAGE_KEY = 'minis-prd-page-library-v4-8';
     /* 导出时写入；与 localStorage 不一致时用文件正文覆盖根页，避免旧缓存盖住新导出 */
-    const DOCUMENT_STAMP = '';
+    const DOCUMENT_STAMP = 'h13vype6-v28f';
     const HOST_MODE = new URLSearchParams(location.search).get('host') === '1';
     const READONLY = new URLSearchParams(location.search).get('readonly') === '1';
     let hostEditable = !READONLY;
@@ -671,16 +927,31 @@
     } catch (_) {}
 
     if (!pageState) {
-      pageState = { activeId:'update-priority', pages:[{ id:'update-priority', title:'更新弹窗展示优先级 PRD', parentId:null, order:0, expanded:true, content:documentArea.innerHTML }], documentStamp: DOCUMENT_STAMP || undefined };
+      pageState = { activeId:'update-priority', pages:[{ id:'update-priority', title:'PRD', parentId:null, order:0, expanded:true, content:documentArea.innerHTML }], phases: buildDefaultPhases(), activePhaseId:'phase-v28', documentStamp: DOCUMENT_STAMP || undefined };
     }
     if (!HOST_MODE && DOCUMENT_STAMP && pageState.documentStamp !== DOCUMENT_STAMP) {
       const root = pageState.pages.find(page => page.id === 'update-priority') || pageState.pages.find(page => !page.parentId);
-      if (root) root.content = documentArea.innerHTML;
+      if (root) {
+        root.content = documentArea.innerHTML;
+        root.parentId = null;
+        root.expanded = true;
+        if (!root.title || root.title === '更新弹窗展示优先级 PRD') root.title = 'PRD';
+      }
+      // 新导出正文时重置期次：保留 V2.7（当前 #document）与 V2.8（template）
+      pageState.phases = buildDefaultPhases();
+      pageState.activePhaseId = 'phase-v28';
       pageState.documentStamp = DOCUMENT_STAMP;
+      const phase28 = pageState.phases.find(p => p.id === 'phase-v28');
+      if (root && phase28) {
+        root.content = phase28.content;
+        documentArea.innerHTML = phase28.content;
+      }
+      try { savePageState(); } catch (_) {}
     }
-    // 已保存的内容只做一次无损格式归一，空白段落不反复进入序列化结果。
+    // 已保存的内容只做一次无损格式归一；V2.7+ 正文跳过旧版迁移，避免打断初始化。
+    const skipLegacyMigrate = /V2\.7|检测触发规则|展示优先级规则/.test(documentArea.innerHTML || '');
     pageState.pages.forEach(page => {
-      if (page.id === 'update-priority') {
+      if (page.id === 'update-priority' && !skipLegacyMigrate) {
         const wordingUpdates = [
           ['自动检查与手动检查均依据本轮已确认的结果决定展示，不使用上一轮结果。', '每次自动或手动检查都重新获取 OS 与客户端的更新结果；两项检查结束后，仅依据此次结果决定弹窗。'],
           ['检测失败、更新失败、忽略、关闭和重新登录的行为具有可验证的结果。', '检测失败或超时时，只展示已确认有更新的项目；两项都未确认有更新且至少一项检测异常时，手动检查显示失败提示，登录自动检查不弹提示。'],
@@ -741,23 +1012,55 @@
         page.content = savedRoot.innerHTML;
       }
       if (!Array.isArray(page.comments)) page.comments = [];
-      const cleaned = sanitizePastedHtml(page.content || '', true);
-      if (cleaned) page.content = cleaned;
+      try {
+        if (typeof sanitizePastedHtml === 'function') {
+          const cleaned = sanitizePastedHtml(page.content || '', true);
+          if (cleaned) page.content = cleaned;
+        }
+      } catch (_) {}
     });
     const PROTOTYPE_PAGE_ID = 'client-update-capsule-prototype';
     const PROTOTYPE_HREF = '客户端更新胶囊交互原型_V1.1.html';
     if (!HOST_MODE) {
-      if (!pageState.pages.some(page => page.id === PROTOTYPE_PAGE_ID)) {
-        const parentId = pageState.pages.find(p => !p.parentId)?.id || 'update-priority';
-        pageState.pages.push({ id:PROTOTYPE_PAGE_ID, title:'Prototype｜客户端更新胶囊', parentId, order:pageState.pages.filter(page => page.parentId === parentId).length, expanded:true, content:prototypePageContent() });
+      const parentId = pageState.pages.find(p => !p.parentId)?.id || 'update-priority';
+      const parent = pageState.pages.find(p => p.id === parentId);
+      if (parent) parent.expanded = true;
+      let prototypePage = pageState.pages.find(page => page.id === PROTOTYPE_PAGE_ID);
+      if (!prototypePage) {
+        prototypePage = {
+          id: PROTOTYPE_PAGE_ID,
+          title: '原型',
+          parentId: null,
+          order: 1,
+          expanded: true,
+          content: '',
+          prototypeUrl: PROTOTYPE_HREF
+        };
+        pageState.pages.push(prototypePage);
+      } else {
+        prototypePage.parentId = null; // 与 PRD 同级，挂在板块下
+        prototypePage.prototypeUrl = PROTOTYPE_HREF;
+        prototypePage.order = 1;
       }
-      // 原型交互内容刷新，但不覆盖用户改过的左侧标题
-      const prototypePage = pageState.pages.find(page => page.id === PROTOTYPE_PAGE_ID);
-      if (prototypePage) prototypePage.content = prototypePageContent();
-      if (pageState.activeId === PROTOTYPE_PAGE_ID) pageState.activeId = pageState.pages.find(p => !p.parentId)?.id || pageState.activeId;
-      if (typeof pageState.navSection === 'string' && navSection) navSection.textContent = pageState.navSection;
-      else if (navSection) pageState.navSection = navSection.textContent.trim();
-      savePageState();
+      // 左侧统一：板块 → PRD、原型（版本只在顶栏切换）；标题可改，不每次强制覆盖
+      if (parent) {
+        parent.parentId = null;
+        parent.order = 0;
+        parent.expanded = true;
+        if (!parent.title || parent.title === '更新弹窗展示优先级 PRD' || parent.title === 'update-priority') {
+          parent.title = 'PRD';
+        }
+      }
+      if (!prototypePage.title) prototypePage.title = '原型';
+      // 原型内容在函数定义后再灌入（避免初始化顺序问题）
+      if (pageState.activeId === PROTOTYPE_PAGE_ID) pageState.activeId = parentId;
+      // 板块名不写死：只用用户已保存的；空则留空（显示 placeholder）
+      if (navSection) {
+        if (typeof pageState.navSection === 'string') navSection.textContent = pageState.navSection;
+        else pageState.navSection = navSection.textContent.trim();
+      }
+      if (pageState.sectionExpanded == null) pageState.sectionExpanded = true;
+      syncSectionExpanded();
     }
 
     const pageById = id => pageState.pages.find(page => page.id === id);
@@ -774,9 +1077,585 @@
         return false;
       }
     }
+
+    function safeFilename(name) {
+      return String(name || 'PRD').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'PRD';
+    }
+    function phaseVersionTag(phase) {
+      const fromName = String(phase?.name || '').match(/V\d+(?:\.\d+)*/i);
+      if (fromName) return fromName[0].toUpperCase();
+      const fromH1 = phaseTitleFromHtml(phase?.content || '').match(/V\d+(?:\.\d+)*/i);
+      if (fromH1) return fromH1[0].toUpperCase();
+      return '';
+    }
+    function exportFilenameForPhase(phase, ext) {
+      const ver = phaseVersionTag(phase);
+      if (ver) return safeFilename('更新弹窗展示优先级PRD_' + ver) + ext;
+      const title = phase?.name || phaseTitleFromHtml(phase?.content || '') || 'PRD';
+      return safeFilename(title) + ext;
+    }
+    function buildDefaultPhases() {
+      const tpl27 = document.getElementById('prd-phase-v27-content');
+      const tpl28 = document.getElementById('prd-phase-v28-content');
+      const v27 = tpl27 ? tpl27.innerHTML : documentArea.innerHTML;
+      const v28 = tpl28 ? tpl28.innerHTML : documentArea.innerHTML;
+      return [
+        { id: 'phase-v27', name: 'V2.7', content: v27 },
+        { id: 'phase-v28', name: 'V2.8', content: v28 }
+      ];
+    }
+
+    function phaseTitleFromHtml(html) {
+      const m = String(html || '').match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (!m) return '';
+      return m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+    }
+    function ensurePhases() {
+      if (!Array.isArray(pageState.phases)) pageState.phases = [];
+      const root = pageState.pages.find(p => !p.parentId) || pageState.pages[0];
+      if (!pageState.phases.length) {
+        // 兼容旧 docVersions：迁成期次
+        if (Array.isArray(pageState.docVersions) && pageState.docVersions.length) {
+          const live = pageState.liveContent != null ? pageState.liveContent : (root?.content || documentArea.innerHTML);
+          pageState.phases = [
+            { id: 'phase-live', name: phaseTitleFromHtml(live) || '一期', content: live },
+            ...pageState.docVersions.map((v, i) => ({
+              id: v.id || `phase-migrated-${i}`,
+              name: v.label || `期 ${i + 2}`,
+              content: v.content || ''
+            }))
+          ];
+        } else {
+          const content = root?.content || documentArea.innerHTML;
+          pageState.phases = [{
+            id: 'phase-' + Date.now().toString(36),
+            name: phaseTitleFromHtml(content) || root?.title || '一期',
+            content
+          }];
+        }
+      }
+      if (!pageState.activePhaseId || !pageState.phases.some(p => p.id === pageState.activePhaseId)) {
+        pageState.activePhaseId = pageState.phases[0].id;
+      }
+    }
+    try { ensurePhases(); } catch (err) { console.warn('ensurePhases', err); }
+
+    try {
+      ensurePhases();
+      const defaults = buildDefaultPhases();
+      const has28 = pageState.phases.some(p => p.id === 'phase-v28' || /V2\.8/.test(p.name || ''));
+      if (!has28) {
+        const v28 = defaults.find(p => p.id === 'phase-v28');
+        if (v28) pageState.phases.push(v28);
+      }
+      // 若两期正文相同（历史 bug 把 V2.8 写进两期），用 template 种子修复
+      const p27 = pageState.phases.find(p => p.id === 'phase-v27' || p.name === 'V2.7');
+      const p28 = pageState.phases.find(p => p.id === 'phase-v28' || p.name === 'V2.8');
+      const d27 = defaults.find(p => p.id === 'phase-v27');
+      const d28 = defaults.find(p => p.id === 'phase-v28');
+      if (p27 && p28 && d27 && d28 && p27.content === p28.content) {
+        p27.content = d27.content;
+        p28.content = d28.content;
+      }
+      if (DOCUMENT_STAMP && pageState.documentStamp === DOCUMENT_STAMP) savePageState();
+    } catch (err) { console.warn('phase migrate', err); }
+
+    function downloadBlob(filename, text, mime) {
+      const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    const prdSaveModal = document.getElementById('prd-save-modal');
+    const prdSaveModalTitle = document.getElementById('prd-save-modal-title');
+    const prdSaveModalHint = document.getElementById('prd-save-modal-hint');
+    const prdSaveModalInput = document.getElementById('prd-save-modal-input');
+    let prdSaveModalResolve = null;
+    function closePrdSaveModal(value) {
+      if (!prdSaveModal) return;
+      prdSaveModal.classList.remove('show');
+      prdSaveModal.setAttribute('hidden', '');
+      prdSaveModal.style.display = 'none';
+      const resolve = prdSaveModalResolve;
+      prdSaveModalResolve = null;
+      resolve?.(value);
+    }
+    function openPrdSaveModal({ title, hint, defaultValue }) {
+      return new Promise(resolve => {
+        if (!prdSaveModal || !prdSaveModalInput) {
+          const fallback = window.prompt(title || '请输入', defaultValue || '');
+          resolve(fallback);
+          return;
+        }
+        prdSaveModalResolve = resolve;
+        if (prdSaveModalTitle) prdSaveModalTitle.textContent = title || '请输入';
+        if (prdSaveModalHint) prdSaveModalHint.textContent = hint || '';
+        prdSaveModalInput.value = defaultValue || '';
+        prdSaveModal.removeAttribute('hidden');
+        prdSaveModal.classList.add('show');
+        prdSaveModal.style.display = 'flex';
+        setTimeout(() => { try { prdSaveModalInput.focus(); prdSaveModalInput.select(); } catch (_) {} }, 0);
+      });
+    }
+    document.getElementById('prd-save-modal-cancel')?.addEventListener('click', () => closePrdSaveModal(null));
+    document.getElementById('prd-save-modal-ok')?.addEventListener('click', () => closePrdSaveModal(prdSaveModalInput?.value ?? ''));
+    document.getElementById('prd-save-modal-use-title')?.addEventListener('click', () => {
+      const fromDoc = documentArea.querySelector('h1')?.textContent?.trim()
+        || phaseTitleFromHtml(rootPage()?.content || '')
+        || '';
+      if (prdSaveModalInput && fromDoc) prdSaveModalInput.value = fromDoc;
+      prdSaveModalInput?.focus();
+    });
+    prdSaveModal?.addEventListener('click', e => { if (e.target === prdSaveModal) closePrdSaveModal(null); });
+    prdSaveModalInput?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); closePrdSaveModal(prdSaveModalInput.value); }
+      if (e.key === 'Escape') { e.preventDefault(); closePrdSaveModal(null); }
+    });
+    async function saveAsFile({ defaultName, text, mime, extensions, description }) {
+      const ext = extensions?.[0] || '';
+      if (typeof window.showSaveFilePicker === 'function') {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: defaultName,
+            types: [{
+              description: description || '文件',
+              accept: { [mime]: extensions || [] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(new Blob([text], { type: mime + ';charset=utf-8' }));
+          await writable.close();
+          return true;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return false;
+        }
+      }
+      const typed = await openPrdSaveModal({
+        title: '另存为文件',
+        hint: '确认文件名后下载到本地。',
+        defaultValue: defaultName
+      });
+      if (typed === null) return false;
+      let name = safeFilename(String(typed).trim() || defaultName);
+      if (ext && !name.toLowerCase().endsWith(ext.toLowerCase())) name += ext;
+      downloadBlob(name, text, mime);
+      return true;
+    }
+    function inlineToMd(node) {
+      if (node.nodeType === 3) return (node.textContent || '').replace(/\s+/g, ' ');
+      if (node.nodeType !== 1) return '';
+      const el = node;
+      const tag = el.tagName.toLowerCase();
+      const inner = [...el.childNodes].map(inlineToMd).join('');
+      if (tag === 'br') return '  \n';
+      if (tag === 'strong' || tag === 'b') return '**' + inner.trim() + '**';
+      if (tag === 'em' || tag === 'i') return '*' + inner.trim() + '*';
+      if (tag === 's' || tag === 'del') return '~~' + inner.trim() + '~~';
+      if (tag === 'code') return '`' + inner.trim() + '`';
+      if (tag === 'a') {
+        const href = el.getAttribute('href') || '';
+        return href ? '[' + inner.trim() + '](' + href + ')' : inner;
+      }
+      return inner;
+    }
+    function listToMd(list, ordered, depth) {
+      const indent = '    '.repeat(depth);
+      return [...list.children].filter(c => c.tagName && c.tagName.toLowerCase() === 'li').map((li, i) => {
+        const marker = ordered ? (i + 1) + '.' : '-';
+        const chunks = [];
+        let line = '';
+        let headWritten = false;
+        const flushHead = () => {
+          if (headWritten) return;
+          chunks.push(indent + marker + ' ' + line.trim());
+          line = '';
+          headWritten = true;
+        };
+        [...li.childNodes].forEach(child => {
+          if (child.nodeType === 1 && /^(ul|ol)$/i.test(child.tagName)) {
+            flushHead();
+            chunks.push(listToMd(child, child.tagName.toLowerCase() === 'ol', depth + 1));
+            return;
+          }
+          line += inlineToMd(child);
+        });
+        if (!headWritten) flushHead();
+        return chunks.join('\n');
+      }).join('\n');
+    }
+    function tableToMd(table) {
+      const rows = [...table.querySelectorAll('tr')].map(tr =>
+        [...tr.children].filter(c => /^(th|td)$/i.test(c.tagName)).map(c => inlineToMd(c).trim().replace(/\|/g, '\\|').replace(/\n+/g, '<br>'))
+      );
+      if (!rows.length) return '';
+      const w = Math.max(...rows.map(r => r.length), 1);
+      const norm = rows.map(r => { const n = r.slice(); while (n.length < w) n.push(''); return n; });
+      return ['| ' + norm[0].join(' | ') + ' |', '| ' + norm[0].map(() => '---').join(' | ') + ' |', ...norm.slice(1).map(r => '| ' + r.join(' | ') + ' |')].join('\n');
+    }
+    function blockToMd(node) {
+      if (node.nodeType === 3) return (node.textContent || '').trim();
+      if (node.nodeType !== 1) return '';
+      const el = node;
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'script' || tag === 'style') return '';
+      if (tag === 'h1') return '# ' + inlineToMd(el).trim();
+      if (tag === 'h2') return '## ' + inlineToMd(el).trim();
+      if (tag === 'h3') return '### ' + inlineToMd(el).trim();
+      if (tag === 'h4') return '#### ' + inlineToMd(el).trim();
+      if (tag === 'p') return inlineToMd(el).trim();
+      if (tag === 'hr') return '---';
+      if (tag === 'blockquote') return inlineToMd(el).trim().split(/\n/).map(l => '> ' + l).join('\n');
+      if (el.classList && el.classList.contains('mermaid-rendered')) {
+        const src = el.getAttribute('data-mermaid-source') || '';
+        return '```mermaid\n' + src + '\n```';
+      }
+      if (tag === 'pre' && el.classList && el.classList.contains('mermaid')) return '```mermaid\n' + (el.textContent || '').replace(/\n$/, '') + '\n```';
+      if (tag === 'pre') return '```\n' + (el.textContent || '').replace(/\n$/, '') + '\n```';
+      if (tag === 'ul') return listToMd(el, false, 0);
+      if (tag === 'ol') return listToMd(el, true, 0);
+      if (tag === 'table') return tableToMd(el);
+      if (tag === 'div' || tag === 'section') return [...el.childNodes].map(blockToMd).filter(Boolean).join('\n\n');
+      return inlineToMd(el).trim();
+    }
+    function htmlToMarkdownLocal(html) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = html;
+      return [...wrap.childNodes].map(blockToMd).map(s => s.trim()).filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    }
+    function isPrototypePage(page) {
+      return !!(page && (page.id === PROTOTYPE_PAGE_ID || page.prototypeUrl || page.title === '原型'
+        || String(page.title || '').startsWith('Prototype｜') || String(page.title || '').startsWith('Prototype-')));
+    }
+    /** PRD 正文页（版本内容挂在这页）；不能用「第一个 parentId=null」——原型也是同级根页 */
+    function prdPage() {
+      return pageState.pages.find(p => p.id === 'update-priority')
+        || pageState.pages.find(p => !p.parentId && !isPrototypePage(p) && (p.title === 'PRD' || /PRD/i.test(p.title || '')))
+        || pageState.pages.find(p => !p.parentId && !isPrototypePage(p))
+        || pageById(pageState.activeId);
+    }
+    function rootPage() { return prdPage(); }
+    function activePhase() {
+      ensurePhases();
+      return pageState.phases.find(p => p.id === pageState.activePhaseId) || pageState.phases[0];
+    }
+    function persistActivePhaseFromEditor() {
+      commitCurrentPage();
+      const root = prdPage();
+      const phase = activePhase();
+      if (!root || !phase) return;
+      // 只把 PRD 页正文写入当前版本；在原型页时不要用原型 HTML 覆盖版本
+      if (pageState.activeId === root.id) phase.content = root.content;
+      else if (root.content) phase.content = root.content;
+    }
+    function applyPhaseToEditor(phase, { editable = true } = {}) {
+      const root = prdPage();
+      if (!root || !phase) return;
+      root.content = phase.content || '<h1>未命名</h1><p><br></p>';
+      // 切换版本：始终回到 PRD 页并刷新正文（版本只换 PRD，不换左侧结构）
+      pageState.activePhaseId = phase.id;
+      pageState.activeId = root.id;
+      documentArea.innerHTML = root.content;
+      documentArea.contentEditable = (editable && !READONLY) ? 'true' : 'false';
+      if (typeof renderPrototypePage === 'function') renderPrototypePage();
+      void renderMermaidIn(documentArea);
+      if (typeof resetHistory === 'function') resetHistory();
+      savePageState();
+      renderPhaseSelect();
+      renderPhasePager();
+      if (typeof refreshOnPageIndex === 'function') refreshOnPageIndex();
+      if (typeof renderPageTree === 'function') renderPageTree();
+    }
+    function closePhasePicker() {
+      const picker = document.getElementById('phase-picker');
+      const menu = document.getElementById('phase-picker-menu');
+      const trigger = document.getElementById('phase-picker-trigger');
+      if (!picker) return;
+      picker.classList.remove('open');
+      if (menu) menu.hidden = true;
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    }
+    function openPhasePicker() {
+      const picker = document.getElementById('phase-picker');
+      const menu = document.getElementById('phase-picker-menu');
+      const trigger = document.getElementById('phase-picker-trigger');
+      if (!picker || !menu) return;
+      renderPhaseSelect();
+      picker.classList.add('open');
+      menu.hidden = false;
+      if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    }
+    function renderPhaseSelect() {
+      const label = document.getElementById('phase-picker-label');
+      const menu = document.getElementById('phase-picker-menu');
+      if (!menu || HOST_MODE) return;
+      ensurePhases();
+      const active = activePhase();
+      if (label) label.textContent = active?.name || '一期';
+      const items = pageState.phases.map((p, i) => {
+        const name = p.name || ('第' + (i + 1) + '期');
+        const isActive = p.id === pageState.activePhaseId;
+        return `<div class="phase-picker-row${isActive ? ' active' : ''}" role="option" aria-selected="${isActive}">`
+          + `<button type="button" class="phase-picker-pick" data-phase-pick="${p.id}"><span class="tick">✓</span><span>${escapeHtml(name)}</span></button>`
+          + `<button type="button" class="phase-picker-rename" data-phase-action="rename" data-phase-id="${p.id}" title="重命名版本" aria-label="重命名 ${escapeHtml(name)}">✎</button>`
+          + `<button type="button" class="phase-picker-delete" data-phase-action="delete" data-phase-id="${p.id}" title="删除版本" aria-label="删除 ${escapeHtml(name)}">×</button>`
+          + `</div>`;
+      }).join('');
+      menu.innerHTML = items
+        + '<div class="phase-picker-divider"></div>'
+        + '<button type="button" class="phase-picker-action" data-phase-action="new">＋　新建版本</button>';
+    }
+    function renderPhasePager() {
+      const pager = document.getElementById('phase-pager');
+      if (!pager || HOST_MODE) return;
+      ensurePhases();
+      const list = pageState.phases;
+      if (list.length < 2) { pager.innerHTML = ''; return; }
+      const index = list.findIndex(p => p.id === pageState.activePhaseId);
+      const prev = index > 0 ? list[index - 1] : null;
+      const next = index >= 0 && index < list.length - 1 ? list[index + 1] : null;
+      pager.innerHTML = `
+        <a href="#" class="prev${prev ? '' : ' disabled'}" data-phase-id="${prev?.id || ''}">
+          <span class="phase-pager-label">上一期</span>
+          <span class="phase-pager-title">${escapeHtml(prev?.name || '')}</span>
+        </a>
+        <a href="#" class="next${next ? '' : ' disabled'}" data-phase-id="${next?.id || ''}">
+          <span class="phase-pager-label">下一期</span>
+          <span class="phase-pager-title">${escapeHtml(next?.name || '')}</span>
+        </a>`;
+      pager.querySelectorAll('a[data-phase-id]').forEach(a => {
+        a.addEventListener('click', e => {
+          e.preventDefault();
+          const id = a.getAttribute('data-phase-id');
+          if (id) switchPhase(id);
+        });
+      });
+    }
+    function switchPhase(nextId) {
+      if (HOST_MODE || !nextId) return;
+      persistActivePhaseFromEditor();
+      const phase = pageState.phases.find(p => p.id === nextId);
+      if (!phase) return;
+      applyPhaseToEditor(phase);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    async function renameActivePhase(phaseId) {
+      if (HOST_MODE) return;
+      persistActivePhaseFromEditor();
+      ensurePhases();
+      const phase = pageState.phases.find(p => p.id === (phaseId || pageState.activePhaseId)) || activePhase();
+      if (!phase) return;
+      const name = await openPrdSaveModal({
+        title: '重命名版本',
+        hint: '只改顶栏版本名称。不会改左侧板块名，也不会改 PRD／原型页面标题。',
+        defaultValue: phase.name || '一期'
+      });
+      if (name === null) return;
+      const next = String(name).trim() || phase.name;
+      phase.name = next;
+      // 刻意不改 navSection（板块）和 pages[].title（页面）
+      savePageState();
+      renderPhaseSelect();
+      renderPhasePager();
+      if (typeof renderPageTree === 'function') renderPageTree();
+    }
+    async function createNewPhase() {
+      if (HOST_MODE) return;
+      persistActivePhaseFromEditor();
+      const n = pageState.phases.length + 1;
+      const suggested = `第${n}期`;
+      const name = await openPrdSaveModal({
+        title: '新建版本',
+        hint: '版本只出现在顶栏下拉，不会出现在左侧板块树。只改版本名。',
+        defaultValue: suggested
+      });
+      if (name === null) return;
+      const title = String(name).trim() || suggested;
+      const phase = {
+        id: 'phase-' + Date.now().toString(36),
+        name: title,
+        content: `<h1>${escapeHtml(title)}</h1><p><br></p>`
+      };
+      pageState.phases.push(phase);
+      applyPhaseToEditor(phase);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    function deletePhase(phaseId) {
+      if (HOST_MODE) return;
+      persistActivePhaseFromEditor();
+      ensurePhases();
+      if (pageState.phases.length <= 1) {
+        alert('至少保留一个版本。');
+        return;
+      }
+      const idx = pageState.phases.findIndex(p => p.id === phaseId);
+      const phase = idx >= 0 ? pageState.phases[idx] : null;
+      if (!phase) return;
+      const label = phase.name || ('第' + (idx + 1) + '期');
+      if (!window.confirm(`确定删除版本「${label}」？删除后不可恢复。`)) return;
+      pageState.phases.splice(idx, 1);
+      if (pageState.activePhaseId === phaseId) {
+        const next = pageState.phases[Math.min(idx, pageState.phases.length - 1)] || pageState.phases[0];
+        applyPhaseToEditor(next);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        savePageState();
+        renderPhaseSelect();
+        renderPhasePager();
+        if (typeof renderPageTree === 'function') renderPageTree();
+      }
+    }
+    function deletePageNode(pageId) {
+      if (HOST_MODE) return;
+      const page = pageById(pageId);
+      if (!page) return;
+      const removeIds = new Set([pageId, ...descendantsOf(pageId)]);
+      const remaining = pageState.pages.filter(p => !removeIds.has(p.id));
+      if (!remaining.length) {
+        alert('至少保留一个页面。');
+        return;
+      }
+      const label = page.title || '未命名页面';
+      const childCount = removeIds.size - 1;
+      const extra = childCount > 0 ? `（含 ${childCount} 个子页面）` : '';
+      if (!window.confirm(`确定删除「${label}」${extra}？删除后不可恢复。`)) return;
+      commitCurrentPage();
+      try {
+        if (pageState.activeId === rootPage()?.id) persistActivePhaseFromEditor();
+      } catch (_) {}
+      pageState.pages = remaining;
+      remaining.filter(p => p.parentId === page.parentId).sort((a, b) => a.order - b.order)
+        .forEach((p, order) => { p.order = order; });
+      if (removeIds.has(pageState.activeId)) {
+        const next = remaining.find(p => !p.parentId) || remaining[0];
+        openPage(next.id);
+      } else {
+        savePageState();
+        renderPageTree();
+      }
+    }
+    function deleteNavSection() {
+      if (HOST_MODE) return;
+      const label = (navSection?.textContent || pageState.navSection || '板块').trim() || '板块';
+      if (!window.confirm(`确定删除板块「${label}」？其下所有页面将一并清空，且不可恢复。`)) return;
+      persistActivePhaseFromEditor();
+      const emptyHtml = '<h1>未命名</h1><p><br></p>';
+      const phaseId = 'phase-' + Date.now().toString(36);
+      const rootId = newId();
+      pageState.navSection = '未命名板块';
+      if (navSection) navSection.textContent = '未命名板块';
+      pageState.phases = [{ id: phaseId, name: '一期', content: emptyHtml, expanded: true }];
+      pageState.activePhaseId = phaseId;
+      pageState.pages = [{ id: rootId, title: '未命名页面', parentId: null, order: 0, expanded: true, content: emptyHtml }];
+      pageState.activeId = rootId;
+      documentArea.innerHTML = emptyHtml;
+      documentArea.contentEditable = READONLY ? 'false' : 'true';
+      if (typeof resetHistory === 'function') resetHistory();
+      savePageState();
+      renderPhaseSelect();
+      renderPhasePager();
+      if (typeof refreshOnPageIndex === 'function') refreshOnPageIndex();
+      renderPageTree();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    async function exportCurrentMarkdown() {
+      persistActivePhaseFromEditor();
+      const phase = activePhase();
+      const text = htmlToMarkdownLocal(phase?.content || documentArea.innerHTML);
+      await saveAsFile({
+        defaultName: exportFilenameForPhase(phase, '.md'),
+        text,
+        mime: 'text/markdown',
+        extensions: ['.md'],
+        description: 'Markdown'
+      });
+    }
+    async function exportCurrentHtml() {
+      persistActivePhaseFromEditor();
+      const phase = activePhase();
+      ensurePhases();
+      const clone = document.documentElement.cloneNode(true);
+      clone.querySelectorAll('#prd-save-modal').forEach(n => n.remove());
+      const main = clone.querySelector('#document');
+      if (main) main.innerHTML = phase?.content || documentArea.innerHTML;
+      // 把当前各期正文写回 template，导出后仍可切换版本
+      pageState.phases.forEach(p => {
+        const ver = phaseVersionTag(p);
+        const id = p.id === 'phase-v27' || ver === 'V2.7' ? 'prd-phase-v27-content'
+          : (p.id === 'phase-v28' || ver === 'V2.8' ? 'prd-phase-v28-content' : null);
+        if (!id) return;
+        let tpl = clone.querySelector('#' + id);
+        if (!tpl) {
+          tpl = clone.ownerDocument.createElement('template');
+          tpl.id = id;
+          const scripts = clone.querySelectorAll('script');
+          const first = scripts[0];
+          if (first && first.parentNode) first.parentNode.insertBefore(tpl, first);
+          else clone.body?.appendChild(tpl);
+        }
+        tpl.innerHTML = p.content || '';
+      });
+      let html = '<!doctype html>\n' + clone.outerHTML;
+      html = html.replace(/const DOCUMENT_STAMP = '[^']*'/, `const DOCUMENT_STAMP = '${DOCUMENT_STAMP}'`);
+      await saveAsFile({
+        defaultName: exportFilenameForPhase(phase, '.html'),
+        text: html,
+        mime: 'text/html',
+        extensions: ['.html', '.htm'],
+        description: 'HTML'
+      });
+    }
+    document.getElementById('phase-picker-trigger')?.addEventListener('click', e => {
+      e.stopPropagation();
+      const picker = document.getElementById('phase-picker');
+      if (picker?.classList.contains('open')) closePhasePicker();
+      else openPhasePicker();
+    });
+    document.getElementById('phase-picker-menu')?.addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      e.stopPropagation();
+      const pick = btn.getAttribute('data-phase-pick');
+      const action = btn.getAttribute('data-phase-action');
+      if (action === 'rename') {
+        const id = btn.getAttribute('data-phase-id');
+        closePhasePicker();
+        void renameActivePhase(id || pageState.activePhaseId);
+        return;
+      }
+      if (action === 'delete') {
+        const id = btn.getAttribute('data-phase-id');
+        closePhasePicker();
+        deletePhase(id || pageState.activePhaseId);
+        return;
+      }
+      if (pick) {
+        closePhasePicker();
+        if (pick !== pageState.activePhaseId) switchPhase(pick);
+        return;
+      }
+      if (action === 'new') {
+        closePhasePicker();
+        void createNewPhase();
+      }
+    });
+    document.addEventListener('click', e => {
+      const picker = document.getElementById('phase-picker');
+      if (picker && !picker.contains(e.target)) closePhasePicker();
+    });
+    document.getElementById('doc-export-md')?.addEventListener('click', () => { void exportCurrentMarkdown(); });
+    document.getElementById('doc-export-html')?.addEventListener('click', () => { void exportCurrentHtml(); });
     navSection?.addEventListener('blur', () => { savePageState(); });
     navSection?.addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); navSection.blur(); }
+    });
+    document.getElementById('nav-section-caret')?.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleSectionExpanded();
+    });
+    document.getElementById('nav-section-delete')?.addEventListener('click', event => {
+      event.stopPropagation();
+      deleteNavSection();
     });
 
     function notifyHost() {
@@ -805,22 +1684,32 @@
     }
 
     function openPage(id) {
-      if (!HOST_MODE && id === PROTOTYPE_PAGE_ID) { window.open(PROTOTYPE_HREF, '_blank'); return; }
-      const hostPage = pageById(id);
-      if (HOST_MODE && hostPage?.prototypeUrl) {
+      const page = pageById(id);
+      // 原型：直接跳转，不进正文编辑区
+      if (page && isPrototypePage(page)) {
+        const url = page.prototypeUrl || PROTOTYPE_HREF;
+        try { if (pageState.activeId === prdPage()?.id) persistActivePhaseFromEditor(); } catch (_) {}
+        window.open(url, '_blank');
+        return;
+      }
+      if (HOST_MODE && page?.prototypeUrl) {
         pageState.activeId = id;
-        showPrototypeFrame(hostPage.prototypeUrl);
+        showPrototypeFrame(page.prototypeUrl);
         renderPageTree();
         return;
       }
       closeReviewThread();
       closeReviewComposer();
       commitCurrentPage();
+      try {
+        if (pageState.activeId === prdPage()?.id) persistActivePhaseFromEditor();
+      } catch (_) {}
       pageState.activeId = id;
-      const page = pageById(id);
       documentArea.innerHTML = page?.content || '<h1>未命名页面</h1><p><br></p>';
-      documentArea.contentEditable = (HOST_MODE ? hostEditable : !READONLY) ? 'true' : 'false';
-      renderPrototypePage();
+      // 非原型页均可编辑
+      documentArea.contentEditable = (!READONLY && (HOST_MODE ? hostEditable : true)) ? 'true' : 'false';
+      if (typeof renderPrototypePage === 'function') renderPrototypePage();
+      void renderMermaidIn(documentArea);
       resetHistory();
       savePageState();
       refreshOnPageIndex();
@@ -829,28 +1718,37 @@
       window.scrollTo({top:0, behavior:'smooth'});
     }
 
-    function createPage(parentId) {
+    async function createPage(parentId) {
       // 宿主模式：多页尚未落库，顶层「＋ 页面」改为让外层新建一份 PRD；子页面暂不支持
       if (HOST_MODE) {
         if (parentId) {
           alert('子页面目录结构即将支持落库。现在请用「＋ 页面」新建另一份 PRD，或用「＋ 原型」挂原型。');
           return;
         }
-        const title = prompt('新 PRD 名称', '未命名 PRD');
+        const title = await openPrdSaveModal({
+          title: '新建 PRD',
+          hint: '输入新 PRD 名称。',
+          defaultValue: '未命名 PRD'
+        });
         if (title === null) return;
         try {
           parent.postMessage({
             type: 'STAR_PRD_HOST_CREATE_PAGE',
-            title: title.trim() || '未命名 PRD',
+            title: String(title).trim() || '未命名 PRD',
           }, '*');
         } catch (_) {}
         return;
       }
-      const title = prompt(parentId ? '子页面名称' : '页面名称', '未命名页面');
+      const title = await openPrdSaveModal({
+        title: parentId ? '新建子页面' : '新建页面',
+        hint: '输入页面名称。',
+        defaultValue: '未命名页面'
+      });
       if (title === null) return;
       const siblings = childrenOf(parentId);
-      const page = { id:newId(), title:title.trim() || '未命名页面', parentId, order:siblings.length, expanded:true, content:`<h1>${escapeHtml(title.trim() || '未命名页面')}</h1><p><br></p>` };
-      if (parentId) pageById(parentId).expanded = true;
+      const name = String(title).trim() || '未命名页面';
+      const page = { id:newId(), title:name, parentId, order:siblings.length, expanded:true, content:`<h1>${escapeHtml(name)}</h1><p><br></p>` };
+      if (parentId && pageById(parentId)) pageById(parentId).expanded = true;
       pageState.pages.push(page);
       savePageState();
       openPage(page.id);
@@ -864,6 +1762,22 @@
     }
 
     function escapeHtml(value) { const element = document.createElement('div'); element.textContent = value; return element.innerHTML; }
+
+    function syncSectionExpanded() {
+      const tree = document.getElementById('page-tree');
+      const caret = document.getElementById('nav-section-caret');
+      const expanded = pageState.sectionExpanded !== false;
+      if (tree) tree.classList.toggle('section-collapsed', !expanded);
+      if (caret) {
+        caret.textContent = expanded ? '⌄' : '›';
+        caret.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      }
+    }
+    function toggleSectionExpanded() {
+      pageState.sectionExpanded = !(pageState.sectionExpanded !== false);
+      syncSectionExpanded();
+      savePageState();
+    }
 
     function renderPageTree() {
       const tree = document.getElementById('page-tree');
@@ -880,19 +1794,29 @@
         caret.type = 'button';
         caret.textContent = page.expanded ? '⌄' : '›';
         caret.addEventListener('click', event => { event.stopPropagation(); page.expanded = !page.expanded; savePageState(); renderPageTree(); });
-        const title = document.createElement('span'); title.className = 'page-row-title'; title.textContent = page.title;
-        title.title = '双击重命名';
-        title.addEventListener('dblclick', event => {
-          event.stopPropagation();
+        const title = document.createElement('span'); title.className = 'page-row-title'; title.textContent = page.title || '未命名';
+        title.title = '单击选中标题可改名；双击也可改名。点行空白处打开页面／原型';
+        const beginRename = () => {
           title.contentEditable = 'true';
           title.focus();
           const range = document.createRange(); range.selectNodeContents(title); range.collapse(false);
           const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        };
+        title.addEventListener('dblclick', event => {
+          event.preventDefault();
+          event.stopPropagation();
+          beginRename();
+        });
+        title.addEventListener('click', event => {
+          // 点标题：只改名，不触发整行跳转／打开（避免原型单击标题被 open 抢走）
+          event.preventDefault();
+          event.stopPropagation();
+          beginRename();
         });
         const commitTitle = () => {
           if (title.contentEditable !== 'true') return;
           title.contentEditable = 'false';
-          const next = title.textContent.trim() || page.title;
+          const next = title.textContent.trim() || page.title || '未命名';
           title.textContent = next;
           page.title = next;
           savePageState();
@@ -903,7 +1827,6 @@
           if (event.key === 'Escape') { title.textContent = page.title; title.blur(); }
           event.stopPropagation();
         });
-        title.addEventListener('click', event => { if (title.contentEditable === 'true') event.stopPropagation(); });
         row.append(caret, title);
         if (page.prototypeUrl || page.title.startsWith('Prototype｜') || page.title.startsWith('Prototype-')) {
           const external = document.createElement('span'); external.className = 'page-row-external'; external.textContent = '↗'; external.setAttribute('aria-label','打开原型'); external.title = '在新页面打开原型';
@@ -913,11 +1836,23 @@
           });
           row.append(external);
         }
-        row.addEventListener('click', () => {
-          if (!HOST_MODE && page.id === PROTOTYPE_PAGE_ID) {
-            window.open(PROTOTYPE_HREF, '_blank');
-            return;
-          }
+        if (!HOST_MODE) {
+          const pageActions = document.createElement('div');
+          pageActions.className = 'tree-actions';
+          const delPageBtn = document.createElement('button');
+          delPageBtn.type = 'button';
+          delPageBtn.className = 'danger';
+          delPageBtn.textContent = '×';
+          delPageBtn.title = '删除页面';
+          delPageBtn.addEventListener('click', event => {
+            event.stopPropagation();
+            deletePageNode(page.id);
+          });
+          pageActions.append(delPageBtn);
+          row.append(pageActions);
+        }
+        row.addEventListener('click', event => {
+          if (event.target.closest('.page-row-title, .tree-actions, .tree-caret, .page-row-external, .phase-tree-actions')) return;
           openPage(page.id);
         });
         row.addEventListener('dragstart', event => { draggedPageId = page.id; row.classList.add('dragging'); event.dataTransfer.effectAllowed = 'move'; });
@@ -934,7 +1869,10 @@
         tree.append(row);
         if (page.expanded) children.forEach(child => renderPage(child, depth + 1));
       };
+
+      // 左侧只显示板块下的页面（PRD / 原型）；版本仅在顶栏期次下拉切换
       childrenOf(null).forEach(page => renderPage(page, 0));
+      syncSectionExpanded();
     }
 
     function movePage(sourceId, targetId, mode) {
@@ -980,6 +1918,14 @@
       saveTimer = setTimeout(() => {
         commitCurrentPage();
         syncPageTitle();
+        try {
+          const phase = activePhase();
+          const root = rootPage();
+          if (phase && root && pageState.activeId === root.id) {
+            phase.content = root.content;
+            /* 期次名独立维护，不随 H1／页面标题自动改写 */
+          }
+        } catch (_) {}
         savePageState();
         refreshOnPageIndex();
         renderPageTree();
@@ -1019,16 +1965,59 @@
         const selection = window.getSelection();
         if (!selection?.rangeCount) return;
         const range = selection.getRangeAt(0);
+        const edge = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        /* 在「新增」建议内删字：直接缩短该条，不另开删减建议 */
+        if (edge?.closest?.('.suggest-mark[data-suggest-kind="insert"]')) {
+          requestAnimationFrame(() => {
+            const mark = edge.closest('.suggest-mark[data-suggest-kind="insert"]');
+            const page = pageById(pageState.activeId);
+            const item = page?.suggestions?.find(s => s.id === mark?.dataset?.suggestId);
+            if (!mark) return;
+            if (!mark.textContent) {
+              const id = mark.dataset.suggestId;
+              mark.remove();
+              if (page) page.suggestions = (page.suggestions || []).filter(s => s.id !== id);
+              closeSuggestCard();
+            } else if (item) {
+              item.quote = mark.textContent;
+              showSuggestCard(mark.dataset.suggestId);
+            }
+            commitCurrentPage(); savePageState(); persistDocument();
+          });
+          return;
+        }
+        /* 空列表项：退格交给列表结构，不打删减建议 */
+        const listItem = edge?.closest?.('li');
+        if (listItem && range.collapsed) {
+          const ownText = [...listItem.childNodes]
+            .filter(child => !['OL', 'UL'].includes(child.nodeName))
+            .map(child => child.textContent || '')
+            .join('')
+            .replace(/\u200b/g, '')
+            .trim();
+          if (!ownText) return;
+        }
         if (range.collapsed) {
           const direction = event.inputType === 'deleteContentForward' ? 'forward' : 'backward';
           try {
             selection.modify('extend', direction, 'character');
           } catch (_) { return; }
           if (selection.isCollapsed) return;
+          const ext = selection.getRangeAt(0);
+          /* 跨列表项／块删除会破坏结构：放行浏览器默认行为 */
+          const a = ext.startContainer.nodeType === Node.TEXT_NODE ? ext.startContainer.parentElement : ext.startContainer;
+          const b = ext.endContainer.nodeType === Node.TEXT_NODE ? ext.endContainer.parentElement : ext.endContainer;
+          if (a?.closest?.('li') !== b?.closest?.('li') || a?.closest?.('p,h1,h2,h3,li,td,th') !== b?.closest?.('p,h1,h2,h3,li,td,th')) {
+            selection.collapseToStart();
+            return;
+          }
           event.preventDefault();
-          createDeleteSuggestion(selection.getRangeAt(0).cloneRange());
+          createDeleteSuggestion(ext.cloneRange());
           return;
         }
+        const a = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+        const b = range.endContainer.nodeType === Node.TEXT_NODE ? range.endContainer.parentElement : range.endContainer;
+        if (a?.closest?.('li') !== b?.closest?.('li') || a?.closest?.('p,h1,h2,h3,li,td,th') !== b?.closest?.('p,h1,h2,h3,li,td,th')) return;
         event.preventDefault();
         createDeleteSuggestion(range.cloneRange());
         return;
@@ -1038,10 +2027,8 @@
         createInsertSuggestion(event.data);
         return;
       }
-      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
-        event.preventDefault();
-        createInsertSuggestion('\n');
-      }
+      /* 回车/换行：放行，走列表续写／退级或正常拆段；禁止做成「新增 \\n」建议（会打断列表） */
+      if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') return;
     });
     documentArea.addEventListener('input', event => {
       persistDocument();
@@ -1164,31 +2151,72 @@
       event.preventDefault();
       const parentItem = list.parentElement.closest?.('li');
       if (parentItem) {
-        parentItem.after(item);
-        if (!list.children.length) list.remove();
-        focusListItem(item);
+        moveListItemKeepingCaret(item, () => {
+          parentItem.after(item);
+          if (!list.children.length) list.remove();
+        });
       } else if (item === list.lastElementChild) {
         const paragraph = document.createElement('p'); paragraph.innerHTML = '<br>';
         list.after(paragraph); item.remove();
         if (!list.children.length) list.remove();
         focusListItem(paragraph);
+        persistDocument();
+      } else {
+        /* 空项在中间：拆成 上半列表 + 段落 + 下半列表，禁止把 <p> 留在 <ol>/<ul> 里 */
+        const afterList = document.createElement(list.tagName.toLowerCase());
+        while (item.nextElementSibling) afterList.append(item.nextElementSibling);
+        const paragraph = document.createElement('p'); paragraph.innerHTML = '<br>';
+        list.after(paragraph);
+        if (afterList.children.length) paragraph.after(afterList);
+        item.remove();
+        if (!list.children.length) list.remove();
+        focusListItem(paragraph);
+        persistDocument();
       }
-      persistDocument();
       return true;
     }
     documentArea.addEventListener('change', event => { if (event.target.matches('input[type="checkbox"]')) persistDocument(); });
-    document.getElementById('new-page').addEventListener('click', () => createPage(null));
-    document.getElementById('new-child-page').addEventListener('click', () => createPage(pageState.activeId));
+    document.getElementById('new-page')?.addEventListener('click', () => { void createPage(null); });
+    document.getElementById('new-child-page')?.addEventListener('click', () => {
+      const parent = rootPage()?.id || pageState.activeId;
+      void createPage(parent);
+    });
     document.getElementById('new-prototype')?.addEventListener('click', () => {
       if (HOST_MODE) requestHostLinkPrototype();
-      else alert('独立打开 viewer 时请用目录旁挂接原型；工作台宿主模式可用「＋ 原型」。');
+      else {
+        // 独立壳：打开／聚焦已挂在更新弹窗下的原型子页
+        const parent = rootPage();
+        if (parent) parent.expanded = true;
+        openPage(PROTOTYPE_PAGE_ID);
+      }
     });
+    try {
+      const proto = pageById(PROTOTYPE_PAGE_ID);
+      if (proto && typeof prototypePageContent === 'function') proto.content = prototypePageContent();
+    } catch (err) { console.warn('prototype init', err); }
     documentArea.innerHTML = pageById(pageState.activeId)?.content || documentArea.innerHTML;
-    renderPrototypePage();
+    try { renderPrototypePage(); } catch (err) { console.warn('renderPrototypePage', err); }
+    try { void renderMermaidIn(documentArea); } catch (err) { console.warn('renderMermaidIn', err); }
     resetHistory();
     refreshOnPageIndex();
     renderPageTree();
     renderReviewComments();
+    try {
+      if (!HOST_MODE) {
+        // 保证一期内容与文件正文一致（防旧期次覆盖）
+        const root = rootPage();
+        const phase = activePhase();
+        if (root && phase && DOCUMENT_STAMP && pageState.documentStamp === DOCUMENT_STAMP) {
+          if (phase.id === 'phase-v27' || pageState.phases.length === 1) {
+            phase.content = root.content || documentArea.innerHTML;
+            phase.name = phase.name || '一期 · V2.7';
+          }
+        }
+        renderPhaseSelect();
+        renderPhasePager();
+        savePageState();
+      }
+    } catch (err) { console.warn('phase boot', err); }
 
     function getBlock(target) {
       const node = target && (target.nodeType === Node.TEXT_NODE ? target.parentElement : target);
@@ -1443,29 +2471,7 @@
       return `<table><thead><tr><th>${escapeHtml(rows[0][0])}</th><th>${escapeHtml(rows[0][1])}</th></tr></thead><tbody>${rows.slice(1).map(row => `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td></tr>`).join('')}</tbody></table><p><br></p>`;
     }
 
-    function prototypePageContent() {
-      return `<h1>Prototype｜客户端更新胶囊</h1><p class="meta">父页面：更新弹窗展示优先级 PRD　｜　阶段：下期方案验证，不纳入本期</p><h2>1. 原型目标</h2><p>验证 OS 更新结束后，使用非打断式胶囊承接客户端更新。胶囊不是通知中心，不修改原有客户端更新弹窗，只提供一个可点击入口。</p><h2>2. 交互说明</h2><ul><li>右上角出现“客户端有更新可用”胶囊。</li><li>用户点击胶囊后，才打开原客户端更新弹窗。</li><li>用户不点击，胶囊不抢焦点、不阻断当前操作。</li><li>用户可主动关闭胶囊；关闭弹窗后胶囊仍可保留。</li></ul><div class="proto-surface" data-prototype="capsule"><div class="proto-desktop"><span class="proto-label">OS 更新流程结束｜主界面已恢复</span><button class="proto-capsule" data-proto-action="open" type="button"><span class="dot"></span><span>客户端有更新可用</span><span class="dismiss" data-proto-action="dismiss" aria-label="关闭胶囊">×</span></button><div class="proto-dialog-mask" data-proto-modal aria-hidden="true"><section class="proto-dialog" role="dialog" aria-modal="true"><div class="proto-dialog-head"><span>客户端更新</span><button class="proto-dialog-x" data-proto-action="close" type="button">×</button></div><div class="proto-dialog-body"><div class="proto-dialog-meta"><strong>更新内容</strong><span>V2.1.1_25080　｜　211.73 MB　｜　2025-02-09</span></div><div class="proto-dialog-copy"><p><b>· 智能相册</b><br>智能相册新增批量管理：批量移出相册、批量删除照片、批量移入回收站。</p><p><b>· 外部存储</b><br>新增 GoogleDrive，修复 115 网盘的展示。</p></div></div><div class="proto-dialog-foot"><button class="proto-link" data-proto-action="toast" type="button">⌁ 手动下载其他版本</button><div class="proto-actions"><button class="proto-btn" data-proto-action="ignore" type="button">忽略本次更新</button><button class="proto-btn primary" data-proto-action="toast" type="button">立即更新</button></div></div></section></div><div class="proto-toast" data-proto-toast></div></div></div><h2>3. MVP 边界</h2><p>本原型仅用于下期胶囊方案验证。本期两项更新同时命中时，先显示 OS 原弹窗；OS 流程结束且返回主屏幕后自动显示客户端原弹窗。</p>`;
-    }
-
-    function renderPrototypePage() {
-      if (pageState.activeId !== PROTOTYPE_PAGE_ID) return;
-      const surface = documentArea.querySelector('[data-prototype="capsule"]');
-      if (!surface || surface.dataset.bound === '1') return;
-      surface.dataset.bound = '1';
-      const modal = surface.querySelector('[data-proto-modal]');
-      const toast = surface.querySelector('[data-proto-toast]');
-      const notify = text => { toast.textContent = text; toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 1600); };
-      surface.addEventListener('click', event => {
-        const action = event.target.closest('[data-proto-action]')?.dataset.protoAction;
-        if (!action) return;
-        if (action === 'open') { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); }
-        if (action === 'close' || action === 'ignore') { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); }
-        if (action === 'dismiss') { event.stopPropagation(); surface.querySelector('.proto-capsule').remove(); notify('已关闭本次胶囊提醒'); }
-        if (action === 'toast') notify('已进入原有更新流程');
-      });
-    }
-
-    // Prototype page override: the child page is a pure interactive surface.
+    // 原型子页：交互面（挂在「更新弹窗展示优先级 PRD」下）
     function prototypePageContent() {
       return `<div class="proto-surface proto-only" data-prototype="capsule" data-proto-state="success">
         <button class="proto-hidden-toggle" data-proto-action="toggle-status" type="button" aria-label="切换 OS 更新成功/失败"></button>
@@ -1484,6 +2490,32 @@
           </div>
         </div>
       </div>`;
+    }
+
+
+    async function renderMermaidIn(root) {
+      const scope = root || documentArea;
+      if (!scope || !window.mermaid) return;
+      const nodes = [...scope.querySelectorAll('pre.mermaid')];
+      for (const el of nodes) {
+        if (el.dataset.mmdDone === '1') continue;
+        const code = (el.textContent || '').replace(/^\uFEFF/, '').trim();
+        if (!code) continue;
+        const holder = document.createElement('div');
+        holder.className = 'mermaid-rendered';
+        holder.setAttribute('data-mermaid-source', code);
+        const rid = 'mmd-' + Math.random().toString(36).slice(2, 10);
+        try {
+          const out = await mermaid.render(rid, code);
+          holder.innerHTML = out.svg;
+          el.dataset.mmdDone = '1';
+          el.replaceWith(holder);
+        } catch (err) {
+          console.warn('mermaid render failed', err);
+          el.dataset.mmdDone = '0';
+          el.title = '流程图渲染失败，请检查 Mermaid 语法';
+        }
+      }
     }
 
     function renderPrototypePage() {
@@ -1537,12 +2569,16 @@
 
     function positionBlockPlus(block) {
       if (window.innerWidth < 700 || !block || !blockControls) return;
-      const rect = block.getBoundingClientRect();
       activeBlock = block;
-      const width = blockControls.offsetWidth || 58;
-      blockControls.style.left = `${Math.max(6, rect.left - width - 8)}px`;
-      blockControls.style.top = `${rect.top + Math.min(4, Math.max(0, rect.height / 2 - 14))}px`;
+      /* 先显示再量宽，避免 display:none 时 width=0 估错，把拖动顶进正文线内 */
       blockControls.classList.add('show');
+      const blockRect = block.getBoundingClientRect();
+      const pageRect = documentArea.getBoundingClientRect();
+      const width = blockControls.offsetWidth || 64;
+      const gap = 8;
+      /* 相对正文左缘（线）外侧排布：＋ 左、⠿ 右；不跟 li 缩进往里跑 */
+      blockControls.style.left = `${Math.max(6, pageRect.left - width - gap)}px`;
+      blockControls.style.top = `${blockRect.top + Math.min(4, Math.max(0, blockRect.height / 2 - 14))}px`;
     }
 
     function showTableContext(table, cell) {
@@ -1579,14 +2615,18 @@
       }
     }
 
+    function isHoveringTableChrome() {
+      return [tableContext, tableRowInline, tableColumnInline, tableSelectInline, tableCellInline]
+        .some(el => el?.matches?.(':hover'));
+    }
     documentArea.addEventListener('mousemove', event => {
       const table = event.target.closest?.('table');
       if (table) {
         blockControls?.classList.remove('show');
         showTableContext(table, event.target.closest('td,th'));
-      } else {
-        tableContext.classList.remove('show');
-        [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
+      } else if (!isHoveringTableChrome()) {
+        /* 移向左侧「－行」等控件时勿强制隐藏，否则点不到删行 */
+        hideTableContext();
       }
     });
     documentArea.addEventListener('mouseleave', () => setTimeout(() => { hideInsertControls(); hideTableContext(); }, 100));
@@ -1597,6 +2637,7 @@
         showTableContext(cell.closest('table'), cell);
         return;
       }
+      if (isHoveringTableChrome()) return;
       tableContext.classList.remove('show');
       [tableRowInline, tableColumnInline, tableSelectInline, tableCellInline].forEach(control => control.classList.remove('show'));
       const selection = window.getSelection();
@@ -1714,7 +2755,7 @@
         const action = button.dataset.tableAction;
         if (action === 'add-row') addRow();
         if (action === 'add-column') addColumn();
-        if (action === 'remove-row') removeRow();
+        if (action === 'remove-row') removeRow(activeCell?.closest('tr'), activeTable);
         if (action === 'remove-column') removeColumn();
         if (action === 'delete-table') deleteTable();
       });
@@ -1724,7 +2765,7 @@
       button.addEventListener('click', () => {
         const action = button.dataset.tableInline;
         if (action === 'add-row') addRow();
-        if (action === 'remove-row') removeRow();
+        if (action === 'remove-row') removeRow(activeCell?.closest('tr'), activeTable);
         if (action === 'add-column') addColumn();
         if (action === 'remove-column') removeColumn();
         if (action === 'select-table') selectTableForDelete(activeTable);
@@ -2458,12 +3499,20 @@
       if (!event.target.closest('.review-menu-wrap')) document.querySelectorAll('.review-menu.show').forEach(menu => menu.classList.remove('show'));
     });
 
+    function blockInsertAnchor(block = activeBlock) {
+      if (!block || !documentArea.contains(block)) return null;
+      /* li 内插入时锚到整份 ul/ol，避免把表格/新列表插成 li 的兄弟节点（非法结构） */
+      if (block.closest?.('li')) return block.closest('ul,ol') || block;
+      if (block.closest?.('td,th')) return block.closest('table') || block;
+      return block;
+    }
     function insertAfterActiveBlock(markup) {
-      if (!activeBlock || !documentArea.contains(activeBlock)) {
+      const anchor = blockInsertAnchor(activeBlock);
+      if (!anchor) {
         documentArea.focus();
         document.execCommand('insertHTML', false, markup);
       } else {
-        activeBlock.insertAdjacentHTML('afterend', markup);
+        anchor.insertAdjacentHTML('afterend', markup);
       }
       persistDocument();
     }
@@ -2487,16 +3536,34 @@
       if (['h1','h2','h3'].includes(type)) return convertOrInsertHeading(type);
       if (['image-url','video','audio','file','bookmark'].includes(type)) return insertMedia(type);
       if (type === 'numbered' || type === 'bullet') {
+        const wantTag = type === 'numbered' ? 'OL' : 'UL';
         const item = activeBlock?.closest?.('li');
         const list = item?.parentElement;
-        if (list?.tagName === (type === 'numbered' ? 'OL' : 'UL')) {
+        if (list?.matches('ol,ul')) {
+          if (list.tagName === wantTag) {
+            const next = document.createElement('li'); next.innerHTML = '<br>';
+            item.after(next); focusListItem(next); persistDocument(); return;
+          }
+          /* 在另一类列表中：在整份列表后新建目标类型，不插进当前 ul/ol 内部 */
+          const newList = document.createElement(wantTag.toLowerCase());
           const next = document.createElement('li'); next.innerHTML = '<br>';
-          item.after(next); focusListItem(next); persistDocument(); return;
+          newList.append(next);
+          list.after(newList);
+          focusListItem(next); persistDocument(); return;
         }
         const preceding = activeBlock?.previousElementSibling;
-        if (activeBlock?.tagName === 'P' && !activeBlock.textContent.trim() && preceding?.tagName === (type === 'numbered' ? 'OL' : 'UL')) {
+        if (activeBlock?.tagName === 'P' && !activeBlock.textContent.trim() && preceding?.tagName === wantTag) {
           const next = document.createElement('li'); next.innerHTML = '<br>';
           preceding.append(next); activeBlock.remove(); focusListItem(next); persistDocument(); return;
+        }
+        /* 有内容的段落：就地转为列表，避免在下方再插一份空列表 */
+        if (activeBlock?.tagName === 'P' && activeBlock.textContent.trim() && activeBlock.textContent.trim() !== '/') {
+          const newList = document.createElement(wantTag.toLowerCase());
+          const li = document.createElement('li');
+          li.innerHTML = activeBlock.innerHTML || '<br>';
+          newList.append(li);
+          activeBlock.replaceWith(newList);
+          focusListItem(li); persistDocument(); return;
         }
       }
       const blocks = {
@@ -2876,13 +3943,16 @@
     }
 
     function removeRow(rowOverride, tableOverride) {
-      const cell = selectedCell() || activeCell;
-      const table = tableOverride || selectedTable() || activeTable;
-      if (!cell || !table) return alert('请先将光标放入需要编辑的表格单元格。');
-      const row = rowOverride || cell.closest('tr');
+      const table = tableOverride || activeTable || selectedTable();
+      const row = rowOverride || selectedRowForDelete || (selectedCell() || activeCell)?.closest('tr');
+      if (!table || !row || !table.contains(row)) return alert('请先将光标放入需要删除的表格行。');
       if (table.rows.length === 1) return alert('表格至少保留一行。');
+      const nextFocus = row.nextElementSibling || row.previousElementSibling;
       row.remove();
+      activeCell = nextFocus?.querySelector?.('td,th') || table.querySelector('td,th');
+      activeTable = table;
       persistDocument();
+      if (activeCell) showTableInlineControls(table, activeCell);
     }
 
     function removeColumn() {

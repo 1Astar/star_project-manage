@@ -360,8 +360,15 @@ export async function createBugAction(input: {
   projectSlug: string;
   title: string;
   description?: string;
+  precondition?: string;
   reproSteps?: string;
+  expectedResult?: string;
+  actualResult?: string;
   suggestion?: string;
+  modulePath?: string | null;
+  foundVersion?: string | null;
+  environments?: string[];
+  priority?: import("@/lib/types").Bug["priority"];
   assignee?: string;
   requirementId?: string | null;
   severity?: import("@/lib/types").BugSeverity;
@@ -372,8 +379,15 @@ export async function createBugAction(input: {
     requirement_id: input.requirementId,
     title: input.title,
     description: input.description,
+    precondition: input.precondition,
     repro_steps: input.reproSteps,
+    expected_result: input.expectedResult,
+    actual_result: input.actualResult,
     suggestion: input.suggestion,
+    module_path: input.modulePath,
+    found_version: input.foundVersion,
+    environments: input.environments,
+    priority: input.priority,
     assignee: input.assignee,
     severity: input.severity,
     bug_type: input.bugType,
@@ -390,8 +404,15 @@ export async function updateBugAction(input: {
   updates: {
     title?: string;
     description?: string | null;
+    precondition?: string | null;
     reproSteps?: string | null;
+    expectedResult?: string | null;
+    actualResult?: string | null;
     suggestion?: string | null;
+    modulePath?: string | null;
+    foundVersion?: string | null;
+    environments?: string[];
+    priority?: import("@/lib/types").Bug["priority"];
     assignee?: string | null;
     requirementId?: string | null;
     status?: import("@/lib/types").TaskStatus;
@@ -405,8 +426,15 @@ export async function updateBugAction(input: {
   await updateBug(input.bugId, {
     title: input.updates.title,
     description: input.updates.description,
+    precondition: input.updates.precondition,
     repro_steps: input.updates.reproSteps,
+    expected_result: input.updates.expectedResult,
+    actual_result: input.updates.actualResult,
     suggestion: input.updates.suggestion,
+    module_path: input.updates.modulePath,
+    found_version: input.updates.foundVersion,
+    environments: input.updates.environments,
+    priority: input.updates.priority,
     assignee: input.updates.assignee,
     requirement_id: input.updates.requirementId,
     status: input.updates.status,
@@ -545,6 +573,13 @@ export async function updatePrdAction(input: {
     note: string;
     section_hint: string;
   }>;
+  /** 整体替换小版本列表（重命名 / 删除快照） */
+  versions?: Array<{
+    id: string;
+    label: string;
+    html_content: string;
+    created_at: string;
+  }>;
   rotateShareToken?: boolean;
   snapshotVersion?: boolean;
   snapshotVersionLabel?: string;
@@ -556,6 +591,7 @@ export async function updatePrdAction(input: {
     module_path: input.modulePath,
     html_content: input.htmlContent,
     linked_prototypes: input.linkedPrototypes,
+    versions: input.versions,
     rotate_share_token: input.rotateShareToken,
     snapshot_version: input.snapshotVersion,
     snapshot_version_label: input.snapshotVersionLabel,

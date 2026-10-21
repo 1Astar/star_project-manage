@@ -25,6 +25,7 @@ export function ProjectBugsClient({
   bugs: initialBugs,
   members,
   requirements,
+  featureModules = [],
   initialShowCreate = false,
   initialRequirementId = "",
 }: {
@@ -33,6 +34,7 @@ export function ProjectBugsClient({
   bugs: Bug[];
   members: MemberOption[];
   requirements: BugFormOption[];
+  featureModules?: string[];
   initialShowCreate?: boolean;
   initialRequirementId?: string;
 }) {
@@ -101,6 +103,7 @@ export function ProjectBugsClient({
           projectSlug={projectSlug}
           members={members}
           requirements={requirements}
+          featureModules={featureModules}
           initialRequirementId={initialRequirementId}
           initialTitle={prefTitle === "【关联】" ? "" : prefTitle}
         />
@@ -111,6 +114,7 @@ export function ProjectBugsClient({
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
             <tr>
               <th className="px-3 py-2.5">标题</th>
+              <th className="px-3 py-2.5">优先级</th>
               <th className="px-3 py-2.5">严重</th>
               <th className="px-3 py-2.5">类型</th>
               <th className="px-3 py-2.5">状态</th>
@@ -121,7 +125,7 @@ export function ProjectBugsClient({
           <tbody className="divide-y divide-slate-100">
             {bugs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-3 py-8 text-center text-slate-400">
                   暂无 Bug
                 </td>
               </tr>
@@ -137,9 +141,14 @@ export function ProjectBugsClient({
                       >
                         {bug.title}
                       </Link>
-                      {bug.assignee ? (
-                        <div className="mt-0.5 text-xs text-slate-500">指派 {bug.assignee}</div>
-                      ) : null}
+                      <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
+                        {bug.module_path ? <span>{bug.module_path}</span> : null}
+                        {bug.found_version ? <span>v {bug.found_version}</span> : null}
+                        {bug.assignee ? <span>指派 {bug.assignee}</span> : null}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-slate-600">
+                      {bug.priority ?? "—"}
                     </td>
                     <td className="px-3 py-2.5 text-xs text-slate-600">
                       {BUG_SEVERITY_LABELS[severity] ?? severity}

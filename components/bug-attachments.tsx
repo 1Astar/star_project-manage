@@ -9,10 +9,13 @@ export function BugAttachmentsBlock({
   projectId,
   bugId,
   attachments: initial,
+  /** inline：正文大图；grid：缩略图网格 */
+  variant = "grid",
 }: {
   projectId: string;
   bugId: string;
   attachments: BugAttachment[];
+  variant?: "grid" | "inline";
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -64,10 +67,14 @@ export function BugAttachmentsBlock({
     });
   }
 
+  const isInline = variant === "inline";
+
   return (
     <section className="space-y-2 border-t border-slate-100 pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold text-slate-500">截图 / 附件</h4>
+        <h4 className="text-xs font-semibold text-slate-500">
+          {isInline ? "截图（正文）" : "截图 / 附件"}
+        </h4>
       </div>
       <ImageDropZone
         multiple
@@ -80,11 +87,44 @@ export function BugAttachmentsBlock({
         }
         className="py-3 text-center"
       >
-        {pending ? "上传中…" : "拖拽截图到这里，或点击选择；也可点此框后 Ctrl+V 粘贴（可多张）"}
+        {pending
+          ? "上传中…"
+          : "拖拽截图到这里，或点击选择；也可点此框后 Ctrl+V 粘贴（可多张）"}
       </ImageDropZone>
       {error ? <p className="text-xs text-rose-600">{error}</p> : null}
       {attachments.length === 0 ? (
         <p className="text-xs text-slate-400">还没有截图。导入反馈或这里上传。</p>
+      ) : isInline ? (
+        <div className="space-y-3">
+          {attachments.map((a, index) => (
+            <figure
+              key={a.id}
+              className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+            >
+              <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5 text-[11px] text-slate-500">
+                <span className="truncate">
+                  图{index + 1} · {a.title}
+                </span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => remove(a.id)}
+                  className="shrink-0 text-rose-600"
+                >
+                  删
+                </button>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <a href={a.url} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={a.url}
+                  alt={a.title}
+                  className="max-h-[480px] w-full object-contain bg-white"
+                />
+              </a>
+            </figure>
+          ))}
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {attachments.map((a) => (

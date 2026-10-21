@@ -37,8 +37,8 @@ description: >-
 
 | 产品域 | PRD / 方案 | 前端 / 原型 UI |
 |--------|------------|----------------|
-| **MinisCloud / NAS** 产品目录 | `miniscloud-prd-agents`（**八章** + 四角色评审；Web 实现 + **原生窗观感**） | `miniscloud-ui-design`（蓝主色体系；完整见 `reference.md`） |
-| **通用 Star** 产品 | `prd-prototype-rules` + `product-scheme-design` | 仓库/用户当场 UI 规则；勿套 MinisCloud 蓝卡 |
+| **MinisCloud / NAS** 产品目录 | `prd-authoring` + `miniscloud-prd-agents`（**八章** + 四角色评审；Web 实现 + **原生窗观感**） | `miniscloud-ui-design`（蓝主色体系；完整见 `reference.md`） |
+| **通用 Star** 产品 | `prd-authoring` → 需要时 `prd-prototype-rules` + `product-scheme-design` | 仓库/用户当场 UI 规则；勿套 MinisCloud 蓝卡 |
 | **随心而行 / Mystic Lab** | 通用 PRD 规则即可 | `mystic-lab-ui`（整页画布，不要条幅/卡片框） |
 | **Star PM 工程仓** | 写需求进 PM；工程见 `AGENTS.md` + `CANONICAL_RULES` | 站内现有模式；不动 Lab / MinisCloud 规则 |
 
@@ -54,8 +54,11 @@ description: >-
 | 写/改调研报告、Word / 首页 / 方案演示 | `doc-delivery-formats`（开场五项）→ 深做时 `content-architecture` → `word-docx-professional` 等 |
 | 咨询风 PPT | `doc-delivery-formats` → `content-architecture`（可选深做）→ `ppt-consulting-visual` |
 | 产品方案书（通用 Star） | `doc-delivery-formats` → `product-scheme-design` |
-| **PRD / 原型（通用 Star）** | `prd-prototype-rules`（先定规则再交付） |
-| **MinisCloud / NAS · PRD / HTML 原型 / 评审** | `miniscloud-prd-agents` → 视觉再 `miniscloud-ui-design` |
+| **PRD / 原型（通用 Star）** | `prd-authoring` V2（§2 先定规则 → §3 引导式确认 → 再交付）→ 需要时辅以 `prd-prototype-rules` |
+| **MinisCloud / NAS · PRD / HTML 原型 / 评审** | `prd-authoring` + `miniscloud-prd-guided-writing` + `miniscloud-prd-agents` → 视觉再 `miniscloud-ui-design` |
+| **零散想法澄清／需求讨论** | `prd-authoring` §3 +（MinisCloud 时）`miniscloud-prd-guided-writing`（按主题批量提问；不擅自定规则） |
+| **代码／Bug 修复** | `code-editing` |
+| **生成 Word DOCX** | `docx-generation`（可叠加 `word-docx-professional`） |
 | **MinisCloud OS UI / 组件 / 原型视觉** | `miniscloud-ui-design`（必读 `reference.md`） |
 | **Lab / 随心而行 界面** | `mystic-lab-ui` |
 | 删文件 | `safe-file-delete` |
