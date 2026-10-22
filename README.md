@@ -122,8 +122,10 @@ SUPABASE_SERVICE_ROLE_KEY=              # service_role secret（仅服务端，�
 
 | 控制台项 | 推荐命令 |
 |----------|----------|
-| **Build command** | `npm run build`（推荐）或 `npm run cf-build` / `npx opennextjs-cloudflare build` |
+| **Build command** | `npm run build`（推荐）或 `npm run cf-build` |
 | **Deploy command** | `npx wrangler deploy` |
+
+OpenNext 对 Next 15.5.x 会报「version not supported」：`ci-build` / `cf-build` 已带 `--dangerouslyUseUnsupportedNextVersion`。若控制台仍手写 `npx opennextjs-cloudflare build`，请自行加上该 flag，或改回 `npm run build`。
 
 若曾把 Build 设成 `npx opennextjs-cloudflare build` 且日志里反复出现 `[ci-build] … → opennextjs-cloudflare build` 后超时：拉含递归守卫的版本后再部署即可。
 

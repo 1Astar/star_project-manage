@@ -10,6 +10,14 @@
 
 ---
 
+## v1.16.2 · 2026-10-22
+
+相对 **v1.16.1**：
+
+- **Cloudflare 构建**：OpenNext 拒绝 Next 15.5.22 时加 `--dangerouslyUseUnsupportedNextVersion`，恢复 CF Workers 构建
+
+---
+
 ## v1.16.1 · 2026-10-21
 
 相对 **v1.16.0**（版本切换／新建／重命名／删除已在 **v1.16.0** 上线，本版与之配套）：

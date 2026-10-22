@@ -36,7 +36,10 @@ const insideOpenNext =
 
 const useOpenNext = isCloudflare && !insideOpenNext;
 const cmd = useOpenNext ? "opennextjs-cloudflare" : "next";
-const args = ["build"];
+/** Next 15.5.x 已超出 OpenNext「官方支持窗口」检查；CF 仍需能构建，显式放行 */
+const args = useOpenNext
+  ? ["build", "--dangerouslyUseUnsupportedNextVersion"]
+  : ["build"];
 
 const platformLabel = isVercel
   ? "vercel"
