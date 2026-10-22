@@ -31,6 +31,31 @@ assert.equal(preview.drafts[1].bugType, "performance");
 assert.equal(preview.drafts[2].severity, 4);
 assert.equal(preview.drafts[0].kind, "bug");
 
+// 「1.标题」无空格也应按条拆开；「1.复现步骤」不拆
+const noSpace = parseBugFeedbackHeuristic(`1.为什么完成了的任务不能直接跳转到文件里
+2.登录云账号网站应直接复制 且网站里无注册入口`);
+assert.equal(noSpace.drafts.length, 2);
+assert.match(noSpace.drafts[0].title, /跳转|文件/);
+assert.match(noSpace.drafts[1].title, /云账号|注册/);
+
+const numberedRepro = parseBugFeedbackHeuristic(`登录失败
+1.复现步骤
+打开 App
+2.期望
+能登录`);
+assert.equal(numberedRepro.drafts.length, 1);
+
+// 无编号：回车分行各算一条；续写「重现：」不拆
+const byEnter = parseBugFeedbackHeuristic(`为什么完成了的任务不能直接跳转到文件里
+登录云账号网站应直接复制 且网站里无注册入口`);
+assert.equal(byEnter.drafts.length, 2);
+assert.match(byEnter.drafts[0].title, /跳转|文件/);
+assert.match(byEnter.drafts[1].title, /云账号|注册/);
+
+const withReproContinue = parseBugFeedbackHeuristic(`登录失败
+重现：打开 App 点登录`);
+assert.equal(withReproContinue.drafts.length, 1);
+
 assert.equal(detectFeedbackSectionKind("## 一、Bug清单（12项）"), "bug");
 assert.equal(detectFeedbackSectionKind("## 二、需求清单（5项）"), "requirement");
 assert.equal(inferFeedbackKind("希望提供 Web 端访问链接"), "requirement");
@@ -65,6 +90,8 @@ const bugs: Bug[] = [
     id: "a",
     project_id: "p",
     requirement_id: null,
+    test_plan_id: null,
+    iteration_id: null,
     title: "塔罗抽卡按钮被挡住",
     description: "界面上按钮点不到",
     precondition: null,
@@ -77,6 +104,8 @@ const bugs: Bug[] = [
     environments: [],
     priority: null,
     assignee: null,
+    reporter_name: null,
+    watchers: [],
     status: "pending",
     severity: 3,
     bug_type: "other",
@@ -87,6 +116,8 @@ const bugs: Bug[] = [
     id: "b",
     project_id: "p",
     requirement_id: null,
+    test_plan_id: null,
+    iteration_id: null,
     title: "塔罗抽卡按钮被挡住：手机宽屏",
     description: null,
     precondition: null,
@@ -99,6 +130,8 @@ const bugs: Bug[] = [
     environments: [],
     priority: null,
     assignee: null,
+    reporter_name: null,
+    watchers: [],
     status: "pending",
     severity: 3,
     bug_type: "ui",

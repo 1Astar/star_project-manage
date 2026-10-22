@@ -566,7 +566,7 @@
       </div>
     </div>
   </div>
-  <div id="selection-tools" class="selection-tools" role="toolbar" aria-label="选中文字操作"><button id="selection-color-button" type="button" title="文字颜色 / 背景高亮" aria-haspopup="true" aria-expanded="false">A</button><select id="selection-block" aria-label="文字类型"><option value="text">普通文本</option><option value="h1">标题 1</option><option value="h2">标题 2</option><option value="h3">标题 3</option></select><button type="button" data-selection-action="bold" title="加粗"><b>B</b></button><button type="button" data-selection-action="italic" title="斜体"><i>I</i></button><button type="button" data-selection-action="underline" title="下划线"><u>U</u></button><button type="button" data-selection-action="text" title="清除格式">T×</button><button type="button" data-selection-action="link" title="插入链接">♧</button><button type="button" data-selection-action="strike" title="删除线"><s>S</s></button><button type="button" data-selection-action="code" title="行内代码">&lt;/&gt;</button><button type="button" data-selection-action="highlight" title="高亮选中文字">✦</button><button type="button" class="tool-comment" data-selection-action="comment" title="添加评论">▤ 评论</button></div>
+  <div id="selection-tools" class="selection-tools" role="toolbar" aria-label="选中文字操作"><button id="selection-color-button" type="button" title="文字颜色 / 背景高亮" aria-haspopup="true" aria-expanded="false">A</button><select id="selection-block" aria-label="文字类型"><option value="text">普通文本</option><option value="h1">标题 1</option><option value="h2">标题 2</option><option value="h3">标题 3</option><option value="bullet">项目符号列表</option><option value="numbered">编号列表</option></select><button type="button" data-selection-action="bold" title="加粗"><b>B</b></button><button type="button" data-selection-action="italic" title="斜体"><i>I</i></button><button type="button" data-selection-action="underline" title="下划线"><u>U</u></button><button type="button" data-selection-action="text" title="清除格式">T×</button><button type="button" data-selection-action="link" title="插入链接">♧</button><button type="button" data-selection-action="strike" title="删除线"><s>S</s></button><button type="button" data-selection-action="code" title="行内代码">&lt;/&gt;</button><button type="button" data-selection-action="highlight" title="高亮选中文字">✦</button><button type="button" class="tool-comment" data-selection-action="comment" title="添加评论">▤ 评论</button></div>
   <div id="selection-color-menu" class="selection-color-menu" aria-label="文字与背景颜色"><p>文字颜色</p><div id="text-color-grid" class="selection-color-grid"></div><p>背景颜色</p><div id="background-color-grid" class="selection-color-grid"></div></div>
   <div id="review-composer" class="review-composer"><p id="review-selected-quote"></p><textarea id="review-input" placeholder="对选中的文字添加评论" aria-label="评论内容"></textarea><div class="review-composer-actions"><button id="review-cancel" type="button">取消</button><button id="review-submit" type="button">评论</button></div></div>
   <div id="review-thread" class="review-thread" aria-label="原文评论"></div>
@@ -1349,6 +1349,132 @@
       wrap.innerHTML = html;
       return [...wrap.childNodes].map(blockToMd).map(s => s.trim()).filter(Boolean).join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
     }
+    /** 粗判纯文本是否像 Markdown（粘贴时优先走 MD→HTML，避免 ### 原样进段落） */
+    function looksLikeMarkdown(text) {
+      if (!text || !String(text).trim()) return false;
+      const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+      let score = 0;
+      for (const line of lines.slice(0, 100)) {
+        if (/^#{1,6}\s+\S/.test(line)) score += 2;
+        else if (/^\s*[-*+]\s+\S/.test(line)) score += 1;
+        else if (/^\s*\d+\.\s+\S/.test(line)) score += 1;
+        else if (/^\|.+\|/.test(line)) score += 2;
+        else if (/^```/.test(line)) score += 2;
+        else if (/^>\s?/.test(line)) score += 1;
+        else if (/^---+$/.test(line.trim())) score += 1;
+      }
+      return score >= 2 || /^#{1,6}\s+\S/m.test(String(text));
+    }
+    function inlineMdToHtml(text) {
+      let s = escapeHtml(String(text ?? ''));
+      s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+      s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+      s = s.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      return s;
+    }
+    /** 轻量 MD→PRD HTML 块（标题/列表/表格/引用/代码/分割线）；非完整 CommonMark */
+    function markdownPlainToHtml(text) {
+      const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n');
+      const blocks = [];
+      let i = 0;
+      const isSep = (cells) => cells.every((c) => /^:?-{3,}:?$/.test(String(c).trim()));
+      while (i < lines.length) {
+        const line = lines[i];
+        if (!line.trim()) { i += 1; continue; }
+        if (/^```/.test(line)) {
+          const lang = line.slice(3).trim();
+          const body = [];
+          i += 1;
+          while (i < lines.length && !/^```/.test(lines[i])) { body.push(lines[i]); i += 1; }
+          if (i < lines.length) i += 1;
+          if (lang === 'mermaid') blocks.push('<pre class="mermaid">' + escapeHtml(body.join('\n')) + '</pre>');
+          else blocks.push('<pre><code>' + escapeHtml(body.join('\n')) + '</code></pre>');
+          continue;
+        }
+        if (/^\|.+\|/.test(line) && i + 1 < lines.length && /^\|[\s:\-|]+\|/.test(lines[i + 1])) {
+          const rows = [];
+          while (i < lines.length && /^\|.+\|/.test(lines[i])) {
+            const cells = lines[i].replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+            if (!isSep(cells)) rows.push(cells);
+            i += 1;
+          }
+          if (rows.length) {
+            const [head, ...body] = rows;
+            blocks.push(
+              '<table><thead><tr>' +
+                head.map((c) => '<th>' + inlineMdToHtml(c) + '</th>').join('') +
+                '</tr></thead><tbody>' +
+                body.map((r) => '<tr>' + r.map((c) => '<td>' + inlineMdToHtml(c) + '</td>').join('') + '</tr>').join('') +
+                '</tbody></table>'
+            );
+          }
+          continue;
+        }
+        const hm = line.match(/^(#{1,3})\s+(.+)$/);
+        if (hm) {
+          blocks.push('<' + 'h' + hm[1].length + '>' + inlineMdToHtml(hm[2].trim()) + '</' + 'h' + hm[1].length + '>');
+          i += 1;
+          continue;
+        }
+        if (/^---+$/.test(line.trim())) { blocks.push('<hr>'); i += 1; continue; }
+        if (/^>\s?/.test(line)) {
+          const q = [];
+          while (i < lines.length && /^>\s?/.test(lines[i])) {
+            q.push(lines[i].replace(/^>\s?/, ''));
+            i += 1;
+          }
+          blocks.push('<blockquote>' + inlineMdToHtml(q.join('\n')) + '</blockquote>');
+          continue;
+        }
+        if (/^\s*[-*+]\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+            items.push('<li>' + inlineMdToHtml(lines[i].replace(/^\s*[-*+]\s+/, '')) + '</li>');
+            i += 1;
+          }
+          blocks.push('<ul>' + items.join('') + '</ul>');
+          continue;
+        }
+        if (/^\s*\d+\.\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) {
+            items.push('<li>' + inlineMdToHtml(lines[i].replace(/^\s*\d+\.\s+/, '')) + '</li>');
+            i += 1;
+          }
+          blocks.push('<ol>' + items.join('') + '</ol>');
+          continue;
+        }
+        const para = [];
+        while (
+          i < lines.length &&
+          lines[i].trim() &&
+          !/^(#{1,6}\s|```|\||>\s?|\s*[-*+]\s|\s*\d+\.\s|---+$)/.test(lines[i])
+        ) {
+          para.push(lines[i]);
+          i += 1;
+        }
+        blocks.push('<p>' + inlineMdToHtml(para.join(' ')) + '</p>');
+      }
+      return blocks.join('') || '<p><br></p>';
+    }
+    /** 把误贴成段落的「### 标题」就地改成真正的 h1–h3 */
+    function normalizeMarkdownSyntaxIn(root) {
+      if (!root) return false;
+      let changed = false;
+      [...root.querySelectorAll('p')].forEach((p) => {
+        if (p.closest('li,td,th,blockquote,pre')) return;
+        const t = (p.textContent || '').replace(/\u00a0/g, ' ');
+        if (/\n/.test(t.trim())) return;
+        const m = t.trim().match(/^(#{1,3})\s+(.+)$/);
+        if (!m) return;
+        const h = document.createElement('h' + m[1].length);
+        h.textContent = m[2];
+        p.replaceWith(h);
+        changed = true;
+      });
+      return changed;
+    }
     function isPrototypePage(page) {
       return !!(page && (page.id === PROTOTYPE_PAGE_ID || page.prototypeUrl || page.title === '原型'
         || String(page.title || '').startsWith('Prototype｜') || String(page.title || '').startsWith('Prototype-')));
@@ -1382,6 +1508,10 @@
       pageState.activePhaseId = phase.id;
       pageState.activeId = root.id;
       documentArea.innerHTML = root.content;
+      if (normalizeMarkdownSyntaxIn(documentArea)) {
+        root.content = documentArea.innerHTML;
+        phase.content = root.content;
+      }
       documentArea.contentEditable = (editable && !READONLY) ? 'true' : 'false';
       if (typeof renderPrototypePage === 'function') renderPrototypePage();
       void renderMermaidIn(documentArea);
@@ -2094,8 +2224,16 @@
       event.preventDefault();
       const html = clipboard.getData('text/html');
       const text = clipboard.getData('text/plain');
-      const clean = parsePastedRuleTable(text) || sanitizePastedHtml(html, false, true) || escapeHtml(text).replace(/\n/g, '<br>');
-      insertPastedMarkup(clean);
+      let clean = parsePastedRuleTable(text);
+      /* 纯 MD / 编辑器同时带 html 时：优先按 MD 转块，避免 ### 落成普通段落 */
+      if (!clean && text && looksLikeMarkdown(text)) clean = markdownPlainToHtml(text);
+      if (!clean) clean = sanitizePastedHtml(html, false, true);
+      if (!clean && text) {
+        clean = looksLikeMarkdown(text)
+          ? markdownPlainToHtml(text)
+          : escapeHtml(text).replace(/\n/g, '<br>');
+      }
+      insertPastedMarkup(clean || '<p><br></p>');
       persistDocument();
       requestAnimationFrame(refreshCursorBlock);
     });
@@ -2133,7 +2271,7 @@
         deleteTable(selectedTableForDelete);
         return;
       }
-      if (event.key === ' ') setTimeout(transformMarkdownHeading, 0);
+      if (event.key === ' ' || event.key === 'Enter') setTimeout(transformMarkdownHeading, 0);
     });
     function focusListItem(item) {
       const range = document.createRange();
@@ -2902,12 +3040,23 @@
       const selection = window.getSelection();
       const block = getBlock(selection.anchorNode);
       if (block?.tagName !== 'P') return;
-      const match = block.textContent.match(/^(#{1,3})\s$/);
-      if (!match) return;
-      const heading = document.createElement(`h${match[1].length}`);
-      heading.innerHTML = '<br>';
+      const raw = (block.textContent || '').replace(/\u00a0/g, ' ');
+      const emptyMatch = raw.match(/^(#{1,3})\s$/);
+      if (emptyMatch) {
+        const heading = document.createElement(`h${emptyMatch[1].length}`);
+        heading.innerHTML = '<br>';
+        block.replaceWith(heading);
+        const range = document.createRange(); range.selectNodeContents(heading); range.collapse(true);
+        selection.removeAllRanges(); selection.addRange(range);
+        persistDocument();
+        return;
+      }
+      const fullMatch = raw.trim().match(/^(#{1,3})\s+(.+)$/);
+      if (!fullMatch || /\n/.test(raw.trim())) return;
+      const heading = document.createElement(`h${fullMatch[1].length}`);
+      heading.textContent = fullMatch[2];
       block.replaceWith(heading);
-      const range = document.createRange(); range.selectNodeContents(heading); range.collapse(true);
+      const range = document.createRange(); range.selectNodeContents(heading); range.collapse(false);
       selection.removeAllRanges(); selection.addRange(range);
       persistDocument();
     }
@@ -3454,9 +3603,25 @@
       const type = event.target.value;
       if (selectedTextRange && documentArea.contains(selectedTextRange.commonAncestorContainer)) {
         activeBlock = getBlock(selectedTextRange.startContainer);
-        if (type === 'text' && activeBlock && /^H[1-3]$/.test(activeBlock.tagName)) {
-          const paragraph = document.createElement('p'); paragraph.innerHTML = activeBlock.innerHTML; activeBlock.replaceWith(paragraph); persistDocument();
-        } else if (type !== 'text') convertOrInsertHeading(type);
+        if (type === 'text') {
+          if (activeBlock && /^H[1-3]$/.test(activeBlock.tagName)) {
+            const paragraph = document.createElement('p'); paragraph.innerHTML = activeBlock.innerHTML; activeBlock.replaceWith(paragraph); persistDocument();
+          } else {
+            const item = activeBlock?.closest?.('li') || (activeBlock?.tagName === 'LI' ? activeBlock : null);
+            const list = item?.parentElement;
+            if (list?.matches('ol,ul') && item) {
+              const paragraph = document.createElement('p');
+              paragraph.innerHTML = item.innerHTML || '<br>';
+              if (list.children.length === 1) list.replaceWith(paragraph);
+              else { list.before(paragraph); item.remove(); }
+              persistDocument();
+            }
+          }
+        } else if (type === 'bullet' || type === 'numbered') {
+          insertBlock(type);
+        } else {
+          convertOrInsertHeading(type);
+        }
       }
       event.target.value = 'text'; selectionTools.classList.remove('show');
     });

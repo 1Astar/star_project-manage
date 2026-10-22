@@ -5,9 +5,13 @@ import { resolveProjectRoute } from "@/lib/project-bridge";
 import {
   getProjectMembers,
   listBugsByProject,
+  listProjectIterations,
   listProjectRequirementOptions,
 } from "@/lib/db/local-store";
+import { listBugTestPlans } from "@/lib/bugs/test-plans";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
+import { getAdminSession } from "@/lib/auth/session";
+import { PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
 
 export default async function ProjectBugsPage({
   params,
@@ -38,16 +42,24 @@ export default async function ProjectBugsPage({
     );
   }
 
-  const [bugs, members, requirements] = await Promise.all([
-    listBugsByProject(pm.id),
-    getProjectMembers(pm.id),
-    listProjectRequirementOptions(pm.id),
-  ]);
+  const [bugs, members, requirements, testPlans, iterations, session] =
+    await Promise.all([
+      listBugsByProject(pm.id),
+      getProjectMembers(pm.id),
+      listProjectRequirementOptions(pm.id),
+      listBugTestPlans(pm.id, { includeArchived: true }),
+      listProjectIterations(pm.id),
+      getAdminSession(),
+    ]);
   const featureModules = resolveFeatureModules(
     ctx.studio?.id ?? pm.id,
     ctx.studio?.featureModules,
     ctx.studio?.githubRepo
   );
+  const currentUserName =
+    session?.role === "admin"
+      ? PRODUCT_ASSIGNEE_NAME
+      : session?.email?.split("@")[0]?.trim() || PRODUCT_ASSIGNEE_NAME;
 
   return (
     <ProjectBugsClient
@@ -57,6 +69,9 @@ export default async function ProjectBugsPage({
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
       featureModules={featureModules}
+      testPlans={testPlans}
+      iterations={iterations}
+      currentUserName={currentUserName}
       initialShowCreate={sp.new === "1" || Boolean(sp.req)}
       initialRequirementId={sp.req?.trim() || ""}
     />

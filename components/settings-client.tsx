@@ -1,12 +1,36 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createShareLinkAction, toggleShareLinkAction } from "@/lib/actions";
 import type { ShareLink, RoleType } from "@/lib/types";
 import { ROLE_LABELS } from "@/lib/types";
 
 type ShareLinkWithToken = ShareLink & { plain_token?: string };
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const text = (await res.text()).trim();
+  if (!text) return fallback;
+  try {
+    const data = JSON.parse(text) as { error?: string };
+    if (data?.error?.trim()) return data.error.trim();
+  } catch {
+    /* plain text */
+  }
+  return text.slice(0, 200);
+}
+
+function defaultNameFromFile(file: File): string {
+  return file.name.replace(/\.(zip|html?)$/i, "") || "原型";
+}
+
+function defaultNameFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || "外链原型";
+  } catch {
+    return "外链原型";
+  }
+}
 
 export function SettingsClient({
   projectId,
@@ -19,9 +43,10 @@ export function SettingsClient({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [protoMsg, setProtoMsg] = useState<string | null>(null);
+  const [protoMsg, setProtoMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [externalUrl, setExternalUrl] = useState("");
-  const [protoName, setProtoName] = useState("原型");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function createLink(role: ShareLink["role"]) {
     const label =
@@ -45,38 +70,60 @@ export function SettingsClient({
     });
   }
 
-  function uploadPrototype(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  function uploadSelectedFile(file: File) {
+    if (!/\.(zip|html?)$/i.test(file.name)) {
+      setProtoMsg({ text: "仅支持 .html 或 .zip 文件", ok: false });
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("name", defaultNameFromFile(file));
     startTransition(async () => {
-      const res = await fetch(`/api/projects/${projectSlug}/prototype`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        setProtoMsg("上传失败");
-        return;
+      try {
+        const res = await fetch(`/api/projects/${projectSlug}/prototype`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) {
+          setProtoMsg({ text: await readErrorMessage(res, "上传失败"), ok: false });
+          return;
+        }
+        setProtoMsg({ text: "原型已保存", ok: true });
+        router.refresh();
+      } catch (err) {
+        setProtoMsg({
+          text: err instanceof Error ? err.message : "网络异常，请重试",
+          ok: false,
+        });
       }
-      setProtoMsg("原型已保存");
-      router.refresh();
     });
   }
 
   function saveExternalUrl() {
+    const url = externalUrl.trim();
+    if (!url) return;
     startTransition(async () => {
-      const fd = new FormData();
-      fd.append("name", protoName);
-      fd.append("external_url", externalUrl);
-      const res = await fetch(`/api/projects/${projectSlug}/prototype`, {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        setProtoMsg("保存失败");
-        return;
+      try {
+        const fd = new FormData();
+        fd.append("name", defaultNameFromUrl(url));
+        fd.append("external_url", url);
+        const res = await fetch(`/api/projects/${projectSlug}/prototype`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) {
+          setProtoMsg({ text: await readErrorMessage(res, "保存失败"), ok: false });
+          return;
+        }
+        setProtoMsg({ text: "外链已保存", ok: true });
+        setExternalUrl("");
+        router.refresh();
+      } catch (err) {
+        setProtoMsg({
+          text: err instanceof Error ? err.message : "网络异常，请重试",
+          ok: false,
+        });
       }
-      setProtoMsg("外链已保存");
-      router.refresh();
     });
   }
 
@@ -84,33 +131,44 @@ export function SettingsClient({
     <div className="space-y-8">
       <section className="card p-5">
         <h2 className="font-semibold">原型来源</h2>
-        <form onSubmit={uploadPrototype} className="mt-4 space-y-3">
-          <input
-            name="name"
-            placeholder="原型名称"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-          <input
-            name="file"
-            type="file"
-            accept=".zip,.html"
-            className="w-full text-sm"
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-          >
-            上传 HTML/ZIP
-          </button>
-        </form>
-        <div className="mt-4 space-y-2">
-          <input
-            value={protoName}
-            onChange={(e) => setProtoName(e.target.value)}
-            placeholder="外链名称"
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".zip,.html,.htm,text/html,application/zip"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadSelectedFile(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) uploadSelectedFile(file);
+          }}
+          className={`mt-4 flex w-full max-w-md flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-sm transition-colors disabled:opacity-60 ${
+            dragOver
+              ? "border-slate-900 bg-slate-100 text-slate-900"
+              : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+          }`}
+        >
+          <span className="font-medium text-slate-900">
+            {pending ? "上传中…" : "点击选择或拖拽到此处"}
+          </span>
+          <span className="text-xs text-slate-400">支持 HTML / ZIP</span>
+        </button>
+        <div className="mt-4 max-w-md space-y-2">
           <input
             value={externalUrl}
             onChange={(e) => setExternalUrl(e.target.value)}
@@ -119,14 +177,18 @@ export function SettingsClient({
           />
           <button
             type="button"
-            disabled={pending || !externalUrl}
+            disabled={pending || !externalUrl.trim()}
             onClick={saveExternalUrl}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-60"
           >
             保存外链
           </button>
         </div>
-        {protoMsg ? <p className="mt-2 text-sm text-green-600">{protoMsg}</p> : null}
+        {protoMsg ? (
+          <p className={`mt-2 text-sm ${protoMsg.ok ? "text-green-600" : "text-red-600"}`}>
+            {protoMsg.text}
+          </p>
+        ) : null}
       </section>
 
       <section className="card p-5">

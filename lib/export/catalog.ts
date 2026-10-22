@@ -88,6 +88,10 @@ function dt(iso: string | null | undefined): string {
 export async function loadExportSheets(opts: {
   kind: TableExportKind;
   project?: string | null;
+  /** 仅导出这些 id（顺序按库内列表） */
+  ids?: string[] | null;
+  /** bugs：未指定 ids 时，仅导出未解决 */
+  scope?: "open" | "all" | null;
 }): Promise<{ filenameBase: string; sheets: ExportSheet[] }> {
   const kind = opts.kind;
   const projectKey = opts.project?.trim() || null;
@@ -306,23 +310,53 @@ export async function loadExportSheets(opts: {
 
   if (kind === "bugs") {
     if (!pm) throw new Error("项目未接入需求库");
-    const [bugs, bugTypeCatalog] = await Promise.all([
+    const { listBugTestPlans } = await import("@/lib/bugs/test-plans");
+    const [allBugs, bugTypeCatalog, plans] = await Promise.all([
       listBugsByProject(pm.id),
       loadBugTypeCatalog(),
+      listBugTestPlans(pm.id, { includeArchived: true }),
     ]);
+    const openStatuses = new Set(["pending", "in_progress", "testing", "blocked"]);
+    let bugs = allBugs;
+    const idFilter = opts.ids?.map((id) => id.trim()).filter(Boolean) ?? [];
+    if (idFilter.length > 0) {
+      const allow = new Set(idFilter);
+      bugs = allBugs.filter((b) => allow.has(b.id));
+    } else if (opts.scope === "open") {
+      bugs = allBugs.filter((b) => openStatuses.has(b.status));
+    }
     const bugTypeLabels = catalogToLabelMap(bugTypeCatalog);
+    const planTitleById = new Map(plans.map((p) => [p.id, p.title]));
     return {
       filenameBase: `${pm.name}-Bug`,
       sheets: [
         {
           name: "Bug",
-          headers: ["标题", "严重", "类型", "状态", "指派", "描述", "重现步骤", "优化建议", "创建时间"],
+          headers: [
+            "标题",
+            "测试计划",
+            "期",
+            "严重",
+            "类型",
+            "状态",
+            "报告人",
+            "指派",
+            "关注人",
+            "描述",
+            "重现步骤",
+            "优化建议",
+            "创建时间",
+          ],
           rows: bugs.map((b) => [
             b.title,
+            b.test_plan_id ? planTitleById.get(b.test_plan_id) ?? b.test_plan_id : "",
+            b.iteration_id ?? "",
             BUG_SEVERITY_LABELS[(b.severity ?? 3) as BugSeverity],
             bugTypeLabels[b.bug_type] ?? b.bug_type,
             TASK_STATUS_LABELS[b.status],
+            b.reporter_name,
             b.assignee,
+            (b.watchers ?? []).join("、"),
             b.description,
             b.repro_steps,
             b.suggestion,

@@ -20,6 +20,7 @@ import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import {
   normalizeBugEnvironments,
   normalizeBugPriority,
+  normalizeBugWatchers,
 } from "@/lib/bugs/fields";
 
 function normalizeBug(row: Record<string, unknown>): Bug {
@@ -31,6 +32,8 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     id: String(row.id),
     project_id: String(row.project_id),
     requirement_id: (row.requirement_id as string | null) ?? null,
+    test_plan_id: (row.test_plan_id as string | null) ?? null,
+    iteration_id: (row.iteration_id as string | null) ?? null,
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
     precondition: (row.precondition as string | null) ?? null,
@@ -43,6 +46,8 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     environments: normalizeBugEnvironments(row.environments),
     priority: normalizeBugPriority(row.priority),
     assignee: (row.assignee as string | null) ?? null,
+    reporter_name: (row.reporter_name as string | null) ?? null,
+    watchers: normalizeBugWatchers(row.watchers),
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,
@@ -147,6 +152,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   const project_learning_notes = await loadOptionalTable(sb, "project_learning_notes");
   const project_prds = await loadOptionalTable(sb, "project_prds");
   const prd_review_comments = await loadOptionalTable(sb, "prd_review_comments");
+  const bug_test_plans = await loadOptionalTable(sb, "bug_test_plans");
 
   return {
     projects: throwOnError(projects, "projects"),
@@ -236,6 +242,17 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
         updated_at: String(row.updated_at ?? new Date().toISOString()),
       })
     ),
+    bug_test_plans: ((bug_test_plans ?? []) as Record<string, unknown>[]).map((row) => ({
+      id: String(row.id),
+      project_id: String(row.project_id),
+      title: String(row.title ?? "").trim() || "未命名测试计划",
+      description: row.description != null ? String(row.description) : null,
+      status: (String(row.status) === "archived" ? "archived" : "active") as
+        | "active"
+        | "archived",
+      created_at: String(row.created_at ?? new Date().toISOString()),
+      updated_at: String(row.updated_at ?? new Date().toISOString()),
+    })),
   };
 }
 

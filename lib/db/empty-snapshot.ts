@@ -16,6 +16,7 @@ export function emptyPmSnapshot(
     share_links: [],
     prototypes: [],
     bugs: [],
+    bug_test_plans: [],
     notifications: [],
     activity_logs: [],
     comments: [],

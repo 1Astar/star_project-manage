@@ -3,6 +3,7 @@ import type {
   AcceptanceRecord,
   ActivityLog,
   Bug,
+  BugTestPlan,
   GitActivity,
   Iteration,
   InterviewRequirementLink,
@@ -39,6 +40,7 @@ export interface DatabaseSnapshot {
   share_links: Array<ShareLink & { plain_token?: string }>;
   prototypes: Prototype[];
   bugs: Bug[];
+  bug_test_plans: BugTestPlan[];
   notifications: NotificationItem[];
   activity_logs: ActivityLog[];
   comments: RequirementComment[];

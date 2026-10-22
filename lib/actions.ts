@@ -370,13 +370,19 @@ export async function createBugAction(input: {
   environments?: string[];
   priority?: import("@/lib/types").Bug["priority"];
   assignee?: string;
+  reporterName?: string | null;
+  watchers?: string[];
   requirementId?: string | null;
+  testPlanId?: string | null;
+  iterationId?: string | null;
   severity?: import("@/lib/types").BugSeverity;
   bugType?: import("@/lib/types").BugType;
 }) {
   const bug = await createBug({
     project_id: input.projectId,
     requirement_id: input.requirementId,
+    test_plan_id: input.testPlanId,
+    iteration_id: input.iterationId,
     title: input.title,
     description: input.description,
     precondition: input.precondition,
@@ -389,6 +395,8 @@ export async function createBugAction(input: {
     environments: input.environments,
     priority: input.priority,
     assignee: input.assignee,
+    reporter_name: input.reporterName,
+    watchers: input.watchers,
     severity: input.severity,
     bug_type: input.bugType,
   });
@@ -414,7 +422,11 @@ export async function updateBugAction(input: {
     environments?: string[];
     priority?: import("@/lib/types").Bug["priority"];
     assignee?: string | null;
+    reporterName?: string | null;
+    watchers?: string[];
     requirementId?: string | null;
+    testPlanId?: string | null;
+    iterationId?: string | null;
     status?: import("@/lib/types").TaskStatus;
     severity?: import("@/lib/types").BugSeverity;
     bugType?: import("@/lib/types").BugType;
@@ -436,7 +448,11 @@ export async function updateBugAction(input: {
     environments: input.updates.environments,
     priority: input.updates.priority,
     assignee: input.updates.assignee,
+    reporter_name: input.updates.reporterName,
+    watchers: input.updates.watchers,
     requirement_id: input.updates.requirementId,
+    test_plan_id: input.updates.testPlanId,
+    iteration_id: input.updates.iterationId,
     status: input.updates.status,
     severity: input.updates.severity,
     bug_type: input.updates.bugType,
@@ -468,6 +484,37 @@ export async function addBugCommentAction(input: {
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
   return comment;
+}
+
+export async function createBugTestPlanAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  description?: string | null;
+}) {
+  const { createBugTestPlan } = await import("@/lib/bugs/test-plans");
+  const plan = await createBugTestPlan({
+    project_id: input.projectId,
+    title: input.title,
+    description: input.description,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  return plan;
+}
+
+export async function updateBugTestPlanAction(input: {
+  planId: string;
+  projectSlug: string;
+  updates: {
+    title?: string;
+    description?: string | null;
+    status?: import("@/lib/types").BugTestPlanStatus;
+  };
+}) {
+  const { updateBugTestPlan } = await import("@/lib/bugs/test-plans");
+  const plan = await updateBugTestPlan(input.planId, input.updates);
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  return plan;
 }
 
 export async function updateBugStatusAction(input: {

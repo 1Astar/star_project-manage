@@ -50,6 +50,7 @@ import {
   defaultBugReproMeta,
   normalizeBugEnvironments,
   normalizeBugPriority,
+  normalizeBugWatchers,
 } from "@/lib/bugs/fields";
 import {
   AGENT_ACTOR_NAME,
@@ -98,6 +99,7 @@ import {
   BUG_TYPE_LABELS,
   REQUIREMENT_CANCELLED_TAG,
   REQUIREMENT_POOL_DEFAULTS,
+  TASK_STATUS_LABELS,
   deriveTaskStatusFromTags,
   requirementIsDone,
   statusTagsFromTaskStatus,
@@ -191,6 +193,8 @@ function normalizeBugRow(bug: Bug): Bug {
   return {
     ...bug,
     requirement_id: bug.requirement_id ?? null,
+    test_plan_id: bug.test_plan_id ?? null,
+    iteration_id: bug.iteration_id ?? null,
     description: bug.description ?? null,
     precondition: bug.precondition ?? null,
     repro_steps: bug.repro_steps ?? null,
@@ -202,6 +206,8 @@ function normalizeBugRow(bug: Bug): Bug {
     environments: normalizeBugEnvironments(bug.environments),
     priority: normalizeBugPriority(bug.priority),
     assignee: bug.assignee ?? null,
+    reporter_name: bug.reporter_name ?? null,
+    watchers: normalizeBugWatchers(bug.watchers),
     severity,
     bug_type,
   };
@@ -222,6 +228,7 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     requirement_attachments: db.requirement_attachments ?? [],
     bug_attachments: db.bug_attachments ?? [],
     requirement_links: db.requirement_links ?? [],
+    bug_test_plans: db.bug_test_plans ?? [],
     project_interviews: db.project_interviews ?? [],
     interview_requirement_links: db.interview_requirement_links ?? [],
     project_learning_notes: db.project_learning_notes ?? [],
@@ -1173,6 +1180,78 @@ function bugPathForProject(project: Project, bugId: string) {
   return `/projects/${project.slug}/bugs/${bugId}`;
 }
 
+/** 项目规划迭代（期）；本地 / Supabase 均可 */
+export async function listProjectIterations(
+  projectId: string
+): Promise<Iteration[]> {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listIterationsForProject(project.id);
+  }
+  const project = await getProjectById(projectId);
+  if (!project) return [];
+  const db = await readDb();
+  return db.iterations
+    .filter((i) => i.project_id === project.id)
+    .sort(
+      (a, b) =>
+        a.sort_order - b.sort_order || a.name.localeCompare(b.name, "zh")
+    );
+}
+
+function buildWatcherNotifications(input: {
+  project: Project;
+  bug: Bug;
+  type: string;
+  title: string;
+  body: string;
+  excludeNames?: string[];
+}): NotificationItem[] {
+  const exclude = new Set(
+    (input.excludeNames ?? []).map((n) => n.trim()).filter(Boolean)
+  );
+  const names = normalizeBugWatchers(input.bug.watchers).filter(
+    (n) => n && !exclude.has(n)
+  );
+  const createdAt = nowIso();
+  return names.map((recipient_name) => ({
+    id: uid("notif-"),
+    project_id: input.project.id,
+    recipient_name,
+    type: input.type,
+    title: input.title,
+    body: input.body,
+    link: bugPathForProject(input.project, input.bug.id),
+    is_read: false,
+    created_at: createdAt,
+  }));
+}
+
+async function persistWatcherNotifications(
+  notifications: NotificationItem[],
+  db?: DatabaseSnapshot
+) {
+  if (!notifications.length) return;
+  if (db) {
+    db.notifications.unshift(...notifications);
+    return;
+  }
+  for (const n of notifications) {
+    try {
+      await upsertNotificationRow(n);
+    } catch {
+      /* ignore */
+    }
+  }
+  if (memoryDb) {
+    memoryDb.notifications = [
+      ...notifications,
+      ...(memoryDb.notifications ?? []),
+    ];
+  }
+}
+
 export async function getBugById(bugId: string) {
   if (isSupabaseConfigured()) {
     const bug = await findBugById(bugId);
@@ -1239,6 +1318,8 @@ export async function getBugById(bugId: string) {
 export async function createBug(input: {
   project_id: string;
   requirement_id?: string | null;
+  test_plan_id?: string | null;
+  iteration_id?: string | null;
   title: string;
   description?: string;
   precondition?: string;
@@ -1251,6 +1332,8 @@ export async function createBug(input: {
   environments?: string[];
   priority?: Bug["priority"];
   assignee?: string;
+  reporter_name?: string | null;
+  watchers?: string[];
   severity?: BugSeverity;
   bug_type?: BugType;
   status?: TaskStatus;
@@ -1267,6 +1350,8 @@ export async function createBug(input: {
       id: uid("bug-"),
       project_id: project.id,
       requirement_id: input.requirement_id ?? null,
+      test_plan_id: input.test_plan_id?.trim() || null,
+      iteration_id: input.iteration_id?.trim() || null,
       title: input.title,
       description: input.description ?? null,
       precondition: input.precondition ?? null,
@@ -1279,6 +1364,8 @@ export async function createBug(input: {
       environments: normalizeBugEnvironments(input.environments),
       priority: normalizeBugPriority(input.priority),
       assignee: input.assignee ?? null,
+      reporter_name: input.reporter_name?.trim() || null,
+      watchers: normalizeBugWatchers(input.watchers),
       status: input.status ?? "pending",
       severity: input.severity ?? 3,
       bug_type: input.bug_type ?? "code",
@@ -1315,6 +1402,17 @@ export async function createBug(input: {
 
     await upsertBugRow(bug);
     if (notification) await upsertNotificationRow(notification);
+    if (input.notify !== false) {
+      const watcherNotifs = buildWatcherNotifications({
+        project,
+        bug,
+        type: "bug_watching",
+        title: `关注的 Bug：${input.title}`,
+        body: input.description ?? `你被加为关注人，请留意进展。`,
+        excludeNames: [input.assignee?.trim() || ""].filter(Boolean),
+      });
+      await persistWatcherNotifications(watcherNotifs);
+    }
     try {
       await upsertActivityLogRow({
         id: uid("log-"),
@@ -1348,6 +1446,8 @@ export async function createBug(input: {
     id: uid("bug-"),
     project_id: input.project_id,
     requirement_id: input.requirement_id ?? null,
+    test_plan_id: input.test_plan_id?.trim() || null,
+    iteration_id: input.iteration_id?.trim() || null,
     title: input.title,
     description: input.description ?? null,
     precondition: input.precondition ?? null,
@@ -1360,6 +1460,8 @@ export async function createBug(input: {
     environments: normalizeBugEnvironments(input.environments),
     priority: normalizeBugPriority(input.priority),
     assignee: input.assignee ?? null,
+    reporter_name: input.reporter_name?.trim() || null,
+    watchers: normalizeBugWatchers(input.watchers),
     status: input.status ?? "pending",
     severity: input.severity ?? 3,
     bug_type: input.bug_type ?? "code",
@@ -1370,32 +1472,41 @@ export async function createBug(input: {
 
   let notification: NotificationItem | null = null;
   if (input.notify !== false) {
-  if (input.assignee?.trim()) {
+    if (input.assignee?.trim()) {
       notification = {
-      id: uid("notif-"),
-      project_id: input.project_id,
-      recipient_name: input.assignee.trim(),
-      type: "bug_assigned",
-      title: `指派给你：${input.title}`,
-      body: input.description ?? `请查看 Bug「${input.title}」`,
-      link: bugPathForProject(project, bug.id),
-      is_read: false,
-      created_at: nowIso(),
+        id: uid("notif-"),
+        project_id: input.project_id,
+        recipient_name: input.assignee.trim(),
+        type: "bug_assigned",
+        title: `指派给你：${input.title}`,
+        body: input.description ?? `请查看 Bug「${input.title}」`,
+        link: bugPathForProject(project, bug.id),
+        is_read: false,
+        created_at: nowIso(),
       };
-  } else {
+    } else {
       notification = {
-      id: uid("notif-"),
-      project_id: input.project_id,
-      recipient_name: null,
-      type: "bug_created",
-      title: `新 Bug：${input.title}`,
-      body: input.description ?? null,
-      link: bugPathForProject(project, bug.id),
-      is_read: false,
-      created_at: nowIso(),
+        id: uid("notif-"),
+        project_id: input.project_id,
+        recipient_name: null,
+        type: "bug_created",
+        title: `新 Bug：${input.title}`,
+        body: input.description ?? null,
+        link: bugPathForProject(project, bug.id),
+        is_read: false,
+        created_at: nowIso(),
       };
-  }
+    }
     db.notifications.unshift(notification);
+    const watcherNotifs = buildWatcherNotifications({
+      project,
+      bug,
+      type: "bug_watching",
+      title: `关注的 Bug：${input.title}`,
+      body: input.description ?? `你被加为关注人，请留意进展。`,
+      excludeNames: [input.assignee?.trim() || ""].filter(Boolean),
+    });
+    await persistWatcherNotifications(watcherNotifs, db);
   }
 
   await logActivity(db, {
@@ -1428,7 +1539,11 @@ export async function updateBug(
     environments: string[];
     priority: Bug["priority"];
     assignee: string | null;
+    reporter_name: string | null;
+    watchers: string[];
     requirement_id: string | null;
+    test_plan_id: string | null;
+    iteration_id: string | null;
     status: TaskStatus;
     severity: BugSeverity;
     bug_type: BugType;
@@ -1462,13 +1577,29 @@ export async function updateBug(
       bug.priority = normalizeBugPriority(patch.priority);
     }
     if (patch.assignee !== undefined) bug.assignee = patch.assignee;
+    if (patch.reporter_name !== undefined) {
+      bug.reporter_name = patch.reporter_name?.trim() || null;
+    }
+    if (patch.watchers !== undefined) {
+      bug.watchers = normalizeBugWatchers(patch.watchers);
+    }
     if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
+    if (patch.test_plan_id !== undefined) {
+      bug.test_plan_id = patch.test_plan_id?.trim() || null;
+    }
+    if (patch.iteration_id !== undefined) {
+      bug.iteration_id = patch.iteration_id?.trim() || null;
+    }
     if (patch.status !== undefined) bug.status = patch.status;
     if (patch.severity !== undefined) bug.severity = patch.severity;
     if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
     if (bug.severity == null) bug.severity = 3;
     if (!bug.bug_type) bug.bug_type = "code";
+    if (bug.test_plan_id === undefined) bug.test_plan_id = null;
+    if (bug.iteration_id === undefined) bug.iteration_id = null;
+    if (bug.reporter_name === undefined) bug.reporter_name = null;
     if (!Array.isArray(bug.environments)) bug.environments = [];
+    if (!Array.isArray(bug.watchers)) bug.watchers = [];
     if (patch.created_at !== undefined && patch.created_at?.trim()) {
       bug.created_at = patch.created_at.trim();
     }
@@ -1496,6 +1627,18 @@ export async function updateBug(
         });
       } catch {
         /* ignore */
+      }
+      if (project) {
+        const statusLabel = TASK_STATUS_LABELS[bug.status] ?? bug.status;
+        await persistWatcherNotifications(
+          buildWatcherNotifications({
+            project,
+            bug,
+            type: "bug_status",
+            title: `关注的 Bug 状态变更：${bug.title}`,
+            body: `状态 → ${statusLabel}`,
+          })
+        );
       }
     }
 
@@ -1558,13 +1701,29 @@ export async function updateBug(
     bug.priority = normalizeBugPriority(patch.priority);
   }
   if (patch.assignee !== undefined) bug.assignee = patch.assignee;
+  if (patch.reporter_name !== undefined) {
+    bug.reporter_name = patch.reporter_name?.trim() || null;
+  }
+  if (patch.watchers !== undefined) {
+    bug.watchers = normalizeBugWatchers(patch.watchers);
+  }
   if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
+  if (patch.test_plan_id !== undefined) {
+    bug.test_plan_id = patch.test_plan_id?.trim() || null;
+  }
+  if (patch.iteration_id !== undefined) {
+    bug.iteration_id = patch.iteration_id?.trim() || null;
+  }
   if (patch.status !== undefined) bug.status = patch.status;
   if (patch.severity !== undefined) bug.severity = patch.severity;
   if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
   if (bug.severity == null) bug.severity = 3;
   if (!bug.bug_type) bug.bug_type = "code";
+  if (bug.test_plan_id === undefined) bug.test_plan_id = null;
+  if (bug.iteration_id === undefined) bug.iteration_id = null;
+  if (bug.reporter_name === undefined) bug.reporter_name = null;
   if (!Array.isArray(bug.environments)) bug.environments = [];
+  if (!Array.isArray(bug.watchers)) bug.watchers = [];
   if (patch.created_at !== undefined && patch.created_at?.trim()) {
     bug.created_at = patch.created_at.trim();
   }
@@ -1585,6 +1744,19 @@ export async function updateBug(
       actor_name: "产品",
       actor_role: "admin",
     });
+    if (project) {
+      const statusLabel = TASK_STATUS_LABELS[bug.status] ?? bug.status;
+      await persistWatcherNotifications(
+        buildWatcherNotifications({
+          project,
+          bug,
+          type: "bug_status",
+          title: `关注的 Bug 状态变更：${bug.title}`,
+          body: `状态 → ${statusLabel}`,
+        }),
+        db
+      );
+    }
   }
 
   const nextAssignee = bug.assignee?.trim() || null;
@@ -1656,6 +1828,7 @@ export async function addBugComment(input: {
   if (isSupabaseConfigured()) {
     const bug = await findBugById(input.bug_id);
     if (!bug) throw new Error("Bug 不存在");
+    const project = await findProjectBySlugOrId(bug.project_id);
     const comment: BugComment = {
       id: uid("bcmt-"),
       project_id: bug.project_id,
@@ -1668,6 +1841,18 @@ export async function addBugComment(input: {
     bug.updated_at = nowIso();
     await upsertBugCommentRow(comment);
     await upsertBugRow(bug);
+    if (project) {
+      await persistWatcherNotifications(
+        buildWatcherNotifications({
+          project,
+          bug,
+          type: "bug_comment",
+          title: `关注的 Bug 有新补充：${bug.title}`,
+          body: `${author}：${body.slice(0, 120)}${body.length > 120 ? "…" : ""}`,
+          excludeNames: [author],
+        })
+      );
+    }
     if (memoryDb) {
       if (!memoryDb.bug_comments) memoryDb.bug_comments = [];
       memoryDb.bug_comments.unshift(comment);
@@ -1680,6 +1865,7 @@ export async function addBugComment(input: {
   const db = await readDb();
   const bug = db.bugs.find((b) => b.id === input.bug_id);
   if (!bug) throw new Error("Bug 不存在");
+  const project = db.projects.find((p) => p.id === bug.project_id);
 
   const comment: BugComment = {
     id: uid("bcmt-"),
@@ -1693,6 +1879,19 @@ export async function addBugComment(input: {
   if (!db.bug_comments) db.bug_comments = [];
   db.bug_comments.unshift(comment);
   bug.updated_at = nowIso();
+  if (project) {
+    await persistWatcherNotifications(
+      buildWatcherNotifications({
+        project,
+        bug,
+        type: "bug_comment",
+        title: `关注的 Bug 有新补充：${bug.title}`,
+        body: `${author}：${body.slice(0, 120)}${body.length > 120 ? "…" : ""}`,
+        excludeNames: [author],
+      }),
+      db
+    );
+  }
   await saveLocalDb(db);
   return comment;
 }

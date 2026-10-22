@@ -592,6 +592,7 @@ export function createSeedData(): DatabaseSnapshot {
     requirement_attachments: [],
     bug_attachments: [],
     requirement_links: [],
+    bug_test_plans: [],
     project_interviews: [],
     project_learning_notes: [],
     project_prds: [],

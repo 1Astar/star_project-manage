@@ -43,6 +43,8 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     id: String(row.id),
     project_id: String(row.project_id),
     requirement_id: (row.requirement_id as string | null) ?? null,
+    test_plan_id: (row.test_plan_id as string | null) ?? null,
+    iteration_id: (row.iteration_id as string | null) ?? null,
     title: String(row.title ?? ""),
     description: (row.description as string | null) ?? null,
     precondition: (row.precondition as string | null) ?? null,
@@ -60,6 +62,10 @@ function normalizeBug(row: Record<string, unknown>): Bug {
       return p === "P0" || p === "P1" || p === "P2" || p === "P3" ? p : null;
     })(),
     assignee: (row.assignee as string | null) ?? null,
+    reporter_name: (row.reporter_name as string | null) ?? null,
+    watchers: Array.isArray(row.watchers)
+      ? (row.watchers as string[]).map(String).filter(Boolean)
+      : [],
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,

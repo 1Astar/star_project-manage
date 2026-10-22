@@ -20,6 +20,10 @@ export function defaultBugReproMeta(): Pick<
   | "found_version"
   | "environments"
   | "priority"
+  | "test_plan_id"
+  | "iteration_id"
+  | "reporter_name"
+  | "watchers"
 > {
   return {
     precondition: null,
@@ -29,6 +33,10 @@ export function defaultBugReproMeta(): Pick<
     found_version: null,
     environments: [],
     priority: null,
+    test_plan_id: null,
+    iteration_id: null,
+    reporter_name: null,
+    watchers: [],
   };
 }
 
@@ -67,4 +75,9 @@ export function normalizeBugEnvironments(raw: unknown): string[] {
       .filter(Boolean);
   }
   return [];
+}
+
+/** 关注人姓名列表（去重保序） */
+export function normalizeBugWatchers(raw: unknown): string[] {
+  return normalizeBugEnvironments(raw);
 }

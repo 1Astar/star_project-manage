@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addBugCommentAction,
   createBugAction,
+  createBugTestPlanAction,
   updateBugAction,
   updateBugStatusAction,
 } from "@/lib/actions";
@@ -19,11 +20,21 @@ import {
   BUG_PRIORITY_OPTIONS,
   type BugPriority,
 } from "@/lib/bugs/fields";
-import type { Bug, BugAttachment, BugComment, BugSeverity, BugType, TaskStatus } from "@/lib/types";
+import type {
+  Bug,
+  BugAttachment,
+  BugComment,
+  BugSeverity,
+  BugTestPlan,
+  BugType,
+  Iteration,
+  TaskStatus,
+} from "@/lib/types";
 import {
   BUG_SEVERITY_LABELS,
   TASK_STATUS_LABELS,
 } from "@/lib/types";
+import { ImageDropZone } from "@/components/image-drop-zone";
 
 const STATUS_OPTIONS: TaskStatus[] = [
   "pending",
@@ -54,7 +65,11 @@ type SharedFields = {
   severity: BugSeverity;
   bugType: BugType;
   assignee: string;
+  reporterName: string;
+  watchers: string[];
   requirementId: string;
+  testPlanId: string;
+  iterationId: string;
   status: TaskStatus;
 };
 
@@ -73,10 +88,38 @@ const EMPTY_FIELDS = (overrides?: Partial<SharedFields>): SharedFields => ({
   severity: 3,
   bugType: "code",
   assignee: "",
+  reporterName: "",
+  watchers: [],
   requirementId: "",
+  testPlanId: "",
+  iterationId: "",
   status: "pending",
   ...overrides,
 });
+
+async function uploadBugPendingFiles(
+  projectId: string,
+  bugId: string,
+  files: File[]
+) {
+  for (const file of files) {
+    const form = new FormData();
+    form.set("projectId", projectId);
+    form.set("bugId", bugId);
+    form.set("title", file.name);
+    form.set("file", file);
+    const res = await fetch("/api/projects/bug-attachments", {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        typeof data.error === "string" ? data.error : `附件上传失败：${file.name}`
+      );
+    }
+  }
+}
 
 function toggleEnv(list: string[], tag: string): string[] {
   return list.includes(tag) ? list.filter((t) => t !== tag) : [...list, tag];
@@ -221,20 +264,115 @@ function RequirementPicker({
   );
 }
 
+function TestPlanPicker({
+  projectId,
+  projectSlug,
+  value,
+  onChange,
+  plans,
+  onPlanCreated,
+}: {
+  projectId: string;
+  projectSlug: string;
+  value: string;
+  onChange: (id: string) => void;
+  plans: BugTestPlan[];
+  onPlanCreated?: (plan: BugTestPlan) => void;
+}) {
+  const [newTitle, setNewTitle] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [hint, setHint] = useState<string | null>(null);
+
+  function createPlan() {
+    const title = newTitle.trim();
+    if (!title) return;
+    startTransition(async () => {
+      try {
+        const plan = await createBugTestPlanAction({
+          projectId,
+          projectSlug,
+          title,
+        });
+        setNewTitle("");
+        onChange(plan.id);
+        onPlanCreated?.(plan);
+        setHint("已新建并选中");
+        setTimeout(() => setHint(null), 2000);
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : "新建失败");
+      }
+    });
+  }
+
+  return (
+    <div className="space-y-1">
+      <span className="text-slate-500">测试计划</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+      >
+        <option value="">无</option>
+        {plans.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.title}
+            {p.status === "archived" ? "（已归档）" : ""}
+          </option>
+        ))}
+      </select>
+      <div className="flex gap-1">
+        <input
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          placeholder="新建如 TP-文件备份"
+          className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1 text-xs"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              createPlan();
+            }
+          }}
+        />
+        <button
+          type="button"
+          disabled={pending || !newTitle.trim()}
+          onClick={createPlan}
+          className="shrink-0 rounded-md border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {pending ? "…" : "新建"}
+        </button>
+      </div>
+      {hint ? <p className="text-[10px] text-slate-400">{hint}</p> : null}
+    </div>
+  );
+}
+
 function MetaSelects({
   value,
   onChange,
   members,
   requirements,
   featureModules = [],
+  testPlans = [],
+  iterations = [],
+  projectId,
+  projectSlug,
+  onPlanCreated,
   showStatus,
+  reporterReadOnly = true,
 }: {
   value: SharedFields;
   onChange: (patch: Partial<SharedFields>) => void;
   members: MemberOption[];
   requirements: BugFormOption[];
   featureModules?: string[];
+  testPlans?: BugTestPlan[];
+  iterations?: Iteration[];
+  projectId: string;
+  projectSlug: string;
+  onPlanCreated?: (plan: BugTestPlan) => void;
   showStatus?: boolean;
+  reporterReadOnly?: boolean;
 }) {
   const roster = useMemo(() => assigneeRosterNames(members.map((m) => m.name)), [members]);
   return (
@@ -257,6 +395,22 @@ function MetaSelects({
             </select>
           </label>
         ) : null}
+        <label className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-slate-500">期</span>
+          <select
+            value={value.iterationId}
+            onChange={(e) => onChange({ iterationId: e.target.value })}
+            className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
+            title="关联规划迭代"
+          >
+            <option value="">未选期</option>
+            {iterations.map((it) => (
+              <option key={it.id} value={it.id}>
+                {it.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">优先级</span>
           <select
@@ -290,6 +444,14 @@ function MetaSelects({
             ))}
           </select>
         </label>
+        <TestPlanPicker
+          projectId={projectId}
+          projectSlug={projectSlug}
+          value={value.testPlanId}
+          onChange={(testPlanId) => onChange({ testPlanId })}
+          plans={testPlans}
+          onPlanCreated={onPlanCreated}
+        />
         <label className="block space-y-1">
           <span className="text-slate-500">功能模块</span>
           <input
@@ -346,6 +508,20 @@ function MetaSelects({
           />
         </label>
         <label className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-slate-500">报告人</span>
+          {reporterReadOnly ? (
+            <span className="min-w-0 flex-1 truncate text-right text-slate-700">
+              {value.reporterName || "—"}
+            </span>
+          ) : (
+            <input
+              value={value.reporterName}
+              onChange={(e) => onChange({ reporterName: e.target.value })}
+              className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
+            />
+          )}
+        </label>
+        <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">指派</span>
           <select
             value={value.assignee}
@@ -360,6 +536,31 @@ function MetaSelects({
             ))}
           </select>
         </label>
+        <div className="space-y-1">
+          <span className="text-slate-500">关注人</span>
+          <div className="flex flex-wrap gap-1.5">
+            {roster.map((name) => {
+              const on = value.watchers.includes(name);
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() =>
+                    onChange({ watchers: toggleEnv(value.watchers, name) })
+                  }
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                    on
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-800"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-slate-400">状态变更与新评论会通知关注人</p>
+        </div>
         <RequirementPicker
           value={value.requirementId}
           onChange={(requirementId) => onChange({ requirementId })}
@@ -370,151 +571,493 @@ function MetaSelects({
   );
 }
 
-export function BugCreateForm({
+type CreateDraft = { id: string; fields: SharedFields; pendingFiles: File[] };
+
+function newCreateDraft(overrides?: Partial<SharedFields>): CreateDraft {
+  return {
+    id: `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    fields: EMPTY_FIELDS(overrides),
+    pendingFiles: [],
+  };
+}
+
+async function createOneBug(
+  projectId: string,
+  projectSlug: string,
+  fields: SharedFields,
+  pendingFiles: File[] = []
+) {
+  const bug = await createBugAction({
+    projectId,
+    projectSlug,
+    title: fields.title.trim(),
+    description: fields.description.trim() || undefined,
+    precondition: fields.precondition.trim() || undefined,
+    reproSteps: fields.reproSteps.trim() || undefined,
+    expectedResult: fields.expectedResult.trim() || undefined,
+    actualResult: fields.actualResult.trim() || undefined,
+    suggestion: fields.suggestion.trim() || undefined,
+    modulePath: fields.modulePath.trim() || null,
+    foundVersion: fields.foundVersion.trim() || null,
+    environments: fields.environments,
+    priority: fields.priority || null,
+    assignee: fields.assignee || undefined,
+    reporterName: fields.reporterName.trim() || null,
+    watchers: fields.watchers,
+    requirementId: fields.requirementId || null,
+    testPlanId: fields.testPlanId || null,
+    iterationId: fields.iterationId || null,
+    severity: fields.severity,
+    bugType: fields.bugType,
+  });
+  if (pendingFiles.length) {
+    await uploadBugPendingFiles(projectId, bug.id, pendingFiles);
+  }
+  return bug;
+}
+
+/** 飞书风格弹窗：可多条草稿一次提交，或勾选连续创建 */
+export function BugCreateModal({
+  open,
+  onClose,
   projectId,
   projectSlug,
   members,
   requirements,
   featureModules = [],
+  testPlans: initialTestPlans = [],
+  iterations = [],
+  currentUserName = PRODUCT_ASSIGNEE_NAME,
   initialRequirementId = "",
   initialTitle = "",
 }: {
+  open: boolean;
+  onClose: () => void;
   projectId: string;
   projectSlug: string;
   members: MemberOption[];
   requirements: BugFormOption[];
   featureModules?: string[];
+  testPlans?: BugTestPlan[];
+  iterations?: Iteration[];
+  currentUserName?: string;
   initialRequirementId?: string;
   initialTitle?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const [fields, setFields] = useState<SharedFields>(() =>
-    EMPTY_FIELDS({
-      title: initialTitle,
-      requirementId: initialRequirementId,
-    })
-  );
+  const [testPlans, setTestPlans] = useState(initialTestPlans);
+  const [continuous, setContinuous] = useState(true);
+  const seedDefaults = (): Partial<SharedFields> => ({
+    title: initialTitle,
+    requirementId: initialRequirementId,
+    reporterName: currentUserName,
+  });
+  const [drafts, setDrafts] = useState<CreateDraft[]>(() => [
+    newCreateDraft(seedDefaults()),
+  ]);
+  const [activeId, setActiveId] = useState(() => drafts[0]!.id);
 
-  function patch(p: Partial<SharedFields>) {
-    setFields((prev) => ({ ...prev, ...p }));
+  useEffect(() => {
+    if (!open) return;
+    const seed = newCreateDraft(seedDefaults());
+    setDrafts([seed]);
+    setActiveId(seed.id);
+    setMessage(null);
+    setTestPlans(initialTestPlans);
+    // 仅在打开弹窗时灌入初始值，避免输入过程被父级 refresh 冲掉
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed on open
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !pending) onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, pending, onClose]);
+
+  const active = drafts.find((d) => d.id === activeId) ?? drafts[0];
+  const titledCount = drafts.filter((d) => d.fields.title.trim()).length;
+
+  function patchActive(p: Partial<SharedFields>) {
+    if (!active) return;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.id === active.id ? { ...d, fields: { ...d.fields, ...p } } : d
+      )
+    );
+  }
+
+  function setActivePendingFiles(files: File[]) {
+    if (!active) return;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.id === active.id
+          ? { ...d, pendingFiles: [...d.pendingFiles, ...files] }
+          : d
+      )
+    );
+  }
+
+  function removeActivePendingFile(index: number) {
+    if (!active) return;
+    setDrafts((prev) =>
+      prev.map((d) =>
+        d.id === active.id
+          ? {
+              ...d,
+              pendingFiles: d.pendingFiles.filter((_, i) => i !== index),
+            }
+          : d
+      )
+    );
+  }
+
+  function addDraft() {
+    const next = newCreateDraft({
+      requirementId: initialRequirementId,
+      reporterName: currentUserName,
+      severity: active?.fields.severity ?? 3,
+      priority: active?.fields.priority ?? "",
+      bugType: active?.fields.bugType ?? "code",
+      modulePath: active?.fields.modulePath ?? "",
+      testPlanId: active?.fields.testPlanId ?? "",
+      iterationId: active?.fields.iterationId ?? "",
+      environments: active?.fields.environments ?? [],
+      assignee: active?.fields.assignee ?? "",
+      watchers: active?.fields.watchers ?? [],
+    });
+    setDrafts((prev) => [...prev, next]);
+    setActiveId(next.id);
+  }
+
+  function removeDraft(id: string) {
+    setDrafts((prev) => {
+      if (prev.length <= 1) return prev;
+      const next = prev.filter((d) => d.id !== id);
+      if (activeId === id) setActiveId(next[0]!.id);
+      return next;
+    });
   }
 
   function submit() {
-    if (!fields.title.trim()) return;
+    const ready = drafts.filter((d) => d.fields.title.trim());
+    if (ready.length === 0) {
+      setMessage("请至少填一条标题");
+      return;
+    }
     startTransition(async () => {
       try {
-        const bug = await createBugAction({
-          projectId,
-          projectSlug,
-          title: fields.title.trim(),
-          description: fields.description.trim() || undefined,
-          precondition: fields.precondition.trim() || undefined,
-          reproSteps: fields.reproSteps.trim() || undefined,
-          expectedResult: fields.expectedResult.trim() || undefined,
-          actualResult: fields.actualResult.trim() || undefined,
-          suggestion: fields.suggestion.trim() || undefined,
-          modulePath: fields.modulePath.trim() || null,
-          foundVersion: fields.foundVersion.trim() || null,
-          environments: fields.environments,
-          priority: fields.priority || null,
-          assignee: fields.assignee || undefined,
-          requirementId: fields.requirementId || null,
-          severity: fields.severity,
-          bugType: fields.bugType,
-        });
-        setFields(EMPTY_FIELDS());
-        setMessage("已提交");
-        router.push(`/projects/${projectSlug}/bugs/${bug.id}`);
+        const created = [];
+        for (const d of ready) {
+          created.push(
+            await createOneBug(
+              projectId,
+              projectSlug,
+              { ...d.fields, reporterName: d.fields.reporterName || currentUserName },
+              d.pendingFiles
+            )
+          );
+        }
+        setMessage(`已创建 ${created.length} 条`);
         router.refresh();
+        if (continuous) {
+          const seed = newCreateDraft({
+            requirementId: initialRequirementId,
+            reporterName: currentUserName,
+            severity: ready[0]?.fields.severity ?? 3,
+            priority: ready[0]?.fields.priority ?? "",
+            bugType: ready[0]?.fields.bugType ?? "code",
+            modulePath: ready[0]?.fields.modulePath ?? "",
+            testPlanId: ready[0]?.fields.testPlanId ?? "",
+            iterationId: ready[0]?.fields.iterationId ?? "",
+            environments: ready[0]?.fields.environments ?? [],
+            assignee: ready[0]?.fields.assignee ?? "",
+            watchers: ready[0]?.fields.watchers ?? [],
+          });
+          setDrafts([seed]);
+          setActiveId(seed.id);
+        } else {
+          onClose();
+          const last = created[created.length - 1];
+          if (last) router.push(`/projects/${projectSlug}/bugs/${last.id}`);
+        }
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "提交失败");
       }
     });
   }
 
+  if (!open || !active) return null;
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-800">+ 提 Bug</h3>
-        <div className="flex items-center gap-2">
-          {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/45 p-3 pt-[5vh] sm:p-6 sm:pt-[6vh]">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default"
+        aria-label="关闭遮罩"
+        onClick={() => !pending && onClose()}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bug-create-modal-title"
+        className="relative z-10 flex w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+          <div className="min-w-0">
+            <h2
+              id="bug-create-modal-title"
+              className="text-base font-semibold text-slate-900"
+            >
+              缺陷
+            </h2>
+            <p className="text-[11px] text-slate-400">
+              可一次填多条；勾选连续创建则提交后继续开窗
+            </p>
+          </div>
           <button
             type="button"
-            disabled={pending || !fields.title.trim()}
-            onClick={submit}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            disabled={pending}
+            onClick={onClose}
+            className="rounded-md px-2 py-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="关闭"
           >
-            {pending ? "提交中…" : "提交"}
+            ✕
           </button>
         </div>
-      </div>
 
-      <SideLayout
-        left={
-          <>
-            <input
-              value={fields.title}
-              onChange={(e) => patch({ title: e.target.value })}
-              placeholder="Bug 标题"
-              className="w-full border-0 bg-transparent text-lg font-bold text-slate-900 outline-none placeholder:text-slate-300"
-            />
-            <ReproTemplateFields value={fields} onChange={patch} />
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
-              <textarea
-                value={fields.description}
-                onChange={(e) => patch({ description: e.target.value })}
-                rows={3}
-                placeholder="影响范围、其它上下文（可选）…"
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 bg-slate-50/80 px-3 py-2 sm:px-4">
+          {drafts.map((d, i) => {
+            const label = d.fields.title.trim() || `第 ${i + 1} 条`;
+            const activeTab = d.id === active.id;
+            return (
+              <div key={d.id} className="inline-flex max-w-[11rem] items-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveId(d.id)}
+                  className={`truncate rounded-l-lg px-2.5 py-1 text-xs ${
+                    activeTab
+                      ? "bg-white font-medium text-indigo-700 shadow-sm ring-1 ring-slate-200"
+                      : "text-slate-600 hover:bg-white/80"
+                  }`}
+                  title={label}
+                >
+                  {label}
+                </button>
+                {drafts.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => removeDraft(d.id)}
+                    className={`rounded-r-lg px-1.5 py-1 text-xs ${
+                      activeTab
+                        ? "bg-white text-slate-400 ring-1 ring-slate-200 hover:text-rose-600"
+                        : "text-slate-400 hover:text-rose-600"
+                    }`}
+                    aria-label={`删除第 ${i + 1} 条`}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={addDraft}
+            className="rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:border-indigo-300 hover:text-indigo-700"
+          >
+            + 再加一条
+          </button>
+        </div>
+
+        <div className="max-h-[min(70vh,720px)] overflow-y-auto px-4 py-4 sm:px-5">
+          <SideLayout
+            left={
+              <>
+                <label className="block space-y-1">
+                  <span className="text-xs font-medium text-slate-500">
+                    缺陷名称 <span className="text-rose-500">*</span>
+                  </span>
+                  <input
+                    value={active.fields.title}
+                    onChange={(e) => patchActive({ title: e.target.value })}
+                    placeholder="一句话说清问题"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-indigo-300"
+                    autoFocus
+                  />
+                </label>
+                <div className="mt-3">
+                  <p className="mb-1.5 text-xs font-medium text-slate-500">缺陷描述</p>
+                  <ReproTemplateFields value={active.fields} onChange={patchActive} />
+                </div>
+                <section className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+                  <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
+                  <textarea
+                    value={active.fields.description}
+                    onChange={(e) => patchActive({ description: e.target.value })}
+                    rows={2}
+                    placeholder="影响范围、其它上下文（可选）…"
+                    className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+                  />
+                </section>
+                <section className="mt-3 space-y-1.5 border-t border-slate-100 pt-3">
+                  <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+                  <textarea
+                    value={active.fields.suggestion}
+                    onChange={(e) => patchActive({ suggestion: e.target.value })}
+                    rows={2}
+                    placeholder="给 +1 / 研发的建议（可选）…"
+                    className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+                  />
+                </section>
+                <section className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                  <h4 className="text-xs font-semibold text-slate-500">截图 / 附件</h4>
+                  <ImageDropZone
+                    multiple
+                    disabled={pending}
+                    onFiles={setActivePendingFiles}
+                    className="py-3 text-center"
+                  >
+                    拖拽或点击添加；创建后自动上传
+                  </ImageDropZone>
+                  {active.pendingFiles.length > 0 ? (
+                    <ul className="space-y-1 text-xs text-slate-600">
+                      {active.pendingFiles.map((f, i) => (
+                        <li
+                          key={`${f.name}-${i}`}
+                          className="flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1"
+                        >
+                          <span className="truncate">{f.name}</span>
+                          <button
+                            type="button"
+                            disabled={pending}
+                            onClick={() => removeActivePendingFile(i)}
+                            className="shrink-0 text-rose-600"
+                          >
+                            删
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">可选；提交后写入该条 Bug</p>
+                  )}
+                </section>
+              </>
+            }
+            right={
+              <MetaSelects
+                value={active.fields}
+                onChange={patchActive}
+                members={members}
+                requirements={requirements}
+                featureModules={featureModules}
+                testPlans={testPlans}
+                iterations={iterations}
+                projectId={projectId}
+                projectSlug={projectSlug}
+                onPlanCreated={(plan) =>
+                  setTestPlans((prev) =>
+                    prev.some((p) => p.id === plan.id) ? prev : [plan, ...prev]
+                  )
+                }
               />
-            </section>
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
-              <textarea
-                value={fields.suggestion}
-                onChange={(e) => patch({ suggestion: e.target.value })}
-                rows={3}
-                placeholder="给 +1 / 研发的建议（可选）…"
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
-              />
-            </section>
-          </>
-        }
-        right={
-          <MetaSelects
-            value={fields}
-            onChange={patch}
-            members={members}
-            requirements={requirements}
-            featureModules={featureModules}
+            }
           />
-        }
-      />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 px-4 py-3 sm:px-5">
+          <label className="inline-flex items-center gap-1.5 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={continuous}
+              onChange={(e) => setContinuous(e.target.checked)}
+            />
+            连续创建
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {message ? (
+              <span className="text-xs text-slate-500">{message}</span>
+            ) : (
+              <span className="text-xs text-slate-400">
+                将创建 {titledCount} 条
+                {drafts.length > titledCount
+                  ? `（另有 ${drafts.length - titledCount} 条无标题跳过）`
+                  : ""}
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onClose}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              disabled={pending || titledCount === 0}
+              onClick={submit}
+              className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {pending
+                ? "创建中…"
+                : titledCount > 1
+                  ? `确认创建 ${titledCount} 条`
+                  : "确认创建"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** @deprecated 使用 BugCreateModal；保留别名以免旧引用报错 */
+export function BugCreateForm(
+  props: Omit<Parameters<typeof BugCreateModal>[0], "open" | "onClose"> & {
+    open?: boolean;
+    onClose?: () => void;
+  }
+) {
+  return (
+    <BugCreateModal
+      {...props}
+      open={props.open ?? true}
+      onClose={props.onClose ?? (() => undefined)}
+    />
   );
 }
 
 export function BugDetailEditor({
   bug,
+  projectId,
   projectSlug,
   projectName,
   requirementTitle,
   members,
   requirements,
   featureModules = [],
+  testPlans: initialTestPlans = [],
+  iterations = [],
   comments,
   attachments = [],
 }: {
   bug: Bug;
+  projectId: string;
   projectSlug: string;
   projectName: string;
   requirementTitle?: string | null;
   members: MemberOption[];
   requirements: BugFormOption[];
   featureModules?: string[];
+  testPlans?: BugTestPlan[];
+  iterations?: Iteration[];
   comments: BugComment[];
   attachments?: BugAttachment[];
 }) {
@@ -522,6 +1065,7 @@ export function BugDetailEditor({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
+  const [testPlans, setTestPlans] = useState(initialTestPlans);
   const [fields, setFields] = useState<SharedFields>(() =>
     EMPTY_FIELDS({
       title: bug.title,
@@ -538,7 +1082,11 @@ export function BugDetailEditor({
       severity: bug.severity ?? 3,
       bugType: bug.bug_type ?? "code",
       assignee: bug.assignee ?? "",
+      reporterName: bug.reporter_name ?? "",
+      watchers: bug.watchers ?? [],
       requirementId: bug.requirement_id ?? "",
+      testPlanId: bug.test_plan_id ?? "",
+      iterationId: bug.iteration_id ?? "",
       status: bug.status,
     })
   );
@@ -602,7 +1150,10 @@ export function BugDetailEditor({
             environments: fields.environments,
             priority: fields.priority || null,
             assignee: fields.assignee || null,
+            watchers: fields.watchers,
             requirementId: fields.requirementId || null,
+            testPlanId: fields.testPlanId || null,
+            iterationId: fields.iterationId || null,
             status: fields.status,
             severity: fields.severity,
             bugType: fields.bugType,
@@ -799,6 +1350,15 @@ export function BugDetailEditor({
               members={members}
               requirements={requirements}
               featureModules={featureModules}
+              testPlans={testPlans}
+              iterations={iterations}
+              projectId={projectId}
+              projectSlug={projectSlug}
+              onPlanCreated={(plan) =>
+                setTestPlans((prev) =>
+                  prev.some((p) => p.id === plan.id) ? prev : [plan, ...prev]
+                )
+              }
               showStatus
             />
             <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">

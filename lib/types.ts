@@ -361,10 +361,27 @@ export const BUG_TYPE_LABELS: Record<BuiltinBugType, string> = {
   other: "其他",
 };
 
+/** 测试计划（轻量实体；不含用例库 / 执行记录） */
+export type BugTestPlanStatus = "active" | "archived";
+
+export interface BugTestPlan {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  status: BugTestPlanStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Bug {
   id: string;
   project_id: string;
   requirement_id: string | null;
+  /** 关联测试计划 */
+  test_plan_id: string | null;
+  /** 关联规划迭代（期） */
+  iteration_id: string | null;
   title: string;
   description: string | null;
   /** 前置条件 */
@@ -389,6 +406,10 @@ export interface Bug {
    */
   priority: "P0" | "P1" | "P2" | "P3" | null;
   assignee: string | null;
+  /** 报告人（创建时写入；只读展示） */
+  reporter_name: string | null;
+  /** 关注人；状态变更 / 评论时通知 */
+  watchers: string[];
   status: TaskStatus;
   /** 严重程度：1 致命 … 4 轻微 */
   severity: BugSeverity;

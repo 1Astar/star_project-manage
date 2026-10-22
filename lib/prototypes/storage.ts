@@ -15,33 +15,53 @@ export function prototypeObjectPath(projectSlug: string, filename: string): stri
   return `${PROTOTYPE_PREFIX}/${projectSlug}-${Date.now()}/${safeName}`;
 }
 
-async function uploadPrototypeZipLocal(
+function storedFilename(filename: string): { safeName: string; contentType: string } {
+  const isHtml = /\.html?$/i.test(filename);
+  return {
+    safeName: isHtml ? "index.html" : "upload.zip",
+    contentType: isHtml ? "text/html; charset=utf-8" : "application/zip",
+  };
+}
+
+async function uploadPrototypeFileLocal(
   project: Pick<Project, "slug">,
-  bytes: Buffer
+  bytes: Buffer,
+  filename: string
 ): Promise<{ storage_path: string; url: string; type: "html_zip" }> {
+  const { safeName } = storedFilename(filename);
   await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
   const dirName = `${project.slug}-${Date.now()}`;
   const dirPath = path.join(LOCAL_UPLOAD_DIR, dirName);
   await fs.mkdir(dirPath, { recursive: true });
-  await fs.writeFile(path.join(dirPath, "upload.zip"), bytes);
-  const publicPath = `/prototypes/${dirName}/upload.zip`;
+  await fs.writeFile(path.join(dirPath, safeName), bytes);
+  const publicPath = `/prototypes/${dirName}/${safeName}`;
   return { storage_path: publicPath, url: publicPath, type: "html_zip" };
 }
 
+/** @deprecated prefer uploadPrototypeFile */
 export async function uploadPrototypeZip(
   project: Pick<Project, "id" | "slug">,
   bytes: Buffer | Uint8Array,
   filename = "upload.zip"
 ): Promise<{ storage_path: string; url: string; type: "html_zip" }> {
+  return uploadPrototypeFile(project, bytes, filename);
+}
+
+export async function uploadPrototypeFile(
+  project: Pick<Project, "id" | "slug">,
+  bytes: Buffer | Uint8Array,
+  filename = "upload.zip"
+): Promise<{ storage_path: string; url: string; type: "html_zip" }> {
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const { safeName, contentType } = storedFilename(filename);
 
   if (isSupabaseConfigured()) {
     const client = createServiceClient();
-    if (!client) throw new Error("Supabase 未配置，无法上传原型 ZIP");
+    if (!client) throw new Error("Supabase 未配置，无法上传原型文件");
 
-    const objectPath = prototypeObjectPath(project.slug, filename);
+    const objectPath = prototypeObjectPath(project.slug, safeName);
     const { error } = await client.storage.from(BUCKET).upload(objectPath, buffer, {
-      contentType: "application/zip",
+      contentType,
       upsert: false,
     });
     if (error) throw new Error(error.message);
@@ -56,5 +76,5 @@ export async function uploadPrototypeZip(
     );
   }
 
-  return uploadPrototypeZipLocal(project, buffer);
+  return uploadPrototypeFileLocal(project, buffer, filename);
 }

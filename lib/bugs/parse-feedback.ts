@@ -239,9 +239,14 @@ export function isStructuralBugSectionTitle(raw: string): boolean {
 function lineStartsNewBug(line: string): boolean {
   const t = line.trim();
   if (!t) return false;
-  if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s/.test(t)) return true;
-  if (/^(?:bug|问题|缺陷)[:：]\s/i.test(t)) return true;
-  if (/^\d+[\.、．)]\s+\S/.test(t)) return true;
+  if (/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/.test(t)) {
+    return !isStructuralBugSectionTitle(t);
+  }
+  if (/^(?:bug|问题|缺陷)[:：]\s*/i.test(t)) return true;
+  /* 允许「1.标题」无空格（中文常见）；「1. 复现步骤」仍不当新条 */
+  if (/^\d+[\.、．)]\s*\S/.test(t)) {
+    return !isStructuralBugSectionTitle(t);
+  }
   if (/^#{1,3}\s+\S/.test(t)) {
     return !isStructuralBugSectionTitle(t);
   }
@@ -249,8 +254,61 @@ function lineStartsNewBug(line: string): boolean {
   return false;
 }
 
+/** 顶层编号条数（1. / ① / 问题：），用于纠正 AI 合并编号项 */
+export function countTopLevelFeedbackItems(raw: string): number {
+  const text = raw.replace(/\r\n/g, "\n").trim();
+  if (!text) return 0;
+  let n = 0;
+  for (const line of text.split("\n")) {
+    if (detectFeedbackSectionKind(line)) continue;
+    if (lineStartsNewBug(line)) n += 1;
+  }
+  return n;
+}
+
+/** 复现/期望等续写行，或缩进行：无编号回车时不新开一条 */
+function isContinuationLine(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (isStructuralBugSectionTitle(t)) return true;
+  if (/^(重现|复现|期望|实际|描述|步骤|环境|备注|见图|截图|补充|操作)[:：]/.test(t)) {
+    return true;
+  }
+  if (/^[→\-–—•]\s+\S/.test(t)) return true;
+  if (/^\s+/.test(line) && line.trim().length > 0) return true;
+  return false;
+}
+
+/**
+ * 无编号时：上一块已是单行短句，本行又是新的独立句 → 回车拆成新条。
+ * 多行正文中的续写不拆。
+ */
+function shouldSplitUnnumberedLine(current: string[], line: string): boolean {
+  if (!line.trim() || isContinuationLine(line)) return false;
+  const body = current.join("\n").trim();
+  if (!body) return false;
+  const prevLines = body.split("\n").map((s) => s.trim()).filter(Boolean);
+  if (prevLines.length !== 1) return false;
+  const prev = prevLines[0]!;
+  if (prev.length > 160) return false;
+  if (line.trim().length > 240) return false;
+  return true;
+}
+
+/** 首段像「随心而行反馈」导语，而不是一条事项本身 */
+function looksLikeFeedbackIntro(part: string): boolean {
+  const t = part.trim();
+  if (!t || t.includes("\n")) return false;
+  if (lineStartsNewBug(t)) return false;
+  if (t.length > 36) return false;
+  if (/[？?！!]/.test(t)) return false;
+  if (/希望|应该|不能|无法|失败|异常|优化|支持|跳转|登录|注册/.test(t)) return false;
+  return /反馈|问题汇总|如下|清单|记录|汇总/.test(t) || t.length <= 16;
+}
+
 /**
  * 无 AI：按 ①② / 1. / 非结构 ## / 「问题：」切段；
+ * 无编号时回车分行也算一条（续写行除外）；
  * 不把「复现步骤 / 期望 / 实际」等结构标题切成多条。
  */
 export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
@@ -279,8 +337,15 @@ export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
       currentSectionKind = section;
       continue;
     }
+    if (!line.trim()) {
+      flushChunk();
+      continue;
+    }
     if (current.length === 0) currentSectionKind = sectionKind;
-    if (current.length > 0 && lineStartsNewBug(line)) {
+    if (
+      current.length > 0 &&
+      (lineStartsNewBug(line) || shouldSplitUnnumberedLine(current, line))
+    ) {
       flushChunk();
       currentSectionKind = sectionKind;
       current = [line];
@@ -296,11 +361,8 @@ export function parseBugFeedbackHeuristic(raw: string): BugFeedbackPreview {
   let intro = "";
   let sections = parts;
   let sectionKinds = kindsFromChunks;
-  if (
-    parts.length > 1 &&
-    !lineStartsNewBug(parts[0].split("\n").find((l) => l.trim()) ?? "")
-  ) {
-    intro = parts[0];
+  if (parts.length > 1 && looksLikeFeedbackIntro(parts[0]!)) {
+    intro = parts[0]!;
     sections = parts.slice(1);
     sectionKinds = kindsFromChunks.slice(1);
   }
@@ -386,7 +448,8 @@ export async function parseBugFeedbackWithOpenAi(
       : "",
     "",
     "规则：",
-    "- 一条独立事项一条；若原文有「Bug清单 / 需求清单」分区，严格按分区标 kind",
+    "- **一条独立事项一条**：原文里 1. / 2. / ①② 或「问题：」各自开头的，必须拆成多条 drafts，禁止把下一条塞进上一条的 reproSteps/description",
+    "- 若原文有「Bug清单 / 需求清单」分区，严格按分区标 kind",
     "- kind 只能是 bug 或 requirement：已坏/异常/复现 → bug；希望新增能力/改进且非现有缺陷 → requirement",
     "- title 短、可扫读；Bug 写 reproSteps；需求可把说明放 description，reproSteps 可空",
     `- severity 1致命 2严重 3一般 4轻微（需求也可用，映射优先级）；bugType 只能是 ${types}（需求可填 other）`,
@@ -587,13 +650,29 @@ export async function previewBugFeedback(
     imageFileNames?: string[];
   }
 ): Promise<BugFeedbackPreview> {
+  const heuristic = parseBugFeedbackHeuristic(raw);
+  const numbered = countTopLevelFeedbackItems(raw);
+
   if (opts.preferAi !== false && opts.credentials?.apiKey?.trim()) {
     try {
-      return await parseBugFeedbackWithOpenAi(raw, {
+      const ai = await parseBugFeedbackWithOpenAi(raw, {
         projectTitle: opts.projectTitle,
         credentials: opts.credentials,
         imageFileNames: opts.imageFileNames,
       });
+      /* 规则已拆出多条（编号或回车分行），AI 却并成更少条 → 以规则为准 */
+      if (
+        heuristic.drafts.length >= 2 &&
+        ai.drafts.length < heuristic.drafts.length &&
+        (numbered >= 2 || numbered === 0)
+      ) {
+        return {
+          ...heuristic,
+          method: "heuristic",
+          aiError: `AI 只返回 ${ai.drafts.length} 条，已按规则拆成 ${heuristic.drafts.length} 条`,
+        };
+      }
+      return ai;
     } catch (error) {
       const aiError =
         error instanceof Error
@@ -602,9 +681,8 @@ export async function previewBugFeedback(
             ? "模型超时（60s），已改用规则拆分"
             : error.message.slice(0, 180)
           : "AI 失败";
-      const fallback = parseBugFeedbackHeuristic(raw);
-      return { ...fallback, aiError };
+      return { ...heuristic, aiError };
     }
   }
-  return parseBugFeedbackHeuristic(raw);
+  return heuristic;
 }

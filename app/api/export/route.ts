@@ -15,12 +15,23 @@ export async function GET(request: Request) {
     const kindRaw = url.searchParams.get("kind")?.trim() ?? "";
     const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
     const project = url.searchParams.get("project")?.trim() || null;
+    const idsRaw = url.searchParams.get("ids")?.trim() || "";
+    const ids = idsRaw
+      ? idsRaw.split(",").map((id) => id.trim()).filter(Boolean)
+      : null;
+    const scopeRaw = url.searchParams.get("scope")?.trim();
+    const scope = scopeRaw === "open" || scopeRaw === "all" ? scopeRaw : null;
 
     if (!isTableExportKind(kindRaw)) {
       return studioErr("未知导出类型", 400);
     }
 
-    const { filenameBase, sheets } = await loadExportSheets({ kind: kindRaw, project });
+    const { filenameBase, sheets } = await loadExportSheets({
+      kind: kindRaw,
+      project,
+      ids,
+      scope,
+    });
     const stamp = new Date().toISOString().slice(0, 10);
 
     if (format === "csv") {

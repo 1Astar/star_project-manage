@@ -1731,7 +1731,22 @@ export function registerWorkspaceTools(server: McpServer) {
         severity: z.number().int().min(1).max(4).optional().describe("严重程度 1致命…4轻微，默认 3"),
         bugType: bugTypeInputSchema.optional(),
         requirementId: z.string().nullable().optional(),
+        testPlanId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("关联测试计划 id（bug_test_plans.id）"),
+        iterationId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("关联规划迭代（期）iterations.id"),
         assignee: z.string().optional(),
+        reporterName: z.string().optional().describe("报告人显示名"),
+        watchers: z
+          .array(z.string())
+          .optional()
+          .describe("关注人姓名列表；状态/评论时通知"),
         status: z
           .enum(["pending", "in_progress", "done", "blocked", "acceptance"])
           .optional(),
@@ -1757,6 +1772,8 @@ export function registerWorkspaceTools(server: McpServer) {
         const bug = await createBug({
           project_id: pm.id,
           requirement_id: input.requirementId ?? null,
+          test_plan_id: input.testPlanId ?? null,
+          iteration_id: input.iterationId ?? null,
           title: input.title.trim(),
           description: input.description,
           precondition: input.precondition,
@@ -1769,6 +1786,8 @@ export function registerWorkspaceTools(server: McpServer) {
           environments: input.environments,
           priority: input.priority ?? null,
           assignee: input.assignee,
+          reporter_name: input.reporterName ?? null,
+          watchers: input.watchers,
           severity: (input.severity as 1 | 2 | 3 | 4 | undefined) ?? 3,
           bug_type: input.bugType ?? "other",
           status: (input.status as BugStatus | undefined) ?? "pending",
@@ -1793,10 +1812,65 @@ export function registerWorkspaceTools(server: McpServer) {
             modulePath: bug.module_path,
             foundVersion: bug.found_version,
             environments: bug.environments,
+            testPlanId: bug.test_plan_id,
+            iterationId: bug.iteration_id,
+            reporterName: bug.reporter_name,
+            watchers: bug.watchers,
           },
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "create_bug 失败");
+      }
+    }
+  );
+
+  server.registerTool(
+    "create_bug_test_plan",
+    {
+      title: "Create Bug Test Plan",
+      description:
+        "在项目下新建轻量测试计划（如 TP-文件备份）。不含用例库。返回 plan id，可供 create_bug.testPlanId 关联。",
+      inputSchema: {
+        projectId: z.string().min(1),
+        title: z.string().min(1),
+        description: z.string().optional(),
+      },
+    },
+    async (input) => {
+      try {
+        const { resolveProjectRoute } = await import("@/lib/project-bridge");
+        const { getProjects } = await import("@/lib/db/local-store");
+        const { createBugTestPlan } = await import("@/lib/bugs/test-plans");
+        const ctx = await resolveProjectRoute(input.projectId);
+        const pmAll = await getProjects();
+        const pm =
+          (ctx.pmSlug ? pmAll.find((p) => p.slug === ctx.pmSlug) : null) ||
+          pmAll.find((p) => p.id === input.projectId) ||
+          pmAll.find((p) => p.slug === input.projectId) ||
+          (ctx.studio ? pmAll.find((p) => p.name === ctx.studio!.title) : null);
+        if (!pm) return mcpError(`找不到 PM 项目：${input.projectId}`);
+        const plan = await createBugTestPlan({
+          project_id: pm.id,
+          title: input.title,
+          description: input.description ?? null,
+        });
+        await logAiAction({
+          action: "create_bug_test_plan",
+          payload: { planId: plan.id, projectId: pm.id, title: plan.title },
+        });
+        return mcpJson({
+          ok: true,
+          plan: {
+            id: plan.id,
+            title: plan.title,
+            projectId: plan.project_id,
+            status: plan.status,
+          },
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "create_bug_test_plan 失败"
+        );
       }
     }
   );
@@ -2082,7 +2156,15 @@ export function registerWorkspaceTools(server: McpServer) {
         environments: z.array(z.string()).optional(),
         priority: z.enum(["P0", "P1", "P2", "P3"]).nullable().optional(),
         assignee: z.string().nullable().optional(),
+        reporterName: z.string().nullable().optional(),
+        watchers: z.array(z.string()).optional(),
         requirementId: z.string().nullable().optional(),
+        testPlanId: z.string().nullable().optional().describe("关联测试计划 id"),
+        iterationId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("关联规划迭代（期）iterations.id"),
         severity: z.number().int().min(1).max(4).optional().describe("严重程度 1致命…4轻微"),
         bugType: bugTypeInputSchema.optional(),
         status: z
@@ -2109,7 +2191,11 @@ export function registerWorkspaceTools(server: McpServer) {
         if (input.environments !== undefined) patch.environments = input.environments;
         if (input.priority !== undefined) patch.priority = input.priority;
         if (input.assignee !== undefined) patch.assignee = input.assignee;
+        if (input.reporterName !== undefined) patch.reporter_name = input.reporterName;
+        if (input.watchers !== undefined) patch.watchers = input.watchers;
         if (input.requirementId !== undefined) patch.requirement_id = input.requirementId;
+        if (input.testPlanId !== undefined) patch.test_plan_id = input.testPlanId;
+        if (input.iterationId !== undefined) patch.iteration_id = input.iterationId;
         if (input.severity !== undefined) {
           patch.severity = input.severity as 1 | 2 | 3 | 4;
         }
@@ -2149,7 +2235,11 @@ export function registerWorkspaceTools(server: McpServer) {
             foundVersion: bug.found_version,
             environments: bug.environments,
             assignee: bug.assignee,
+            reporterName: bug.reporter_name,
+            watchers: bug.watchers,
             requirementId: bug.requirement_id,
+            testPlanId: bug.test_plan_id,
+            iterationId: bug.iteration_id,
             updatedAt: bug.updated_at,
           },
         });
