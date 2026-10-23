@@ -430,6 +430,8 @@ export async function updateBugAction(input: {
     status?: import("@/lib/types").TaskStatus;
     severity?: import("@/lib/types").BugSeverity;
     bugType?: import("@/lib/types").BugType;
+    linkedLearningNoteIds?: string[];
+    linkedCompetitorIds?: string[];
     createdAt?: string | null;
     updatedAt?: string | null;
   };
@@ -456,6 +458,8 @@ export async function updateBugAction(input: {
     status: input.updates.status,
     severity: input.updates.severity,
     bug_type: input.updates.bugType,
+    linked_learning_note_ids: input.updates.linkedLearningNoteIds,
+    linked_competitor_ids: input.updates.linkedCompetitorIds,
     ...(input.updates.createdAt !== undefined
       ? { created_at: input.updates.createdAt }
       : {}),
@@ -572,6 +576,8 @@ export async function updateLearningNoteAction(input: {
   competitors?: string;
   productThinking?: string;
   linkedRequirementIds?: string[];
+  linkedCompetitorIds?: string[];
+  linkedBugIds?: string[];
   suggestions?: import("@/lib/types").LearningSuggestion[];
 }) {
   assertNotViewerWrite();
@@ -588,9 +594,13 @@ export async function updateLearningNoteAction(input: {
     competitors: input.competitors,
     product_thinking: input.productThinking,
     linked_requirement_ids: input.linkedRequirementIds,
+    linked_competitor_ids: input.linkedCompetitorIds,
+    linked_bug_ids: input.linkedBugIds,
     suggestions: input.suggestions,
   });
   revalidatePath(`/projects/${input.projectSlug}/learning`);
+  revalidatePath(`/projects/${input.projectSlug}/competitors`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
   return row;
 }
 
@@ -1536,4 +1546,64 @@ export async function fetchWorkbenchAcceptancePeekAction(input: {
     };
   }
   throw new Error("缺少 changeSessionId 或 requirementId");
+}
+
+export async function createCompetitorEntryAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  summary?: string;
+  url?: string | null;
+  modulePath?: string | null;
+}) {
+  assertNotViewerWrite();
+  const { createCompetitorEntry } = await import("@/lib/competitors/store");
+  const row = await createCompetitorEntry({
+    project_id: input.projectId,
+    title: input.title,
+    summary: input.summary,
+    url: input.url,
+    module_path: input.modulePath,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/competitors`);
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+export async function updateCompetitorEntryAction(input: {
+  entryId: string;
+  projectSlug: string;
+  title?: string;
+  summary?: string;
+  url?: string | null;
+  modulePath?: string | null;
+  linkedLearningNoteIds?: string[];
+  linkedRequirementIds?: string[];
+  linkedBugIds?: string[];
+}) {
+  assertNotViewerWrite();
+  const { updateCompetitorEntry } = await import("@/lib/competitors/store");
+  const row = await updateCompetitorEntry(input.entryId, {
+    title: input.title,
+    summary: input.summary,
+    url: input.url,
+    module_path: input.modulePath,
+    linked_learning_note_ids: input.linkedLearningNoteIds,
+    linked_requirement_ids: input.linkedRequirementIds,
+    linked_bug_ids: input.linkedBugIds,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/competitors`);
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  return row;
+}
+
+export async function deleteCompetitorEntryAction(input: {
+  entryId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deleteCompetitorEntry } = await import("@/lib/competitors/store");
+  await deleteCompetitorEntry(input.entryId);
+  revalidatePath(`/projects/${input.projectSlug}/competitors`);
 }

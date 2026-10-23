@@ -6,7 +6,8 @@ import {
   listLearningAttachmentsForProject,
   listProjectLearningNotes,
 } from "@/lib/learning-notes/store";
-import { getPoolBundle } from "@/lib/db/local-store";
+import { listCompetitorEntries } from "@/lib/competitors/store";
+import { getPoolBundle, listBugsByProject } from "@/lib/db/local-store";
 
 export default async function ProjectLearningPoolPage({
   params,
@@ -35,15 +36,28 @@ export default async function ProjectLearningPoolPage({
     );
   }
 
-  const [notes, pool, attachments] = await Promise.all([
+  const [notes, pool, attachments, competitors, bugs] = await Promise.all([
     listProjectLearningNotes(project.id),
     getPoolBundle(project.id),
     listLearningAttachmentsForProject(project.id),
+    listCompetitorEntries(project.id),
+    listBugsByProject(project.id),
   ]);
 
   const requirements = (pool?.poolRequirements ?? []).map((r) => ({
     id: r.id,
     title: r.title,
+    href: `/projects/${ctx.routeId}/requirements/${r.id}`,
+  }));
+  const competitorOptions = competitors.map((c) => ({
+    id: c.id,
+    title: c.title,
+    href: `/projects/${ctx.routeId}/competitors`,
+  }));
+  const bugOptions = bugs.map((b) => ({
+    id: b.id,
+    title: b.title,
+    href: `/projects/${ctx.routeId}/bugs`,
   }));
 
   return (
@@ -53,6 +67,8 @@ export default async function ProjectLearningPoolPage({
       initialNotes={notes}
       initialAttachments={attachments}
       requirements={requirements}
+      competitorOptions={competitorOptions}
+      bugOptions={bugOptions}
     />
   );
 }

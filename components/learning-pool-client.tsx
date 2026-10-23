@@ -21,11 +21,12 @@ import type {
 } from "@/lib/types";
 import { WorkbookImportPanel } from "@/components/workbook-import-panel";
 import { LearningAttachmentsBlock } from "@/components/learning-attachments";
+import {
+  CrossLinkSection,
+  type CrossLinkOption,
+} from "@/components/cross-link-section";
 
-export type LearningReqOption = {
-  id: string;
-  title: string;
-};
+export type LearningReqOption = CrossLinkOption;
 
 const FIELDS: Array<{
   key: keyof Pick<
@@ -124,12 +125,16 @@ export function LearningPoolClient({
   initialNotes,
   initialAttachments = [],
   requirements,
+  competitorOptions = [],
+  bugOptions = [],
 }: {
   projectId: string;
   projectSlug: string;
   initialNotes: ProjectLearningNote[];
   initialAttachments?: LearningNoteAttachment[];
   requirements: LearningReqOption[];
+  competitorOptions?: CrossLinkOption[];
+  bugOptions?: CrossLinkOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -347,6 +352,27 @@ export function LearningPoolClient({
         router.refresh();
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "取消失败");
+      }
+    });
+  }
+
+  function setNoteLinks(
+    field: "linkedCompetitorIds" | "linkedBugIds",
+    ids: string[]
+  ) {
+    if (!selected) return;
+    startTransition(async () => {
+      try {
+        const row = await updateLearningNoteAction({
+          noteId: selected.id,
+          projectSlug,
+          [field]: ids,
+        });
+        applyNote(row);
+        setMessage("已更新关联");
+        router.refresh();
+      } catch (e) {
+        setMessage(e instanceof Error ? e.message : "关联失败");
       }
     });
   }
@@ -605,12 +631,38 @@ export function LearningPoolClient({
             projectSlug={projectSlug}
             attachments={selectedAttachments}
             requirements={requirements}
+            competitorOptions={competitorOptions}
+            bugOptions={bugOptions}
             reqById={reqById}
             pending={pending}
             onSave={saveSelected}
             onDelete={removeSelected}
             onLinkRequirement={linkRequirement}
             onUnlinkRequirement={unlinkRequirement}
+            onLinkCompetitor={(id) =>
+              setNoteLinks("linkedCompetitorIds", [
+                ...(selected.linked_competitor_ids ?? []),
+                id,
+              ])
+            }
+            onUnlinkCompetitor={(id) =>
+              setNoteLinks(
+                "linkedCompetitorIds",
+                (selected.linked_competitor_ids ?? []).filter((x) => x !== id)
+              )
+            }
+            onLinkBug={(id) =>
+              setNoteLinks("linkedBugIds", [
+                ...(selected.linked_bug_ids ?? []),
+                id,
+              ])
+            }
+            onUnlinkBug={(id) =>
+              setNoteLinks(
+                "linkedBugIds",
+                (selected.linked_bug_ids ?? []).filter((x) => x !== id)
+              )
+            }
             onAddSuggestion={addSuggestion}
             onPatchSuggestion={patchSuggestion}
             onGenerateRequirement={generateFromSuggestion}
@@ -675,12 +727,18 @@ function LearningNoteEditor({
   projectSlug,
   attachments,
   requirements,
+  competitorOptions,
+  bugOptions,
   reqById,
   pending,
   onSave,
   onDelete,
   onLinkRequirement,
   onUnlinkRequirement,
+  onLinkCompetitor,
+  onUnlinkCompetitor,
+  onLinkBug,
+  onUnlinkBug,
   onAddSuggestion,
   onPatchSuggestion,
   onGenerateRequirement,
@@ -692,6 +750,8 @@ function LearningNoteEditor({
   projectSlug: string;
   attachments: LearningNoteAttachment[];
   requirements: LearningReqOption[];
+  competitorOptions: CrossLinkOption[];
+  bugOptions: CrossLinkOption[];
   reqById: Map<string, string>;
   pending: boolean;
   onSave: (
@@ -709,6 +769,10 @@ function LearningNoteEditor({
   onDelete: () => void;
   onLinkRequirement: (requirementId: string) => void;
   onUnlinkRequirement: (requirementId: string) => void;
+  onLinkCompetitor: (id: string) => void;
+  onUnlinkCompetitor: (id: string) => void;
+  onLinkBug: (id: string) => void;
+  onUnlinkBug: (id: string) => void;
   onAddSuggestion: (title: string, detail: string) => void;
   onPatchSuggestion: (
     suggestionId: string,
@@ -908,6 +972,25 @@ function LearningNoteEditor({
           </button>
         </div>
       </section>
+
+      <CrossLinkSection
+        title="关联竞品条目"
+        linkedIds={note.linked_competitor_ids ?? []}
+        options={competitorOptions}
+        pending={pending}
+        pickPlaceholder="选择竞品条目…"
+        onLink={onLinkCompetitor}
+        onUnlink={onUnlinkCompetitor}
+      />
+      <CrossLinkSection
+        title="关联 Bug"
+        linkedIds={note.linked_bug_ids ?? []}
+        options={bugOptions}
+        pending={pending}
+        pickPlaceholder="选择 Bug…"
+        onLink={onLinkBug}
+        onUnlink={onUnlinkBug}
+      />
 
       <section className="space-y-2 border-t border-slate-100 pt-3">
         <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>

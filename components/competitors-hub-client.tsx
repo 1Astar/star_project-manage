@@ -8,14 +8,24 @@ import {
   MARKET_COMPETITOR_PREVIEW_URL,
 } from "@/lib/competitor/links";
 import { WorkbookImportPanel } from "@/components/workbook-import-panel";
+import { CompetitorsEntriesPanel } from "@/components/competitors-entries-panel";
+import type { CrossLinkOption } from "@/components/cross-link-section";
 import type { CompetitorEntry } from "@/lib/types";
 
 export function CompetitorsHubClient({
   routeId,
+  projectId,
   entries = [],
+  learningOptions = [],
+  requirementOptions = [],
+  bugOptions = [],
 }: {
   routeId: string;
+  projectId: string;
   entries?: CompetitorEntry[];
+  learningOptions?: CrossLinkOption[];
+  requirementOptions?: CrossLinkOption[];
+  bugOptions?: CrossLinkOption[];
 }) {
   const featuresHref = `/projects/${routeId}/competitors/features#${FEATURE_COMPETITOR_DEFAULT_HASH}`;
   const marketFormal = MARKET_COMPETITOR_LINK_STATUS === "formal";
@@ -38,49 +48,14 @@ export function CompetitorsHubClient({
 
       <WorkbookImportPanel projectSlug={routeId} compact />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900">
-            竞品条目 · {entries.length}
-          </h3>
-          <p className="text-xs text-slate-500">
-            可被学习 / 需求 / Bug 交叉引用；总表「竞品」Sheet 写入这里
-          </p>
-        </div>
-        {entries.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">
-            暂无条目。下载总表模板填「竞品」Sheet 后上传，或后续在此手工新建。
-          </p>
-        ) : (
-          <ul className="mt-3 divide-y divide-slate-100">
-            {entries.map((e) => (
-              <li key={e.id} className="py-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-medium text-slate-900">{e.title}</p>
-                  {e.url ? (
-                    <a
-                      href={e.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs text-indigo-600 hover:underline"
-                    >
-                      外链 ↗
-                    </a>
-                  ) : null}
-                </div>
-                {e.summary ? (
-                  <p className="mt-1 text-sm text-slate-600">{e.summary}</p>
-                ) : null}
-                <p className="mt-1 text-[11px] text-slate-400">
-                  关联 学习 {e.linked_learning_note_ids.length} · 需求{" "}
-                  {e.linked_requirement_ids.length} · Bug {e.linked_bug_ids.length}
-                  {e.module_path ? ` · ${e.module_path}` : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <CompetitorsEntriesPanel
+        projectId={projectId}
+        projectSlug={routeId}
+        initialEntries={entries}
+        learningOptions={learningOptions}
+        requirementOptions={requirementOptions}
+        bugOptions={bugOptions}
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
