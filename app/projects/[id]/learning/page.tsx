@@ -3,6 +3,7 @@ import { BackLink } from "@/components/back-button";
 import { LearningPoolClient } from "@/components/learning-pool-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import { listProjectLearningNotes } from "@/lib/learning-notes/store";
+import { getPoolBundle } from "@/lib/db/local-store";
 
 export default async function ProjectLearningPoolPage({
   params,
@@ -31,13 +32,22 @@ export default async function ProjectLearningPoolPage({
     );
   }
 
-  const notes = await listProjectLearningNotes(project.id);
+  const [notes, pool] = await Promise.all([
+    listProjectLearningNotes(project.id),
+    getPoolBundle(project.id),
+  ]);
+
+  const requirements = (pool?.poolRequirements ?? []).map((r) => ({
+    id: r.id,
+    title: r.title,
+  }));
 
   return (
     <LearningPoolClient
       projectId={project.id}
       projectSlug={ctx.routeId}
       initialNotes={notes}
+      requirements={requirements}
     />
   );
 }

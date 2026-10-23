@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { readDb, writeDb } from "@/lib/db/local-store";
-import type { ProjectLearningNote } from "@/lib/types";
+import type { LearningSuggestion, ProjectLearningNote } from "@/lib/types";
 
 function uid(prefix: string) {
   return `${prefix}${crypto.randomUUID().slice(0, 12)}`;
@@ -11,7 +11,37 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function normalizeNote(row: Record<string, unknown>): ProjectLearningNote {
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => String(v)).filter(Boolean);
+}
+
+function asSuggestions(value: unknown): LearningSuggestion[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const row = raw as Record<string, unknown>;
+      const id = String(row.id ?? "").trim();
+      const title = String(row.title ?? "").trim();
+      if (!id || !title) return null;
+      return {
+        id,
+        title,
+        detail: String(row.detail ?? ""),
+        linked_requirement_id:
+          row.linked_requirement_id != null && String(row.linked_requirement_id).trim()
+            ? String(row.linked_requirement_id)
+            : null,
+        created_at: String(row.created_at ?? nowIso()),
+      } satisfies LearningSuggestion;
+    })
+    .filter((s): s is LearningSuggestion => Boolean(s));
+}
+
+export function normalizeLearningNote(
+  row: Record<string, unknown>
+): ProjectLearningNote {
   return {
     id: String(row.id),
     project_id: String(row.project_id),
@@ -22,15 +52,25 @@ function normalizeNote(row: Record<string, unknown>): ProjectLearningNote {
     tech_background: String(row.tech_background ?? ""),
     competitors: String(row.competitors ?? ""),
     product_thinking: String(row.product_thinking ?? ""),
+    linked_requirement_ids: asStringArray(row.linked_requirement_ids),
+    suggestions: asSuggestions(row.suggestions),
     created_at: String(row.created_at ?? nowIso()),
     updated_at: String(row.updated_at ?? nowIso()),
   };
+}
+
+function normalizeNote(row: Record<string, unknown>): ProjectLearningNote {
+  return normalizeLearningNote(row);
 }
 
 function tableMissing(message: string): boolean {
   return /project_learning_notes|schema cache|does not exist|Could not find/i.test(
     message
   );
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
 }
 
 export async function listProjectLearningNotes(
@@ -54,6 +94,7 @@ export async function listProjectLearningNotes(
   const db = await readDb();
   return (db.project_learning_notes ?? [])
     .filter((n) => n.project_id === projectId)
+    .map((n) => normalizeNote(n as unknown as Record<string, unknown>))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 }
 
@@ -78,7 +119,8 @@ export async function getLearningNoteById(
     }
   }
   const db = await readDb();
-  return (db.project_learning_notes ?? []).find((n) => n.id === noteId) ?? null;
+  const row = (db.project_learning_notes ?? []).find((n) => n.id === noteId);
+  return row ? normalizeNote(row as unknown as Record<string, unknown>) : null;
 }
 
 export async function createProjectLearningNote(input: {
@@ -90,6 +132,8 @@ export async function createProjectLearningNote(input: {
   tech_background?: string;
   competitors?: string;
   product_thinking?: string;
+  linked_requirement_ids?: string[];
+  suggestions?: LearningSuggestion[];
 }): Promise<ProjectLearningNote> {
   const now = nowIso();
   const note: ProjectLearningNote = {
@@ -102,6 +146,8 @@ export async function createProjectLearningNote(input: {
     tech_background: input.tech_background?.trim() ?? "",
     competitors: input.competitors?.trim() ?? "",
     product_thinking: input.product_thinking?.trim() ?? "",
+    linked_requirement_ids: uniqueIds(input.linked_requirement_ids ?? []),
+    suggestions: asSuggestions(input.suggestions ?? []),
     created_at: now,
     updated_at: now,
   };
@@ -125,17 +171,21 @@ export async function createProjectLearningNote(input: {
   return note;
 }
 
+export type LearningNotePatch = {
+  title?: string;
+  why_text?: string;
+  principle?: string;
+  protocol?: string;
+  tech_background?: string;
+  competitors?: string;
+  product_thinking?: string;
+  linked_requirement_ids?: string[];
+  suggestions?: LearningSuggestion[];
+};
+
 export async function updateProjectLearningNote(
   noteId: string,
-  patch: {
-    title?: string;
-    why_text?: string;
-    principle?: string;
-    protocol?: string;
-    tech_background?: string;
-    competitors?: string;
-    product_thinking?: string;
-  }
+  patch: LearningNotePatch
 ): Promise<ProjectLearningNote> {
   const existing = await getLearningNoteById(noteId);
   if (!existing) throw new Error("学习笔记不存在");
@@ -157,6 +207,14 @@ export async function updateProjectLearningNote(
       patch.product_thinking !== undefined
         ? patch.product_thinking
         : existing.product_thinking,
+    linked_requirement_ids:
+      patch.linked_requirement_ids !== undefined
+        ? uniqueIds(patch.linked_requirement_ids)
+        : existing.linked_requirement_ids,
+    suggestions:
+      patch.suggestions !== undefined
+        ? asSuggestions(patch.suggestions)
+        : existing.suggestions,
     updated_at: nowIso(),
   };
 
@@ -173,6 +231,8 @@ export async function updateProjectLearningNote(
           tech_background: next.tech_background,
           competitors: next.competitors,
           product_thinking: next.product_thinking,
+          linked_requirement_ids: next.linked_requirement_ids,
+          suggestions: next.suggestions,
           updated_at: next.updated_at,
         })
         .eq("id", noteId);
@@ -206,4 +266,17 @@ export async function deleteProjectLearningNote(noteId: string): Promise<void> {
     (n) => n.id !== noteId
   );
   await writeDb(db);
+}
+
+export function newLearningSuggestion(input: {
+  title: string;
+  detail?: string;
+}): LearningSuggestion {
+  return {
+    id: uid("ls-"),
+    title: input.title.trim() || "未命名建议",
+    detail: input.detail?.trim() ?? "",
+    linked_requirement_id: null,
+    created_at: nowIso(),
+  };
 }

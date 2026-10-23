@@ -564,6 +564,8 @@ export async function updateLearningNoteAction(input: {
   techBackground?: string;
   competitors?: string;
   productThinking?: string;
+  linkedRequirementIds?: string[];
+  suggestions?: import("@/lib/types").LearningSuggestion[];
 }) {
   assertNotViewerWrite();
   const { updateProjectLearningNote } = await import("@/lib/learning-notes/store");
@@ -575,6 +577,8 @@ export async function updateLearningNoteAction(input: {
     tech_background: input.techBackground,
     competitors: input.competitors,
     product_thinking: input.productThinking,
+    linked_requirement_ids: input.linkedRequirementIds,
+    suggestions: input.suggestions,
   });
   revalidatePath(`/projects/${input.projectSlug}/learning`);
   return row;
@@ -588,6 +592,185 @@ export async function deleteLearningNoteAction(input: {
   const { deleteProjectLearningNote } = await import("@/lib/learning-notes/store");
   await deleteProjectLearningNote(input.noteId);
   revalidatePath(`/projects/${input.projectSlug}/learning`);
+}
+
+/** 学习笔记挂上已有需求 */
+export async function linkLearningNoteRequirementAction(input: {
+  noteId: string;
+  projectSlug: string;
+  requirementId: string;
+}) {
+  assertNotViewerWrite();
+  const { getLearningNoteById, updateProjectLearningNote } = await import(
+    "@/lib/learning-notes/store"
+  );
+  const note = await getLearningNoteById(input.noteId);
+  if (!note) throw new Error("学习笔记不存在");
+  const ids = Array.from(
+    new Set([...note.linked_requirement_ids, input.requirementId.trim()].filter(Boolean))
+  );
+  const row = await updateProjectLearningNote(input.noteId, {
+    linked_requirement_ids: ids,
+  });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+/** 学习笔记取消关联需求 */
+export async function unlinkLearningNoteRequirementAction(input: {
+  noteId: string;
+  projectSlug: string;
+  requirementId: string;
+}) {
+  assertNotViewerWrite();
+  const { getLearningNoteById, updateProjectLearningNote } = await import(
+    "@/lib/learning-notes/store"
+  );
+  const note = await getLearningNoteById(input.noteId);
+  if (!note) throw new Error("学习笔记不存在");
+  const row = await updateProjectLearningNote(input.noteId, {
+    linked_requirement_ids: note.linked_requirement_ids.filter(
+      (id) => id !== input.requirementId
+    ),
+  });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+/** 新增一条优化建议（不自动建需求） */
+export async function addLearningSuggestionAction(input: {
+  noteId: string;
+  projectSlug: string;
+  title: string;
+  detail?: string;
+}) {
+  assertNotViewerWrite();
+  const {
+    getLearningNoteById,
+    updateProjectLearningNote,
+    newLearningSuggestion,
+  } = await import("@/lib/learning-notes/store");
+  const note = await getLearningNoteById(input.noteId);
+  if (!note) throw new Error("学习笔记不存在");
+  const suggestion = newLearningSuggestion({
+    title: input.title,
+    detail: input.detail,
+  });
+  const row = await updateProjectLearningNote(input.noteId, {
+    suggestions: [...note.suggestions, suggestion],
+  });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return { note: row, suggestion };
+}
+
+/** 更新 / 删除优化建议 */
+export async function updateLearningSuggestionAction(input: {
+  noteId: string;
+  projectSlug: string;
+  suggestionId: string;
+  title?: string;
+  detail?: string;
+  remove?: boolean;
+}) {
+  assertNotViewerWrite();
+  const { getLearningNoteById, updateProjectLearningNote } = await import(
+    "@/lib/learning-notes/store"
+  );
+  const note = await getLearningNoteById(input.noteId);
+  if (!note) throw new Error("学习笔记不存在");
+  let suggestions = note.suggestions;
+  if (input.remove) {
+    suggestions = suggestions.filter((s) => s.id !== input.suggestionId);
+  } else {
+    suggestions = suggestions.map((s) =>
+      s.id === input.suggestionId
+        ? {
+            ...s,
+            title: input.title !== undefined ? input.title.trim() || s.title : s.title,
+            detail: input.detail !== undefined ? input.detail : s.detail,
+          }
+        : s
+    );
+  }
+  const row = await updateProjectLearningNote(input.noteId, { suggestions });
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  return row;
+}
+
+/**
+ * 从优化建议一键生成需求池条目，并回写关联。
+ * 若建议已挂过需求则幂等返回，不重复创建。
+ */
+export async function generateRequirementFromLearningSuggestionAction(input: {
+  noteId: string;
+  projectId: string;
+  projectSlug: string;
+  suggestionId: string;
+}) {
+  assertNotViewerWrite();
+  const { getLearningNoteById, updateProjectLearningNote } = await import(
+    "@/lib/learning-notes/store"
+  );
+  const note = await getLearningNoteById(input.noteId);
+  if (!note) throw new Error("学习笔记不存在");
+  const suggestion = note.suggestions.find((s) => s.id === input.suggestionId);
+  if (!suggestion) throw new Error("优化建议不存在");
+
+  if (suggestion.linked_requirement_id) {
+    return {
+      note,
+      requirementId: suggestion.linked_requirement_id,
+      created: false,
+    };
+  }
+
+  const detailParts = [
+    suggestion.detail.trim(),
+    `来源学习笔记：${note.title}`,
+  ].filter(Boolean);
+
+  const { requirement } = await createPoolRequirementAction(
+    input.projectSlug,
+    input.projectId,
+    { title: suggestion.title }
+  );
+
+  // 补 detail（createPoolRequirementAction 只接 title；再 patch）
+  try {
+    const { updatePoolRequirement } = await import("@/lib/db/local-store");
+    await updatePoolRequirement(
+      requirement.id,
+      {
+        detail_work: detailParts.join("\n\n"),
+        inspiration_source: `学习池 · ${note.title}`,
+      },
+      { name: "Auto", role: "admin" }
+    );
+  } catch {
+    // 若无 detail 字段更新能力，仍保留已创建的需求
+  }
+
+  const suggestions = note.suggestions.map((s) =>
+    s.id === suggestion.id
+      ? { ...s, linked_requirement_id: requirement.id }
+      : s
+  );
+  const linked = Array.from(
+    new Set([...note.linked_requirement_ids, requirement.id])
+  );
+  const nextNote = await updateProjectLearningNote(input.noteId, {
+    suggestions,
+    linked_requirement_ids: linked,
+  });
+
+  revalidatePath(`/projects/${input.projectSlug}/learning`);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return {
+    note: nextNote,
+    requirementId: requirement.id,
+    created: true,
+  };
 }
 
 export async function createPrdAction(input: {

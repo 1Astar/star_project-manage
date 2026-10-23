@@ -418,6 +418,16 @@ export interface Bug {
   updated_at: string;
 }
 
+/** 学习笔记里的一条优化建议（可一键生成需求） */
+export interface LearningSuggestion {
+  id: string;
+  title: string;
+  detail: string;
+  /** 已一键生成或手动挂上的需求 id */
+  linked_requirement_id: string | null;
+  created_at: string;
+}
+
 /** 项目学习池条目（个人学习：原理 / 协议 / 竞品等） */
 export interface ProjectLearningNote {
   id: string;
@@ -435,6 +445,10 @@ export interface ProjectLearningNote {
   competitors: string;
   /** 更底层的产品思考 */
   product_thinking: string;
+  /** 关联需求 id（可多选；含建议生成的需求） */
+  linked_requirement_ids: string[];
+  /** 优化建议（尚未/已生成需求） */
+  suggestions: LearningSuggestion[];
   created_at: string;
   updated_at: string;
 }

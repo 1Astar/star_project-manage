@@ -221,6 +221,29 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
         tech_background: String(row.tech_background ?? ""),
         competitors: String(row.competitors ?? ""),
         product_thinking: String(row.product_thinking ?? ""),
+        linked_requirement_ids: Array.isArray(row.linked_requirement_ids)
+          ? row.linked_requirement_ids.map((v) => String(v)).filter(Boolean)
+          : [],
+        suggestions: Array.isArray(row.suggestions)
+          ? (row.suggestions as Record<string, unknown>[])
+              .map((s) => {
+                const id = String(s.id ?? "").trim();
+                const title = String(s.title ?? "").trim();
+                if (!id || !title) return null;
+                return {
+                  id,
+                  title,
+                  detail: String(s.detail ?? ""),
+                  linked_requirement_id:
+                    s.linked_requirement_id != null &&
+                    String(s.linked_requirement_id).trim()
+                      ? String(s.linked_requirement_id)
+                      : null,
+                  created_at: String(s.created_at ?? new Date().toISOString()),
+                };
+              })
+              .filter((s): s is NonNullable<typeof s> => Boolean(s))
+          : [],
         created_at: String(row.created_at ?? new Date().toISOString()),
         updated_at: String(row.updated_at ?? new Date().toISOString()),
       })

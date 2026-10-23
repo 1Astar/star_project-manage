@@ -18,7 +18,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    const payload = await runWithDurableReadMemo(() => loadWorkbenchHomePart(part));
+    // star 已在 loadWorkbenchStar 内超时降级；整段再加总超时，避免 Worker 挂死拖垮客户端
+    const load = () => runWithDurableReadMemo(() => loadWorkbenchHomePart(part));
+    const payload =
+      part === "star"
+        ? await Promise.race([
+            load(),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error("星图接口超时，请重试")),
+                10_000
+              )
+            ),
+          ])
+        : await load();
     return NextResponse.json(payload);
   } catch (e) {
     console.error("workbench home section", part, e);

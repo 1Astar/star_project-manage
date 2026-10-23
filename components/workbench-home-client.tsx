@@ -69,24 +69,46 @@ function explainWorkbenchHttpError(status: number, raw: string): string {
   return text && text.length < 200 ? text : `HTTP ${status}`;
 }
 
+const PART_TIMEOUT_MS: Record<string, number> = {
+  hero: 12_000,
+  today: 12_000,
+  library: 12_000,
+  star: 10_000,
+};
+
 async function fetchPart<T>(part: string): Promise<T> {
-  const res = await fetch(`/api/workbench/home?part=${part}`, {
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const raw = await res.text();
-    let message = raw;
-    try {
-      const body = JSON.parse(raw) as { error?: unknown };
-      if (typeof body?.error === "string") message = body.error;
-    } catch {
-      /* plain text e.g. Vercel DEPLOYMENT_DISABLED */
+  const ms = PART_TIMEOUT_MS[part] ?? 12_000;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(`/api/workbench/home?part=${part}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const raw = await res.text();
+      let message = raw;
+      try {
+        const body = JSON.parse(raw) as { error?: unknown };
+        if (typeof body?.error === "string") message = body.error;
+      } catch {
+        /* plain text e.g. Vercel DEPLOYMENT_DISABLED */
+      }
+      throw new Error(explainWorkbenchHttpError(res.status, message));
     }
-    throw new Error(explainWorkbenchHttpError(res.status, message));
+    const json = (await res.json()) as { data: T };
+    return json.data;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(
+        `加载超时（${Math.round(ms / 1000)}s）。可点重试；星图失败不影响其它区块。`
+      );
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  const json = (await res.json()) as { data: T };
-  return json.data;
 }
 
 export function WorkbenchHomeClient() {
@@ -116,7 +138,7 @@ export function WorkbenchHomeClient() {
     };
 
     (async () => {
-      // 顺序加载：先主线摘要 → 今日清单 → 项目库 → 星图（最重）
+      // 先主线摘要；再并行今日 / 项目库 / 星图（星图最重，超时不拖死其它块）
       try {
         clearError("hero");
         const h = await fetchPart<WorkbenchHeroPayload>("hero");
@@ -125,29 +147,35 @@ export function WorkbenchHomeClient() {
         markError("hero", e);
       }
 
-      try {
-        clearError("today");
-        const t = await fetchPart<WorkbenchTodayPayload>("today");
-        if (!cancelled) setToday(t);
-      } catch (e) {
-        markError("today", e);
-      }
-
-      try {
-        clearError("library");
-        const lib = await fetchPart<WorkbenchLibraryPayload>("library");
-        if (!cancelled) setLibrary(lib);
-      } catch (e) {
-        markError("library", e);
-      }
-
-      try {
-        clearError("star");
-        const s = await fetchPart<WorkbenchStarPayload>("star");
-        if (!cancelled) setStar(s);
-      } catch (e) {
-        markError("star", e);
-      }
+      await Promise.all([
+        (async () => {
+          try {
+            clearError("today");
+            const t = await fetchPart<WorkbenchTodayPayload>("today");
+            if (!cancelled) setToday(t);
+          } catch (e) {
+            markError("today", e);
+          }
+        })(),
+        (async () => {
+          try {
+            clearError("library");
+            const lib = await fetchPart<WorkbenchLibraryPayload>("library");
+            if (!cancelled) setLibrary(lib);
+          } catch (e) {
+            markError("library", e);
+          }
+        })(),
+        (async () => {
+          try {
+            clearError("star");
+            const s = await fetchPart<WorkbenchStarPayload>("star");
+            if (!cancelled) setStar(s);
+          } catch (e) {
+            markError("star", e);
+          }
+        })(),
+      ]);
     })();
 
     return () => {
@@ -327,7 +355,7 @@ export function WorkbenchHomeClient() {
         </div>
       )}
 
-      {/* 视觉顺序：星图 → 项目库 → 今日；网络顺序已是 hero→today→library→star */}
+      {/* 视觉顺序：星图 → 项目库 → 今日；网络：hero 后并行 today/library/star */}
       {deploymentDisabledDetail ? null : errors.star ? (
         <SectionError
           label="星图 / 日历"
@@ -338,10 +366,26 @@ export function WorkbenchHomeClient() {
         <SectionSkeleton label="星图与日历加载中…" />
       ) : (
         <div className="mt-6">
-          <WorkbenchStarOrCalendar
-            layout={star.layout}
-            improvementByDay={star.improvementByDay}
-          />
+          {star.degraded ? (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              <p>星图 / 日历暂未加载（已降级，不影响下方项目库与清单）</p>
+              {star.degradeReason ? (
+                <p className="mt-1 text-xs text-amber-900/80">{star.degradeReason}</p>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void retryPart("star")}
+                className="mt-2 text-xs font-medium text-amber-800 underline"
+              >
+                重试星图
+              </button>
+            </div>
+          ) : (
+            <WorkbenchStarOrCalendar
+              layout={star.layout}
+              improvementByDay={star.improvementByDay}
+            />
+          )}
         </div>
       )}
 

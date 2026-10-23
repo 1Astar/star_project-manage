@@ -36,22 +36,26 @@ import type {
   StudioTask,
 } from "@/lib/studio/types";
 
-/** 星图灵感条数上限（首页 SSR） */
-export const WORKBENCH_IDEA_LIMIT = 80;
+/** 星图灵感条数上限（首页 / part=star；再压一档防 CF Worker 1102） */
+export const WORKBENCH_IDEA_LIMIT = 40;
 /** 改进日历：演进回看天数 */
-export const WORKBENCH_EVOLUTION_DAYS = 45;
+export const WORKBENCH_EVOLUTION_DAYS = 30;
 /** 改进日历 / 明日议程：变更会话回看天数 */
-export const WORKBENCH_SESSION_DAYS = 45;
+export const WORKBENCH_SESSION_DAYS = 30;
 /** 演进条数上限 */
-export const WORKBENCH_EVOLUTION_LIMIT = 120;
+export const WORKBENCH_EVOLUTION_LIMIT = 60;
 /** 日历用近期会话上限 */
-export const WORKBENCH_SESSION_CALENDAR_LIMIT = 100;
+export const WORKBENCH_SESSION_CALENDAR_LIMIT = 50;
 /** 待验收 unreviewed 会话上限（另按 14 天窗过滤） */
-export const WORKBENCH_SESSION_UNREVIEWED_LIMIT = 60;
+export const WORKBENCH_SESSION_UNREVIEWED_LIMIT = 40;
 /** 待验收会话回看天数（与 pm-inbox SESSION_LOOKBACK 对齐） */
 export const WORKBENCH_ACCEPT_SESSION_DAYS = 14;
 /** 未完成任务上限（主线/阻塞/下一步草稿） */
-export const WORKBENCH_OPEN_TASK_LIMIT = 200;
+export const WORKBENCH_OPEN_TASK_LIMIT = 120;
+/** 星图专用：构图前再裁一刀（登录态仍可能偏重） */
+export const WORKBENCH_STAR_IDEA_LIMIT = 28;
+export const WORKBENCH_STAR_EVOLUTION_LIMIT = 40;
+export const WORKBENCH_STAR_SESSION_LIMIT = 40;
 
 const WORKBENCH_PROJECT_COLUMNS = [
   "id",

@@ -4,6 +4,11 @@
 import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { buildStarMapLayout, type StarMapLayout } from "@/lib/studio/idea-star-map";
 import { buildImprovementCalendar, type ImprovementDayBucket } from "@/lib/studio/improvement-calendar";
+import {
+  WORKBENCH_STAR_EVOLUTION_LIMIT,
+  WORKBENCH_STAR_IDEA_LIMIT,
+  WORKBENCH_STAR_SESSION_LIMIT,
+} from "@/lib/studio/workbench-snapshot";
 import type { Project, StudioTask } from "@/lib/studio/types";
 import { PROJECT_STATUS_LABELS } from "@/lib/studio/types";
 import {
@@ -63,6 +68,9 @@ export type WorkbenchLibraryPayload = {
 export type WorkbenchStarPayload = {
   layout: StarMapLayout;
   improvementByDay: Record<string, ImprovementDayBucket>;
+  /** 超时/失败降级为空图时为 true，客户端可提示重试 */
+  degraded?: boolean;
+  degradeReason?: string;
 };
 
 function nextActionDraftsFromTasks(tasks: StudioTask[]): Record<string, string> {
@@ -156,26 +164,80 @@ export async function loadWorkbenchLibrary(): Promise<WorkbenchLibraryPayload> {
   });
 }
 
+const STAR_SECTION_TIMEOUT_MS = 8_000;
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} 超时（${Math.round(ms / 1000)}s）`)),
+          ms
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function loadWorkbenchStar(): Promise<WorkbenchStarPayload> {
   return runWithDurableReadMemo(async () => {
-    const [studioSnap, acceptanceQueue] = await Promise.all([
-      getScopedWorkbenchStudioSnapshot(),
-      getPmAcceptanceQueue(),
-    ]);
-    const projectTitleById = new Map(studioSnap.projects.map((p) => [p.id, p.title]));
-    const improvementByDayMap = buildImprovementCalendar({
-      evolution: studioSnap.evolutionLogs,
-      changeSessions: studioSnap.changeSessions ?? [],
-      projectTitleById,
-    });
-    const improvementByDay = Object.fromEntries(improvementByDayMap);
-    const layout = buildStarMapLayout(studioSnap.ideas, studioSnap.projects, {
-      acceptanceCount: acceptanceQueue.items.length,
-      latestImproveDay: Object.keys(improvementByDay).sort().reverse()[0] ?? null,
-      changeSessions: studioSnap.changeSessions ?? [],
-      evolution: studioSnap.evolutionLogs,
-    });
-    return { layout, improvementByDay };
+    try {
+      return await withTimeout(
+        (async () => {
+          const [studioSnap, acceptanceQueue] = await Promise.all([
+            getScopedWorkbenchStudioSnapshot(),
+            getPmAcceptanceQueue(),
+          ]);
+          const ideas = [...studioSnap.ideas]
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+            .slice(0, WORKBENCH_STAR_IDEA_LIMIT);
+          const evolution = studioSnap.evolutionLogs.slice(
+            0,
+            WORKBENCH_STAR_EVOLUTION_LIMIT
+          );
+          const changeSessions = (studioSnap.changeSessions ?? []).slice(
+            0,
+            WORKBENCH_STAR_SESSION_LIMIT
+          );
+          const projects = studioSnap.projects.filter((p) => p.status !== "archived");
+          const projectTitleById = new Map(projects.map((p) => [p.id, p.title]));
+          const improvementByDayMap = buildImprovementCalendar({
+            evolution,
+            changeSessions,
+            projectTitleById,
+          });
+          const improvementByDay = Object.fromEntries(improvementByDayMap);
+          const layout = buildStarMapLayout(ideas, projects, {
+            acceptanceCount: acceptanceQueue.items.length,
+            latestImproveDay:
+              Object.keys(improvementByDay).sort().reverse()[0] ?? null,
+            changeSessions,
+            evolution,
+          });
+          return { layout, improvementByDay };
+        })(),
+        STAR_SECTION_TIMEOUT_MS,
+        "星图 / 日历"
+      );
+    } catch (e) {
+      console.error("workbench star degraded", e);
+      // 超时/失败：返回空星图（HTTP 200），其它区块不受影响；带 degraded 供客户端提示重试
+      return {
+        layout: buildStarMapLayout([], [], { acceptanceCount: 0 }),
+        improvementByDay: {},
+        degraded: true,
+        degradeReason:
+          e instanceof Error ? e.message : "星图加载失败，已降级为空图",
+      };
+    }
   });
 }
 
