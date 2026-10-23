@@ -531,6 +531,8 @@ export async function createLearningNoteAction(input: {
   projectId: string;
   projectSlug: string;
   title: string;
+  kind?: import("@/lib/types").LearningNoteKind;
+  parentId?: string | null;
   whyText?: string;
   principle?: string;
   protocol?: string;
@@ -543,6 +545,8 @@ export async function createLearningNoteAction(input: {
   const row = await createProjectLearningNote({
     project_id: input.projectId,
     title: input.title,
+    kind: input.kind,
+    parent_id: input.parentId,
     why_text: input.whyText,
     principle: input.principle,
     protocol: input.protocol,
@@ -558,6 +562,9 @@ export async function updateLearningNoteAction(input: {
   noteId: string;
   projectSlug: string;
   title?: string;
+  kind?: import("@/lib/types").LearningNoteKind;
+  parentId?: string | null;
+  sortOrder?: number;
   whyText?: string;
   principle?: string;
   protocol?: string;
@@ -571,6 +578,9 @@ export async function updateLearningNoteAction(input: {
   const { updateProjectLearningNote } = await import("@/lib/learning-notes/store");
   const row = await updateProjectLearningNote(input.noteId, {
     title: input.title,
+    kind: input.kind,
+    parent_id: input.parentId,
+    sort_order: input.sortOrder,
     why_text: input.whyText,
     principle: input.principle,
     protocol: input.protocol,

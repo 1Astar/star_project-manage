@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-button";
 import { LearningPoolClient } from "@/components/learning-pool-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
-import { listProjectLearningNotes } from "@/lib/learning-notes/store";
+import {
+  listLearningAttachmentsForProject,
+  listProjectLearningNotes,
+} from "@/lib/learning-notes/store";
 import { getPoolBundle } from "@/lib/db/local-store";
 
 export default async function ProjectLearningPoolPage({
@@ -32,9 +35,10 @@ export default async function ProjectLearningPoolPage({
     );
   }
 
-  const [notes, pool] = await Promise.all([
+  const [notes, pool, attachments] = await Promise.all([
     listProjectLearningNotes(project.id),
     getPoolBundle(project.id),
+    listLearningAttachmentsForProject(project.id),
   ]);
 
   const requirements = (pool?.poolRequirements ?? []).map((r) => ({
@@ -47,6 +51,7 @@ export default async function ProjectLearningPoolPage({
       projectId={project.id}
       projectSlug={ctx.routeId}
       initialNotes={notes}
+      initialAttachments={attachments}
       requirements={requirements}
     />
   );

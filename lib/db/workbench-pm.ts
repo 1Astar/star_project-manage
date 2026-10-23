@@ -69,6 +69,12 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,
+    linked_learning_note_ids: Array.isArray(row.linked_learning_note_ids)
+      ? row.linked_learning_note_ids.map((v) => String(v)).filter(Boolean)
+      : [],
+    linked_competitor_ids: Array.isArray(row.linked_competitor_ids)
+      ? row.linked_competitor_ids.map((v) => String(v)).filter(Boolean)
+      : [],
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };

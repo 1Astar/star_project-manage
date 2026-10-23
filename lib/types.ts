@@ -414,6 +414,37 @@ export interface Bug {
   /** 严重程度：1 致命 … 4 轻微 */
   severity: BugSeverity;
   bug_type: BugType;
+  /** 可选：关联学习知识点 */
+  linked_learning_note_ids: string[];
+  /** 可选：关联竞品条目 */
+  linked_competitor_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** 项目内竞品条目（可被学习 / 需求 / Bug 交叉引用） */
+export interface CompetitorEntry {
+  id: string;
+  project_id: string;
+  title: string;
+  summary: string;
+  /** 外链（产品页 / 资料等） */
+  url: string | null;
+  module_path: string | null;
+  linked_learning_note_ids: string[];
+  linked_requirement_ids: string[];
+  linked_bug_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+/** 项目内嵌工作簿（FortuneSheet JSON；一期不与实体同步） */
+export interface ProjectWorkbook {
+  id: string;
+  project_id: string;
+  title: string;
+  /** FortuneSheet Sheet[] JSON */
+  sheet_data: Array<Record<string, unknown>>;
   created_at: string;
   updated_at: string;
 }
@@ -428,11 +459,20 @@ export interface LearningSuggestion {
   created_at: string;
 }
 
+/** 学习池节点层级：板块 → 主题 → 子知识点 */
+export type LearningNoteKind = "section" | "topic" | "point";
+
 /** 项目学习池条目（个人学习：原理 / 协议 / 竞品等） */
 export interface ProjectLearningNote {
   id: string;
   project_id: string;
   title: string;
+  /** section=板块 / topic=主题 / point=子知识点 */
+  kind: LearningNoteKind;
+  /** 父节点；板块为空；主题挂板块；子挂主题 */
+  parent_id: string | null;
+  /** 同级排序，小在前 */
+  sort_order: number;
   /** 为什么？ */
   why_text: string;
   /** 原理 */
@@ -447,10 +487,26 @@ export interface ProjectLearningNote {
   product_thinking: string;
   /** 关联需求 id（可多选；含建议生成的需求） */
   linked_requirement_ids: string[];
+  /** 可选：关联竞品条目 */
+  linked_competitor_ids: string[];
+  /** 可选：关联 Bug */
+  linked_bug_ids: string[];
   /** 优化建议（尚未/已生成需求） */
   suggestions: LearningSuggestion[];
   created_at: string;
   updated_at: string;
+}
+
+/** 学习笔记附件（截图 / 文件） */
+export interface LearningNoteAttachment {
+  id: string;
+  project_id: string;
+  note_id: string;
+  title: string;
+  url: string;
+  storage_path: string | null;
+  mime_type: string | null;
+  created_at: string;
 }
 
 /** PRD 内挂载的原型引用 */

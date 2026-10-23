@@ -1,6 +1,7 @@
 /**
- * 工作台「当前主线」算法：按今日压力 / 近期活动打分，取最高。
+ * 工作台「当前主线」算法：今日压力 / 近期活动 / Git 热度打分，取最高。
  * 项目库 status=mainline 视为「钉主线」强加权，不是唯一来源。
+ * Git：用项目 lastCommitAt（及兜底 lastGitSyncedAt），不现场打 GitHub。
  */
 import { getScopedWorkbenchStudioSnapshot } from "@/lib/demo/ensure-showcase";
 import { memoizeDurableRead } from "@/lib/runtime/durable-read-memo";
@@ -55,6 +56,39 @@ function pickFocusTask(tasks: StudioTask[], projectId: string): StudioTask | nul
   );
 }
 
+/** 用于热度比较的时间戳：优先最近一次 commit，其次 Git 同步 */
+function gitHeatAt(project: Project): string | null {
+  return project.lastCommitAt?.trim() || project.lastGitSyncedAt?.trim() || null;
+}
+
+function pushGitHeat(
+  breakdown: MainlineScoreBreakdown[],
+  project: Project,
+  todayDay: string,
+  hottestAt: string | null
+) {
+  const commitAt = project.lastCommitAt?.trim() || null;
+  const syncedAt = project.lastGitSyncedAt?.trim() || null;
+  const heatAt = commitAt || syncedAt;
+
+  if (commitAt) {
+    if (withinDays(commitAt, todayDay, 1)) {
+      breakdown.push({ label: "今日有提交", points: 40 });
+    } else if (withinDays(commitAt, todayDay, 3)) {
+      breakdown.push({ label: "近3日有提交", points: 25 });
+    } else if (withinDays(commitAt, todayDay, 7)) {
+      breakdown.push({ label: "近7日有提交", points: 12 });
+    }
+  } else if (syncedAt && withinDays(syncedAt, todayDay, 2)) {
+    breakdown.push({ label: "近2日Git同步", points: 10 });
+  }
+
+  // 候选里最近一次 Git 活动最新的项目再加一档（相对热度）
+  if (heatAt && hottestAt && heatAt === hottestAt) {
+    breakdown.push({ label: "Git最热", points: 22 });
+  }
+}
+
 export async function getSuggestedMainline(): Promise<MainlineSuggestion | null> {
   return memoizeDurableRead("mainline", loadSuggestedMainline);
 }
@@ -73,6 +107,13 @@ async function loadSuggestedMainline(): Promise<MainlineSuggestion | null> {
     (p) => p.status !== "archived" && p.status !== "parking"
   );
   if (candidates.length === 0) return null;
+
+  // 候选里 Git 活动最新的时间戳（相对「Git最热」）
+  let hottestAt: string | null = null;
+  for (const p of candidates) {
+    const at = gitHeatAt(p);
+    if (at && (!hottestAt || at > hottestAt)) hottestAt = at;
+  }
 
   let best: MainlineSuggestion | null = null;
 
@@ -119,6 +160,8 @@ async function loadSuggestedMainline(): Promise<MainlineSuggestion | null> {
     );
     if (recentEvo) breakdown.push({ label: "近2日演进", points: 15 });
 
+    pushGitHeat(breakdown, project, todayDay, hottestAt);
+
     const inProgress = tasks.some(
       (t) => t.projectId === project.id && t.status === "in_progress"
     );
@@ -144,26 +187,29 @@ async function loadSuggestedMainline(): Promise<MainlineSuggestion | null> {
       focusTask: pickFocusTask(tasks, project.id),
     };
 
-    if (
-      !best ||
-      candidate.score > best.score ||
-      (candidate.score === best.score &&
-        candidate.project.updatedAt > best.project.updatedAt)
-    ) {
+    if (!best || candidate.score > best.score) {
       best = candidate;
+    } else if (candidate.score === best.score) {
+      const a = gitHeatAt(candidate.project) ?? candidate.project.updatedAt;
+      const b = gitHeatAt(best.project) ?? best.project.updatedAt;
+      if (a > b) best = candidate;
     }
   }
 
-  // 全员 0 分时：优先钉主线，否则最近更新
+  // 全员 0 分时：优先钉主线，否则 Git 最近，再否则项目更新时间
   if (best && best.score === 0) {
     const pinned = candidates.find((p) => p.status === "mainline");
-    const fallback =
-      pinned ??
-      [...candidates].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]!;
+    const byGit = [...candidates].sort((a, b) => {
+      const ga = gitHeatAt(a) ?? "";
+      const gb = gitHeatAt(b) ?? "";
+      if (ga !== gb) return gb.localeCompare(ga);
+      return b.updatedAt.localeCompare(a.updatedAt);
+    })[0]!;
+    const fallback = pinned ?? byGit;
     return {
       project: fallback,
       score: pinned ? 80 : 0,
-      reasons: pinned ? ["钉主线"] : ["最近更新"],
+      reasons: pinned ? ["钉主线"] : gitHeatAt(fallback) ? ["Git最近"] : ["最近更新"],
       pinned: fallback.status === "mainline",
       focusTask: pickFocusTask(tasks, fallback.id),
     };

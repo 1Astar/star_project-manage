@@ -210,6 +210,12 @@ function normalizeBugRow(bug: Bug): Bug {
     watchers: normalizeBugWatchers(bug.watchers),
     severity,
     bug_type,
+    linked_learning_note_ids: Array.isArray(bug.linked_learning_note_ids)
+      ? bug.linked_learning_note_ids.map(String).filter(Boolean)
+      : [],
+    linked_competitor_ids: Array.isArray(bug.linked_competitor_ids)
+      ? bug.linked_competitor_ids.map(String).filter(Boolean)
+      : [],
   };
 }
 
@@ -232,6 +238,9 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     project_interviews: db.project_interviews ?? [],
     interview_requirement_links: db.interview_requirement_links ?? [],
     project_learning_notes: db.project_learning_notes ?? [],
+    learning_note_attachments: db.learning_note_attachments ?? [],
+    competitor_entries: db.competitor_entries ?? [],
+    project_workbooks: db.project_workbooks ?? [],
     project_prds: (db.project_prds ?? []).map((p) => ({
       ...p,
       versions: Array.isArray(p.versions) ? p.versions : [],
@@ -1337,6 +1346,8 @@ export async function createBug(input: {
   severity?: BugSeverity;
   bug_type?: BugType;
   status?: TaskStatus;
+  linked_learning_note_ids?: string[];
+  linked_competitor_ids?: string[];
   created_at?: string | null;
   /** 批量导入时关通知，避免刷屏 */
   notify?: boolean;
@@ -1369,6 +1380,12 @@ export async function createBug(input: {
       status: input.status ?? "pending",
       severity: input.severity ?? 3,
       bug_type: input.bug_type ?? "code",
+      linked_learning_note_ids: Array.isArray(input.linked_learning_note_ids)
+        ? input.linked_learning_note_ids.map(String).filter(Boolean)
+        : [],
+      linked_competitor_ids: Array.isArray(input.linked_competitor_ids)
+        ? input.linked_competitor_ids.map(String).filter(Boolean)
+        : [],
       created_at: createdAt,
       updated_at: createdAt,
     };
@@ -1465,6 +1482,12 @@ export async function createBug(input: {
     status: input.status ?? "pending",
     severity: input.severity ?? 3,
     bug_type: input.bug_type ?? "code",
+    linked_learning_note_ids: Array.isArray(input.linked_learning_note_ids)
+      ? input.linked_learning_note_ids.map(String).filter(Boolean)
+      : [],
+    linked_competitor_ids: Array.isArray(input.linked_competitor_ids)
+      ? input.linked_competitor_ids.map(String).filter(Boolean)
+      : [],
     created_at: createdAt,
     updated_at: createdAt,
   };
@@ -1547,6 +1570,8 @@ export async function updateBug(
     status: TaskStatus;
     severity: BugSeverity;
     bug_type: BugType;
+    linked_learning_note_ids: string[];
+    linked_competitor_ids: string[];
     created_at: string | null;
     updated_at: string | null;
   }>
@@ -1593,6 +1618,16 @@ export async function updateBug(
     if (patch.status !== undefined) bug.status = patch.status;
     if (patch.severity !== undefined) bug.severity = patch.severity;
     if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
+    if (patch.linked_learning_note_ids !== undefined) {
+      bug.linked_learning_note_ids = patch.linked_learning_note_ids
+        .map(String)
+        .filter(Boolean);
+    }
+    if (patch.linked_competitor_ids !== undefined) {
+      bug.linked_competitor_ids = patch.linked_competitor_ids
+        .map(String)
+        .filter(Boolean);
+    }
     if (bug.severity == null) bug.severity = 3;
     if (!bug.bug_type) bug.bug_type = "code";
     if (bug.test_plan_id === undefined) bug.test_plan_id = null;
@@ -1600,6 +1635,12 @@ export async function updateBug(
     if (bug.reporter_name === undefined) bug.reporter_name = null;
     if (!Array.isArray(bug.environments)) bug.environments = [];
     if (!Array.isArray(bug.watchers)) bug.watchers = [];
+    if (!Array.isArray(bug.linked_learning_note_ids)) {
+      bug.linked_learning_note_ids = [];
+    }
+    if (!Array.isArray(bug.linked_competitor_ids)) {
+      bug.linked_competitor_ids = [];
+    }
     if (patch.created_at !== undefined && patch.created_at?.trim()) {
       bug.created_at = patch.created_at.trim();
     }
@@ -1717,6 +1758,16 @@ export async function updateBug(
   if (patch.status !== undefined) bug.status = patch.status;
   if (patch.severity !== undefined) bug.severity = patch.severity;
   if (patch.bug_type !== undefined) bug.bug_type = patch.bug_type;
+  if (patch.linked_learning_note_ids !== undefined) {
+    bug.linked_learning_note_ids = patch.linked_learning_note_ids
+      .map(String)
+      .filter(Boolean);
+  }
+  if (patch.linked_competitor_ids !== undefined) {
+    bug.linked_competitor_ids = patch.linked_competitor_ids
+      .map(String)
+      .filter(Boolean);
+  }
   if (bug.severity == null) bug.severity = 3;
   if (!bug.bug_type) bug.bug_type = "code";
   if (bug.test_plan_id === undefined) bug.test_plan_id = null;
@@ -1724,6 +1775,12 @@ export async function updateBug(
   if (bug.reporter_name === undefined) bug.reporter_name = null;
   if (!Array.isArray(bug.environments)) bug.environments = [];
   if (!Array.isArray(bug.watchers)) bug.watchers = [];
+  if (!Array.isArray(bug.linked_learning_note_ids)) {
+    bug.linked_learning_note_ids = [];
+  }
+  if (!Array.isArray(bug.linked_competitor_ids)) {
+    bug.linked_competitor_ids = [];
+  }
   if (patch.created_at !== undefined && patch.created_at?.trim()) {
     bug.created_at = patch.created_at.trim();
   }

@@ -13,6 +13,7 @@ import type {
   Project,
   ProjectInterview,
   ProjectLearningNote,
+  LearningNoteAttachment,
   ProjectPrd,
   PrdReviewComment,
   ProjectMember,
@@ -21,6 +22,8 @@ import type {
   RequirementAttachment,
   BugAttachment,
   BugComment,
+  CompetitorEntry,
+  ProjectWorkbook,
   RequirementComment,
   RequirementLink,
   RoleTask,
@@ -54,6 +57,9 @@ export interface DatabaseSnapshot {
   project_interviews: ProjectInterview[];
   interview_requirement_links: InterviewRequirementLink[];
   project_learning_notes: ProjectLearningNote[];
+  learning_note_attachments: LearningNoteAttachment[];
+  competitor_entries: CompetitorEntry[];
+  project_workbooks: ProjectWorkbook[];
   project_prds: ProjectPrd[];
   prd_review_comments: PrdReviewComment[];
 }

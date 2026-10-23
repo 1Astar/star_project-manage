@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createBugTestPlanAction, updateBugStatusAction } from "@/lib/actions";
 import { BugCreateModal, type BugFormOption, type MemberOption } from "@/components/bug-side-form";
 import { BugImportOrganizePanel } from "@/components/bug-import-organize";
+import { WorkbookImportPanel } from "@/components/workbook-import-panel";
 import { TableExportButtons } from "@/components/table-export-buttons";
 import { StudioBadge } from "@/components/studio/shell";
 import type { Bug, BugTestPlan, Iteration, TaskStatus } from "@/lib/types";
@@ -254,6 +255,8 @@ export function ProjectBugsClient({
           </p>
         )}
       </div>
+
+      <WorkbookImportPanel projectSlug={projectSlug} compact />
 
       <BugImportOrganizePanel projectId={projectId} projectSlug={projectSlug} />
 

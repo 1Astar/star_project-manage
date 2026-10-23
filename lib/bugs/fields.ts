@@ -24,6 +24,8 @@ export function defaultBugReproMeta(): Pick<
   | "iteration_id"
   | "reporter_name"
   | "watchers"
+  | "linked_learning_note_ids"
+  | "linked_competitor_ids"
 > {
   return {
     precondition: null,
@@ -37,6 +39,8 @@ export function defaultBugReproMeta(): Pick<
     iteration_id: null,
     reporter_name: null,
     watchers: [],
+    linked_learning_note_ids: [],
+    linked_competitor_ids: [],
   };
 }
 

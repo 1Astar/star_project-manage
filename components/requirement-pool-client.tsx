@@ -10,6 +10,7 @@ import {
   savePoolRequirementAction,
 } from "@/lib/actions";
 import { PoolColumnManager } from "@/components/pool-column-manager";
+import { WorkbookImportPanel } from "@/components/workbook-import-panel";
 import { TASK_STATUS_LABELS, type Iteration, type ModuleNode, type PoolColumnDef, type Requirement, type TaskStatus } from "@/lib/types";
 
 const STATUS_OPTIONS: TaskStatus[] = [
@@ -121,6 +122,8 @@ export function RequirementPoolClient({
 
   return (
     <div className="space-y-4">
+      <WorkbookImportPanel projectSlug={projectSlug} compact />
+
       <PoolColumnManager
         projectId={projectId}
         projectSlug={projectSlug}

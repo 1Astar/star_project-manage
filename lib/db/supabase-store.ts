@@ -51,6 +51,12 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,
+    linked_learning_note_ids: Array.isArray(row.linked_learning_note_ids)
+      ? row.linked_learning_note_ids.map((v) => String(v)).filter(Boolean)
+      : [],
+    linked_competitor_ids: Array.isArray(row.linked_competitor_ids)
+      ? row.linked_competitor_ids.map((v) => String(v)).filter(Boolean)
+      : [],
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
@@ -150,6 +156,12 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     "interview_requirement_links"
   );
   const project_learning_notes = await loadOptionalTable(sb, "project_learning_notes");
+  const learning_note_attachments = await loadOptionalTable(
+    sb,
+    "learning_note_attachments"
+  );
+  const competitor_entries = await loadOptionalTable(sb, "competitor_entries");
+  const project_workbooks = await loadOptionalTable(sb, "project_workbooks");
   const project_prds = await loadOptionalTable(sb, "project_prds");
   const prd_review_comments = await loadOptionalTable(sb, "prd_review_comments");
   const bug_test_plans = await loadOptionalTable(sb, "bug_test_plans");
@@ -211,38 +223,113 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
     interview_requirement_links: (interview_requirement_links ??
       []) as InterviewRequirementLink[],
     project_learning_notes: ((project_learning_notes ?? []) as Record<string, unknown>[]).map(
+      (row) => {
+        const kindRaw = String(row.kind ?? "").trim();
+        const kind =
+          kindRaw === "section" || kindRaw === "topic" || kindRaw === "point"
+            ? kindRaw
+            : ("topic" as const);
+        return {
+          id: String(row.id),
+          project_id: String(row.project_id),
+          title: String(row.title ?? ""),
+          kind,
+          parent_id:
+            row.parent_id != null && String(row.parent_id).trim()
+              ? String(row.parent_id)
+              : null,
+          sort_order: Number.isFinite(Number(row.sort_order))
+            ? Number(row.sort_order)
+            : 0,
+          why_text: String(row.why_text ?? ""),
+          principle: String(row.principle ?? ""),
+          protocol: String(row.protocol ?? ""),
+          tech_background: String(row.tech_background ?? ""),
+          competitors: String(row.competitors ?? ""),
+          product_thinking: String(row.product_thinking ?? ""),
+          linked_requirement_ids: Array.isArray(row.linked_requirement_ids)
+            ? row.linked_requirement_ids.map((v) => String(v)).filter(Boolean)
+            : [],
+          linked_competitor_ids: Array.isArray(row.linked_competitor_ids)
+            ? row.linked_competitor_ids.map((v) => String(v)).filter(Boolean)
+            : [],
+          linked_bug_ids: Array.isArray(row.linked_bug_ids)
+            ? row.linked_bug_ids.map((v) => String(v)).filter(Boolean)
+            : [],
+          suggestions: Array.isArray(row.suggestions)
+            ? (row.suggestions as Record<string, unknown>[])
+                .map((s) => {
+                  const id = String(s.id ?? "").trim();
+                  const title = String(s.title ?? "").trim();
+                  if (!id || !title) return null;
+                  return {
+                    id,
+                    title,
+                    detail: String(s.detail ?? ""),
+                    linked_requirement_id:
+                      s.linked_requirement_id != null &&
+                      String(s.linked_requirement_id).trim()
+                        ? String(s.linked_requirement_id)
+                        : null,
+                    created_at: String(s.created_at ?? new Date().toISOString()),
+                  };
+                })
+                .filter((s): s is NonNullable<typeof s> => Boolean(s))
+            : [],
+          created_at: String(row.created_at ?? new Date().toISOString()),
+          updated_at: String(row.updated_at ?? new Date().toISOString()),
+        };
+      }
+    ),
+    learning_note_attachments: (
+      (learning_note_attachments ?? []) as Record<string, unknown>[]
+    ).map((row) => ({
+      id: String(row.id),
+      project_id: String(row.project_id),
+      note_id: String(row.note_id),
+      title: String(row.title ?? ""),
+      url: String(row.url ?? ""),
+      storage_path:
+        row.storage_path != null && String(row.storage_path).trim()
+          ? String(row.storage_path)
+          : null,
+      mime_type:
+        row.mime_type != null && String(row.mime_type).trim()
+          ? String(row.mime_type)
+          : null,
+      created_at: String(row.created_at ?? new Date().toISOString()),
+    })),
+    competitor_entries: ((competitor_entries ?? []) as Record<string, unknown>[]).map(
       (row) => ({
         id: String(row.id),
         project_id: String(row.project_id),
         title: String(row.title ?? ""),
-        why_text: String(row.why_text ?? ""),
-        principle: String(row.principle ?? ""),
-        protocol: String(row.protocol ?? ""),
-        tech_background: String(row.tech_background ?? ""),
-        competitors: String(row.competitors ?? ""),
-        product_thinking: String(row.product_thinking ?? ""),
+        summary: String(row.summary ?? ""),
+        url: row.url != null && String(row.url).trim() ? String(row.url) : null,
+        module_path:
+          row.module_path != null && String(row.module_path).trim()
+            ? String(row.module_path)
+            : null,
+        linked_learning_note_ids: Array.isArray(row.linked_learning_note_ids)
+          ? row.linked_learning_note_ids.map((v) => String(v)).filter(Boolean)
+          : [],
         linked_requirement_ids: Array.isArray(row.linked_requirement_ids)
           ? row.linked_requirement_ids.map((v) => String(v)).filter(Boolean)
           : [],
-        suggestions: Array.isArray(row.suggestions)
-          ? (row.suggestions as Record<string, unknown>[])
-              .map((s) => {
-                const id = String(s.id ?? "").trim();
-                const title = String(s.title ?? "").trim();
-                if (!id || !title) return null;
-                return {
-                  id,
-                  title,
-                  detail: String(s.detail ?? ""),
-                  linked_requirement_id:
-                    s.linked_requirement_id != null &&
-                    String(s.linked_requirement_id).trim()
-                      ? String(s.linked_requirement_id)
-                      : null,
-                  created_at: String(s.created_at ?? new Date().toISOString()),
-                };
-              })
-              .filter((s): s is NonNullable<typeof s> => Boolean(s))
+        linked_bug_ids: Array.isArray(row.linked_bug_ids)
+          ? row.linked_bug_ids.map((v) => String(v)).filter(Boolean)
+          : [],
+        created_at: String(row.created_at ?? new Date().toISOString()),
+        updated_at: String(row.updated_at ?? new Date().toISOString()),
+      })
+    ),
+    project_workbooks: ((project_workbooks ?? []) as Record<string, unknown>[]).map(
+      (row) => ({
+        id: String(row.id),
+        project_id: String(row.project_id),
+        title: String(row.title ?? "未命名表格"),
+        sheet_data: Array.isArray(row.sheet_data)
+          ? (row.sheet_data as Array<Record<string, unknown>>)
           : [],
         created_at: String(row.created_at ?? new Date().toISOString()),
         updated_at: String(row.updated_at ?? new Date().toISOString()),
@@ -367,6 +454,9 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "project_interviews" ||
       table === "interview_requirement_links" ||
       table === "project_learning_notes" ||
+      table === "learning_note_attachments" ||
+      table === "competitor_entries" ||
+      table === "project_workbooks" ||
       table === "project_prds" ||
       table === "prd_review_comments"
     ) {
@@ -456,6 +546,35 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
       if (!/project_learning_notes|schema cache|does not exist/i.test(msg)) throw e;
     }
   }
+  if ((snapshot.learning_note_attachments ?? []).length) {
+    try {
+      await upsertRows(
+        "learning_note_attachments",
+        snapshot.learning_note_attachments ?? []
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/learning_note_attachments|schema cache|does not exist/i.test(msg)) {
+        throw e;
+      }
+    }
+  }
+  if ((snapshot.competitor_entries ?? []).length) {
+    try {
+      await upsertRows("competitor_entries", snapshot.competitor_entries ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/competitor_entries|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
+  if ((snapshot.project_workbooks ?? []).length) {
+    try {
+      await upsertRows("project_workbooks", snapshot.project_workbooks ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/project_workbooks|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
   if ((snapshot.project_prds ?? []).length) {
     try {
       await upsertRows("project_prds", snapshot.project_prds ?? []);
@@ -498,6 +617,18 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await deleteMissing(
     "project_learning_notes",
     (snapshot.project_learning_notes ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "learning_note_attachments",
+    (snapshot.learning_note_attachments ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "competitor_entries",
+    (snapshot.competitor_entries ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "project_workbooks",
+    (snapshot.project_workbooks ?? []).map((r) => r.id)
   );
   await deleteMissing(
     "prd_review_comments",

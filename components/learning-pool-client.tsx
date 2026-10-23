@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   addLearningSuggestionAction,
@@ -13,7 +13,14 @@ import {
   updateLearningNoteAction,
   updateLearningSuggestionAction,
 } from "@/lib/actions";
-import type { LearningSuggestion, ProjectLearningNote } from "@/lib/types";
+import type {
+  LearningNoteAttachment,
+  LearningNoteKind,
+  LearningSuggestion,
+  ProjectLearningNote,
+} from "@/lib/types";
+import { WorkbookImportPanel } from "@/components/workbook-import-panel";
+import { LearningAttachmentsBlock } from "@/components/learning-attachments";
 
 export type LearningReqOption = {
   id: string;
@@ -45,30 +52,116 @@ const FIELDS: Array<{
   },
 ];
 
+const KIND_LABEL: Record<LearningNoteKind, string> = {
+  section: "板块",
+  topic: "主题",
+  point: "子知识",
+};
+
+type TreeRow =
+  | { type: "orphan-header"; key: string }
+  | { type: "note"; note: ProjectLearningNote; depth: number };
+
+function buildTreeRows(notes: ProjectLearningNote[]): TreeRow[] {
+  const byParent = new Map<string | null, ProjectLearningNote[]>();
+  for (const n of notes) {
+    const key = n.parent_id;
+    const list = byParent.get(key) ?? [];
+    list.push(n);
+    byParent.set(key, list);
+  }
+  for (const list of byParent.values()) {
+    list.sort((a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return a.title.localeCompare(b.title, "zh-CN");
+    });
+  }
+
+  const rows: TreeRow[] = [];
+  const sections = (byParent.get(null) ?? []).filter((n) => n.kind === "section");
+  const orphanTopics = (byParent.get(null) ?? []).filter((n) => n.kind !== "section");
+
+  function pushBranch(note: ProjectLearningNote, depth: number) {
+    rows.push({ type: "note", note, depth });
+    const kids = byParent.get(note.id) ?? [];
+    for (const kid of kids) pushBranch(kid, depth + 1);
+  }
+
+  for (const s of sections) pushBranch(s, 0);
+
+  if (orphanTopics.length) {
+    rows.push({ type: "orphan-header", key: "orphan" });
+    for (const t of orphanTopics) pushBranch(t, 0);
+  }
+
+  return rows;
+}
+
+function countDescendants(notes: ProjectLearningNote[], rootId: string): number {
+  const byParent = new Map<string, ProjectLearningNote[]>();
+  for (const n of notes) {
+    if (!n.parent_id) continue;
+    const list = byParent.get(n.parent_id) ?? [];
+    list.push(n);
+    byParent.set(n.parent_id, list);
+  }
+  let count = 0;
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    const kids = byParent.get(id) ?? [];
+    for (const k of kids) {
+      count += 1;
+      stack.push(k.id);
+    }
+  }
+  return count;
+}
+
 export function LearningPoolClient({
   projectId,
   projectSlug,
   initialNotes,
+  initialAttachments = [],
   requirements,
 }: {
   projectId: string;
   projectSlug: string;
   initialNotes: ProjectLearningNote[];
+  initialAttachments?: LearningNoteAttachment[];
   requirements: LearningReqOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [notes, setNotes] = useState(initialNotes);
+  const [attachments, setAttachments] = useState(initialAttachments);
+  useEffect(() => {
+    setAttachments(initialAttachments);
+  }, [initialAttachments]);
+  useEffect(() => {
+    setNotes(initialNotes);
+  }, [initialNotes]);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialNotes[0]?.id ?? null
   );
   const [message, setMessage] = useState("");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [newKind, setNewKind] = useState<LearningNoteKind>("section");
+  const [newParentId, setNewParentId] = useState<string>("");
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const selected = useMemo(
     () => notes.find((n) => n.id === selectedId) ?? null,
     [notes, selectedId]
+  );
+
+  const selectedAttachments = useMemo(
+    () =>
+      selected
+        ? attachments.filter((a) => a.note_id === selected.id)
+        : [],
+    [attachments, selected]
   );
 
   const reqById = useMemo(() => {
@@ -77,29 +170,88 @@ export function LearningPoolClient({
     return m;
   }, [requirements]);
 
+  const treeRows = useMemo(() => buildTreeRows(notes), [notes]);
+
+  const visibleRows = useMemo(() => {
+    const hidden = new Set<string>();
+    for (const [id, isCollapsed] of Object.entries(collapsed)) {
+      if (!isCollapsed) continue;
+      for (const n of notes) {
+        if (isDescendantOf(notes, n.id, id)) hidden.add(n.id);
+      }
+    }
+    return treeRows.filter((row) => {
+      if (row.type === "orphan-header") return true;
+      return !hidden.has(row.note.id);
+    });
+  }, [treeRows, collapsed, notes]);
+
+  const sectionOptions = useMemo(
+    () => notes.filter((n) => n.kind === "section").sort(bySort),
+    [notes]
+  );
+  const topicOptions = useMemo(
+    () => notes.filter((n) => n.kind === "topic").sort(bySort),
+    [notes]
+  );
+
   function applyNote(row: ProjectLearningNote) {
-    setNotes((prev) => prev.map((n) => (n.id === row.id ? row : n)));
+    setNotes((prev) => {
+      const idx = prev.findIndex((n) => n.id === row.id);
+      if (idx < 0) return [row, ...prev];
+      const next = [...prev];
+      next[idx] = row;
+      return next;
+    });
   }
 
   function createOne() {
-    const title = newTitle.trim() || "未命名笔记";
+    const title = newTitle.trim() || undefined;
+    if (newKind === "topic" && !newParentId) {
+      // 允许未分板块：parent 空
+    }
+    if (newKind === "point" && !newParentId) {
+      setMessage("子知识点请选择所属主题");
+      return;
+    }
     startTransition(async () => {
       try {
         const row = await createLearningNoteAction({
           projectId,
           projectSlug,
-          title,
+          title: title || "",
+          kind: newKind,
+          parentId:
+            newKind === "section"
+              ? null
+              : newParentId.trim()
+                ? newParentId
+                : null,
         });
-        setNotes((prev) => [row, ...prev]);
+        setNotes((prev) => [...prev, row]);
         setSelectedId(row.id);
         setNewTitle("");
         setCreating(false);
-        setMessage("已创建");
+        setMessage(`已创建${KIND_LABEL[row.kind]}`);
         router.refresh();
       } catch (e) {
         setMessage(e instanceof Error ? e.message : "创建失败");
       }
     });
+  }
+
+  function startCreateUnder(parent: ProjectLearningNote) {
+    if (parent.kind === "section") {
+      setNewKind("topic");
+      setNewParentId(parent.id);
+    } else if (parent.kind === "topic") {
+      setNewKind("point");
+      setNewParentId(parent.id);
+    } else {
+      return;
+    }
+    setCreating(true);
+    setNewTitle("");
   }
 
   function saveSelected(
@@ -111,6 +263,7 @@ export function LearningPoolClient({
       techBackground: string;
       competitors: string;
       productThinking: string;
+      parentId: string | null;
     }>
   ) {
     if (!selected) return;
@@ -132,7 +285,12 @@ export function LearningPoolClient({
 
   function removeSelected() {
     if (!selected) return;
-    if (!confirm(`删除学习笔记「${selected.title}」？`)) return;
+    const childCount = countDescendants(notes, selected.id);
+    const tip =
+      childCount > 0
+        ? `删除「${selected.title}」及其下 ${childCount} 个子节点？不可恢复。`
+        : `删除「${selected.title}」？`;
+    if (!confirm(tip)) return;
     startTransition(async () => {
       try {
         await deleteLearningNoteAction({
@@ -140,8 +298,13 @@ export function LearningPoolClient({
           projectSlug,
         });
         setNotes((prev) => {
-          const next = prev.filter((n) => n.id !== selected.id);
+          const removeIds = new Set([
+            selected.id,
+            ...collectDescendantIdList(prev, selected.id),
+          ]);
+          const next = prev.filter((n) => !removeIds.has(n.id));
           setSelectedId(next[0]?.id ?? null);
+          setAttachments((atts) => atts.filter((a) => !removeIds.has(a.note_id)));
           return next;
         });
         setMessage("已删除");
@@ -252,35 +415,92 @@ export function LearningPoolClient({
     });
   }
 
+  const parentChoices =
+    newKind === "topic"
+      ? sectionOptions
+      : newKind === "point"
+        ? topicOptions
+        : [];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">学习池</h2>
           <p className="text-xs text-slate-500">
-            为什么 · 原理 · 协议 · 技术背景 · 竞品 · 产品思考 · 关联需求 · 优化建议 · 共{" "}
-            {notes.length} 条
+            板块 → 主题 → 子知识 · 关联需求 · 优化建议 · 共 {notes.length} 条
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setCreating((v) => !v)}
+          onClick={() => {
+            setCreating((v) => !v);
+            if (!creating) {
+              setNewKind("section");
+              setNewParentId("");
+            }
+          }}
           className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white"
         >
-          {creating ? "收起" : "+ 新建笔记"}
+          {creating ? "收起" : "+ 新建"}
         </button>
       </div>
+
+      <WorkbookImportPanel projectSlug={projectSlug} compact />
 
       {message ? <p className="text-xs text-slate-500">{message}</p> : null}
 
       {creating ? (
         <div className="flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3">
+          <label className="space-y-1 text-sm">
+            <span className="text-xs text-slate-500">类型</span>
+            <select
+              value={newKind}
+              onChange={(e) => {
+                const k = e.target.value as LearningNoteKind;
+                setNewKind(k);
+                setNewParentId("");
+              }}
+              className="block rounded-lg border border-slate-200 px-3 py-2"
+            >
+              <option value="section">板块</option>
+              <option value="topic">主题</option>
+              <option value="point">子知识</option>
+            </select>
+          </label>
+          {newKind !== "section" ? (
+            <label className="min-w-[180px] flex-1 space-y-1 text-sm">
+              <span className="text-xs text-slate-500">
+                {newKind === "topic" ? "所属板块（可空=未分板块）" : "所属主题"}
+              </span>
+              <select
+                value={newParentId}
+                onChange={(e) => setNewParentId(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2"
+              >
+                <option value="">
+                  {newKind === "topic" ? "未分板块" : "请选择主题…"}
+                </option>
+                {parentChoices.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <label className="min-w-[200px] flex-1 space-y-1 text-sm">
             <span className="text-xs text-slate-500">标题</span>
             <input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="例如：SMB / AFP 选型 · 家庭相册场景"
+              placeholder={
+                newKind === "section"
+                  ? "例如：存储"
+                  : newKind === "topic"
+                    ? "例如：RAID 0（条带化）"
+                    : "例如：容量利用率与故障边界"
+              }
               className="w-full rounded-lg border border-slate-200 px-3 py-2"
             />
           </label>
@@ -295,36 +515,83 @@ export function LearningPoolClient({
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]">
         <aside className="max-h-[70vh] overflow-auto rounded-xl border border-slate-200 bg-white">
           {notes.length === 0 ? (
-            <p className="p-4 text-sm text-slate-400">还没有笔记，先新建一条。</p>
+            <p className="p-4 text-sm text-slate-400">还没有内容，先新建一个板块。</p>
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {notes.map((note) => (
-                <li key={note.id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(note.id)}
-                    className={`w-full px-3 py-2.5 text-left transition ${
-                      selectedId === note.id
-                        ? "bg-indigo-50 text-indigo-900"
-                        : "hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="text-sm font-medium line-clamp-2">{note.title}</div>
-                    <div className="mt-0.5 flex flex-wrap gap-2 text-[11px] text-slate-500">
-                      <span>{new Date(note.updated_at).toLocaleString("zh-CN")}</span>
-                      {(note.linked_requirement_ids?.length ?? 0) > 0 ? (
-                        <span>需求 {note.linked_requirement_ids.length}</span>
-                      ) : null}
-                      {(note.suggestions?.length ?? 0) > 0 ? (
-                        <span>建议 {note.suggestions.length}</span>
+            <ul className="py-1">
+              {visibleRows.map((row) => {
+                if (row.type === "orphan-header") {
+                  return (
+                    <li
+                      key={row.key}
+                      className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+                    >
+                      未分板块
+                    </li>
+                  );
+                }
+                const { note, depth } = row;
+                const hasKids = notes.some((n) => n.parent_id === note.id);
+                const isCollapsed = Boolean(collapsed[note.id]);
+                return (
+                  <li key={note.id}>
+                    <div
+                      className={`flex items-stretch ${
+                        selectedId === note.id
+                          ? "bg-indigo-50 text-indigo-900"
+                          : "hover:bg-slate-50"
+                      }`}
+                      style={{ paddingLeft: 8 + depth * 14 }}
+                    >
+                      {hasKids ? (
+                        <button
+                          type="button"
+                          aria-label={isCollapsed ? "展开" : "折叠"}
+                          onClick={() =>
+                            setCollapsed((prev) => ({
+                              ...prev,
+                              [note.id]: !prev[note.id],
+                            }))
+                          }
+                          className="w-6 shrink-0 text-xs text-slate-400"
+                        >
+                          {isCollapsed ? "▸" : "▾"}
+                        </button>
+                      ) : (
+                        <span className="w-6 shrink-0" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(note.id)}
+                        className="min-w-0 flex-1 py-2 pr-2 text-left"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-500">
+                            {KIND_LABEL[note.kind]}
+                          </span>
+                          <span className="text-sm font-medium line-clamp-2">
+                            {note.title}
+                          </span>
+                        </div>
+                      </button>
+                      {note.kind !== "point" ? (
+                        <button
+                          type="button"
+                          title={
+                            note.kind === "section" ? "加主题" : "加子知识"
+                          }
+                          onClick={() => startCreateUnder(note)}
+                          className="shrink-0 px-2 text-sm text-indigo-600 hover:bg-indigo-100"
+                        >
+                          +
+                        </button>
                       ) : null}
                     </div>
-                  </button>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>
@@ -333,7 +600,10 @@ export function LearningPoolClient({
           <LearningNoteEditor
             key={selected.id}
             note={selected}
+            notes={notes}
+            projectId={projectId}
             projectSlug={projectSlug}
+            attachments={selectedAttachments}
             requirements={requirements}
             reqById={reqById}
             pending={pending}
@@ -344,6 +614,7 @@ export function LearningPoolClient({
             onAddSuggestion={addSuggestion}
             onPatchSuggestion={patchSuggestion}
             onGenerateRequirement={generateFromSuggestion}
+            onAddChild={() => startCreateUnder(selected)}
           />
         ) : (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-sm text-slate-400">
@@ -355,9 +626,54 @@ export function LearningPoolClient({
   );
 }
 
+function bySort(a: ProjectLearningNote, b: ProjectLearningNote) {
+  if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+  return a.title.localeCompare(b.title, "zh-CN");
+}
+
+function isDescendantOf(
+  notes: ProjectLearningNote[],
+  nodeId: string,
+  ancestorId: string
+): boolean {
+  const byId = new Map(notes.map((n) => [n.id, n]));
+  let cur = byId.get(nodeId);
+  while (cur?.parent_id) {
+    if (cur.parent_id === ancestorId) return true;
+    cur = byId.get(cur.parent_id);
+  }
+  return false;
+}
+
+function collectDescendantIdList(
+  notes: ProjectLearningNote[],
+  rootId: string
+): string[] {
+  const out: string[] = [];
+  const byParent = new Map<string, ProjectLearningNote[]>();
+  for (const n of notes) {
+    if (!n.parent_id) continue;
+    const list = byParent.get(n.parent_id) ?? [];
+    list.push(n);
+    byParent.set(n.parent_id, list);
+  }
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    for (const k of byParent.get(id) ?? []) {
+      out.push(k.id);
+      stack.push(k.id);
+    }
+  }
+  return out;
+}
+
 function LearningNoteEditor({
   note,
+  notes,
+  projectId,
   projectSlug,
+  attachments,
   requirements,
   reqById,
   pending,
@@ -368,9 +684,13 @@ function LearningNoteEditor({
   onAddSuggestion,
   onPatchSuggestion,
   onGenerateRequirement,
+  onAddChild,
 }: {
   note: ProjectLearningNote;
+  notes: ProjectLearningNote[];
+  projectId: string;
   projectSlug: string;
+  attachments: LearningNoteAttachment[];
   requirements: LearningReqOption[];
   reqById: Map<string, string>;
   pending: boolean;
@@ -383,6 +703,7 @@ function LearningNoteEditor({
       techBackground: string;
       competitors: string;
       productThinking: string;
+      parentId: string | null;
     }>
   ) => void;
   onDelete: () => void;
@@ -394,8 +715,10 @@ function LearningNoteEditor({
     patch: { title?: string; detail?: string; remove?: boolean }
   ) => void;
   onGenerateRequirement: (suggestionId: string) => void;
+  onAddChild: () => void;
 }) {
   const [title, setTitle] = useState(note.title);
+  const [parentId, setParentId] = useState(note.parent_id ?? "");
   const [draft, setDraft] = useState({
     why_text: note.why_text,
     principle: note.principle,
@@ -412,6 +735,13 @@ function LearningNoteEditor({
   const suggestions = note.suggestions ?? [];
   const linkable = requirements.filter((r) => !linkedIds.includes(r.id));
 
+  const parentOptions =
+    note.kind === "topic"
+      ? notes.filter((n) => n.kind === "section")
+      : note.kind === "point"
+        ? notes.filter((n) => n.kind === "topic")
+        : [];
+
   function saveAll() {
     onSave({
       title,
@@ -421,18 +751,39 @@ function LearningNoteEditor({
       techBackground: draft.tech_background,
       competitors: draft.competitors,
       productThinking: draft.product_thinking,
+      parentId:
+        note.kind === "section"
+          ? null
+          : parentId.trim()
+            ? parentId
+            : null,
     });
   }
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="min-w-0 flex-1 border-0 bg-transparent text-lg font-semibold text-slate-900 outline-none"
-        />
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
+            {KIND_LABEL[note.kind]}
+          </span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="min-w-0 flex-1 border-0 bg-transparent text-lg font-semibold text-slate-900 outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {note.kind !== "point" ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={onAddChild}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700"
+            >
+              {note.kind === "section" ? "+ 主题" : "+ 子知识"}
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={pending}
@@ -452,6 +803,32 @@ function LearningNoteEditor({
         </div>
       </div>
 
+      {note.kind !== "section" ? (
+        <label className="block space-y-1 text-sm">
+          <span className="text-xs text-slate-500">
+            {note.kind === "topic" ? "所属板块" : "所属主题"}
+          </span>
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            className="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2"
+          >
+            <option value="">
+              {note.kind === "topic" ? "未分板块" : "（请选择主题）"}
+            </option>
+            {parentOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <p className="text-xs text-slate-400">
+          板块是容器：可在下方写总述，右侧树用「+ 主题」挂子项。
+        </p>
+      )}
+
       {FIELDS.map((field) => (
         <section key={field.key} className="space-y-1.5 border-t border-slate-100 pt-3">
           <h4 className="text-xs font-semibold text-slate-500">{field.label}</h4>
@@ -460,17 +837,26 @@ function LearningNoteEditor({
             onChange={(e) =>
               setDraft((prev) => ({ ...prev, [field.key]: e.target.value }))
             }
-            rows={3}
+            rows={note.kind === "section" ? 2 : 3}
             placeholder={field.placeholder}
             className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
           />
         </section>
       ))}
 
+      <LearningAttachmentsBlock
+        key={note.id}
+        projectId={projectId}
+        noteId={note.id}
+        attachments={attachments}
+      />
+
       <section className="space-y-2 border-t border-slate-100 pt-3">
         <h4 className="text-xs font-semibold text-slate-500">关联需求</h4>
         {linkedIds.length === 0 ? (
-          <p className="text-xs text-slate-400">尚未关联需求。可从下方选择已有需求，或先写优化建议再一键生成。</p>
+          <p className="text-xs text-slate-400">
+            尚未关联需求。可从下方选择已有需求，或先写优化建议再一键生成。
+          </p>
         ) : (
           <ul className="space-y-1.5">
             {linkedIds.map((id) => (
@@ -543,9 +929,7 @@ function LearningNoteEditor({
                     : null
                 }
                 pending={pending}
-                onSave={(title, detail) =>
-                  onPatchSuggestion(s.id, { title, detail })
-                }
+                onSave={(t, d) => onPatchSuggestion(s.id, { title: t, detail: d })}
                 onRemove={() => onPatchSuggestion(s.id, { remove: true })}
                 onGenerate={() => onGenerateRequirement(s.id)}
               />
