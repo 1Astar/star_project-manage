@@ -6,7 +6,7 @@ import type {
   BundleCommitResult,
   BundleConflictItem,
   BundlePreview,
-} from "@/lib/excel/workbook-bundle";
+} from "@/lib/excel/workbook-client";
 import { WorkbookGridPanel } from "@/components/workbook-grid-panel";
 
 const KIND_LABEL: Record<string, string> = {

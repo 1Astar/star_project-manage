@@ -9,7 +9,7 @@ import {
   type GridRow,
   type GridSheetDef,
   type WorkbookGridState,
-} from "@/lib/excel/workbook-bundle";
+} from "@/lib/excel/workbook-client";
 
 export function WorkbookGridPanel({
   projectSlug,
