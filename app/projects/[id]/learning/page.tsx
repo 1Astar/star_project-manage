@@ -48,16 +48,40 @@ export default async function ProjectLearningPoolPage({
     id: r.id,
     title: r.title,
     href: `/projects/${ctx.routeId}/requirements/${r.id}`,
+    kind: "requirement" as const,
+    fields: [
+      { key: "detail", label: "详情", value: r.detail_work ?? "", multiline: true },
+    ],
   }));
   const competitorOptions = competitors.map((c) => ({
     id: c.id,
     title: c.title,
     href: `/projects/${ctx.routeId}/competitors`,
+    kind: "competitor" as const,
+    fields: [
+      { key: "summary", label: "摘要", value: c.summary ?? "", multiline: true },
+      { key: "url", label: "外链", value: c.url ?? "" },
+    ],
   }));
   const bugOptions = bugs.map((b) => ({
     id: b.id,
     title: b.title,
-    href: `/projects/${ctx.routeId}/bugs`,
+    href: `/projects/${ctx.routeId}/bugs/${b.id}`,
+    kind: "bug" as const,
+    fields: [
+      {
+        key: "actual",
+        label: "现状 / 实际",
+        value: b.actual_result ?? b.description ?? "",
+        multiline: true,
+      },
+      {
+        key: "suggestion",
+        label: "优化建议",
+        value: b.suggestion ?? "",
+        multiline: true,
+      },
+    ],
   }));
 
   return (

@@ -141,6 +141,7 @@ export async function saveRequirementDetailAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/requirements/${input.requirementId}`);
   revalidatePath(`/projects/${input.projectSlug}/pool`);
   revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
   revalidatePath(`/projects/${input.projectSlug}`);
 }
 
@@ -469,6 +470,9 @@ export async function updateBugAction(input: {
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}`);
   revalidatePath(`/notifications`);
 }
 
@@ -601,6 +605,9 @@ export async function updateLearningNoteAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/learning`);
   revalidatePath(`/projects/${input.projectSlug}/competitors`);
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}`);
   return row;
 }
 
@@ -633,6 +640,8 @@ export async function linkLearningNoteRequirementAction(input: {
     linked_requirement_ids: ids,
   });
   revalidatePath(`/projects/${input.projectSlug}/learning`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}`);
   return row;
 }
 
@@ -654,6 +663,8 @@ export async function unlinkLearningNoteRequirementAction(input: {
     ),
   });
   revalidatePath(`/projects/${input.projectSlug}/learning`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}`);
   return row;
 }
 
@@ -788,6 +799,68 @@ export async function generateRequirementFromLearningSuggestionAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/tasks`);
   return {
     note: nextNote,
+    requirementId: requirement.id,
+    created: true,
+  };
+}
+
+/**
+ * 从 Bug「优化建议」一键生成需求池条目，并回写 Bug.requirement_id。
+ * 若 Bug 已挂需求则幂等返回。
+ */
+export async function generateRequirementFromBugSuggestionAction(input: {
+  bugId: string;
+  projectId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { getBugById, updateBug } = await import("@/lib/db/local-store");
+  const detail = await getBugById(input.bugId);
+  if (!detail?.bug) throw new Error("Bug 不存在");
+  const bug = detail.bug;
+  const suggestion = (bug.suggestion ?? "").trim();
+  if (!suggestion) throw new Error("请先填写优化建议");
+
+  if (bug.requirement_id) {
+    return {
+      bug,
+      requirementId: bug.requirement_id,
+      created: false,
+    };
+  }
+
+  const { requirement } = await createPoolRequirementAction(
+    input.projectSlug,
+    input.projectId,
+    { title: bug.title }
+  );
+
+  try {
+    const { updatePoolRequirement } = await import("@/lib/db/local-store");
+    await updatePoolRequirement(
+      requirement.id,
+      {
+        detail_work: [
+          suggestion,
+          `来源 Bug：${bug.title}`,
+        ].join("\n\n"),
+        inspiration_source: `Bug · ${bug.title}`,
+      },
+      { name: "Auto", role: "admin" }
+    );
+  } catch {
+    // 保留已创建需求
+  }
+
+  await updateBug(input.bugId, { requirement_id: requirement.id });
+  const nextDetail = await getBugById(input.bugId);
+
+  revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
+  revalidatePath(`/projects/${input.projectSlug}/pool`);
+  revalidatePath(`/projects/${input.projectSlug}/tasks`);
+  return {
+    bug: nextDetail?.bug ?? bug,
     requirementId: requirement.id,
     created: true,
   };
@@ -1595,6 +1668,9 @@ export async function updateCompetitorEntryAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/competitors`);
   revalidatePath(`/projects/${input.projectSlug}/learning`);
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
+  revalidatePath(`/projects/${input.projectSlug}/requirements`);
+  revalidatePath(`/projects/${input.projectSlug}/overview`);
+  revalidatePath(`/projects/${input.projectSlug}`);
   return row;
 }
 
@@ -1606,4 +1682,39 @@ export async function deleteCompetitorEntryAction(input: {
   const { deleteCompetitorEntry } = await import("@/lib/competitors/store");
   await deleteCompetitorEntry(input.entryId);
   revalidatePath(`/projects/${input.projectSlug}/competitors`);
+}
+
+/** 产品模块主页简介（存 Studio customFields.moduleBiosJson） */
+export async function saveProductModuleBioAction(input: {
+  studioProjectId: string;
+  projectSlug: string;
+  moduleName: string;
+  bio: string;
+}) {
+  assertNotViewerWrite();
+  const name = input.moduleName.trim();
+  if (!name) throw new Error("模块名不能为空");
+  const { getProjectById } = await import("@/lib/studio/data");
+  const { updateStudioProject } = await import("@/lib/studio/mutations");
+  const {
+    MODULE_BIOS_FIELD,
+    parseModuleBios,
+    serializeModuleBios,
+    encodeModuleKey,
+  } = await import("@/lib/modules/product-module-home");
+  const studio = await getProjectById(input.studioProjectId);
+  if (!studio) throw new Error("Studio 项目不存在");
+  const bios = parseModuleBios(studio.customFields);
+  bios[name] = input.bio;
+  await updateStudioProject(studio.id, {
+    customFields: {
+      ...studio.customFields,
+      [MODULE_BIOS_FIELD]: serializeModuleBios(bios),
+    },
+  });
+  const key = encodeModuleKey(name);
+  revalidatePath(`/projects/${input.projectSlug}/modules`);
+  revalidatePath(`/projects/${input.projectSlug}/modules/${key}`);
+  revalidatePath(`/projects/${input.studioProjectId}/modules`);
+  revalidatePath(`/projects/${input.studioProjectId}/modules/${key}`);
 }

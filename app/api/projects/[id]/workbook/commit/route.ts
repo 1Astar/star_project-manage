@@ -26,7 +26,9 @@ export async function POST(
   }
 
   try {
-    const result = await commitWorkbookBundle(id, preview);
+    const result = await commitWorkbookBundle(id, preview, {
+      workbookBuffer: buffer,
+    });
     return NextResponse.json({ result });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "写入失败";

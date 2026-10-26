@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 
 /** 按产品工作流：调研 → 需求 → 方案 → 原型验收 → 缺陷 → 排期复盘 → 资料 → 项目卡 */
 const TABS = [
-  { suffix: "/overview", label: "概况" },
+  { suffix: "/overview", label: "总览" },
+  { suffix: "/modules", label: "模块" },
   { suffix: "/interviews", label: "访谈库" },
   { suffix: "/learning", label: "学习池" },
   { suffix: "/competitors", label: "竞品分析" },

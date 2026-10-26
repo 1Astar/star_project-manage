@@ -36,3 +36,6 @@ cloudflare-env.d.ts
 .worktrees/
 .superpowers/
 .tmp/
+
+# Excel 导入落盘的本地媒体（无 Supabase 时）
+public/import-media/

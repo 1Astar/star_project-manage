@@ -1,31 +1,58 @@
+import fs from "fs/promises";
+import path from "path";
 import { createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { publicStudioAssetUrl } from "@/lib/studio/asset-url";
 
 export async function uploadStudioAssetFile(projectId: string, file: File) {
-  if (!isSupabaseConfigured()) {
-    throw new Error("Supabase 未配置，无法上传文件");
-  }
-
-  const client = createServiceClient();
-  if (!client) throw new Error("Supabase 未配置");
-
+  const buffer = Buffer.from(await file.arrayBuffer());
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
   const safeExt = (ext ?? "bin").replace(/[^a-zA-Z0-9]/g, "") || "bin";
-  const path = `${projectId}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${safeExt}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${safeExt}`;
+  return uploadStudioAssetBuffer(
+    projectId,
+    buffer,
+    filename,
+    file.type || "application/octet-stream"
+  );
+}
 
-  const { error } = await client.storage.from("studio-assets").upload(path, buffer, {
-    contentType: file.type || "application/octet-stream",
-    upsert: false,
-  });
+/** Buffer 上传（Excel 内嵌图等）；无 Supabase 时落到 public/import-media */
+export async function uploadStudioAssetBuffer(
+  projectId: string,
+  buffer: Buffer,
+  filename: string,
+  mimeType: string
+) {
+  const safeName =
+    filename.replace(/[^a-zA-Z0-9._-]/g, "") ||
+    `${Date.now()}.bin`;
 
-  if (error) throw new Error(error.message);
+  if (isSupabaseConfigured()) {
+    const client = createServiceClient();
+    if (!client) throw new Error("Supabase 未配置");
+    const storagePath = `${projectId}/${safeName}`;
+    const { error } = await client.storage
+      .from("studio-assets")
+      .upload(storagePath, buffer, {
+        contentType: mimeType || "application/octet-stream",
+        upsert: false,
+      });
+    if (error) throw new Error(error.message);
+    return {
+      storagePath,
+      mimeType: mimeType || null,
+      url: publicStudioAssetUrl(storagePath),
+    };
+  }
 
+  const dir = path.join(process.cwd(), "public", "import-media", projectId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, safeName), buffer);
   return {
-    storagePath: path,
-    mimeType: file.type || null,
-    url: publicStudioAssetUrl(path),
+    storagePath: `local:${projectId}/${safeName}`,
+    mimeType: mimeType || null,
+    url: `/import-media/${projectId}/${safeName}`,
   };
 }
 

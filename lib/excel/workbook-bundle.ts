@@ -18,10 +18,14 @@ import {
 import {
   createProjectLearningNote,
   listProjectLearningNotes,
-  newLearningSuggestion,
   updateProjectLearningNote,
 } from "@/lib/learning-notes/store";
 import type { TaskStatus } from "@/lib/types";
+import {
+  CONTENT_SIMILARITY_THRESHOLD,
+  contentSimilarity,
+  joinContentParts,
+} from "@/lib/excel/text-similarity";
 
 export type BundleSheetKind =
   | "learning"
@@ -42,12 +46,22 @@ export type BundleRowBase = {
   title: string;
   links: BundleLinkRefs;
   warnings: string[];
+  /** Excel 行号（1-based，含表头时数据从 2 起） */
+  sourceRow: number;
 };
 
 export type LearningBundleRow = BundleRowBase & {
   kind: "learning";
-  /** 板块名；有则建/挂到板块下主题 */
+  /** 板块名 → section */
   section_title: string | null;
+  /**
+   * 主题名 → topic。
+   * 有 point_title 时：板块→主题→子知识点；
+   * 无 point_title 时：主题即叶子（建成 topic，兼容旧表）。
+   */
+  topic_title: string | null;
+  /** 子知识点标题；空则不建第三级 */
+  point_title: string | null;
   why_text: string;
   principle: string;
   protocol: string;
@@ -107,6 +121,25 @@ export type BundleSheetPreview = {
   note?: string;
 };
 
+/** 再导入冲突：标题匹配（5a）或内容相似（5b）时的替换确认项 */
+export type BundleConflictItem = {
+  /** kind + 规范化标题，用于勾选 */
+  key: string;
+  kind: BundleSheetKind;
+  title: string;
+  sheetName: string;
+  action: "create" | "update";
+  existingId?: string;
+  /** title=标题完全一致；similar=正文/标题相似 */
+  match?: "title" | "similar";
+  /** 相似时库内原标题（导入标题可能不同） */
+  similarToTitle?: string;
+  /** 0～1，仅 similar */
+  score?: number;
+  /** 用户是否写入；更新默认勾选，可取消跳过 */
+  selected: boolean;
+};
+
 export type BundlePreview = {
   sheets: BundleSheetPreview[];
   summary: {
@@ -117,7 +150,13 @@ export type BundlePreview = {
     optimization: number;
     linkHints: number;
     unmatchedLinkHints: string[];
+    creates: number;
+    updates: number;
+    /** 预览时统计到的内嵌图数量 */
+    embeddedImages: number;
   };
+  /** 标题匹配冲突清单（5a）；无则视为全部写入 */
+  conflicts?: BundleConflictItem[];
 };
 
 export type BundleCommitResult = {
@@ -137,6 +176,8 @@ export type BundleCommitResult = {
   };
   linksApplied: number;
   pendingLinks: string[];
+  /** 本次挂上的内嵌图张数 */
+  imagesAttached: number;
 };
 
 const SHEET_KIND: Record<string, BundleSheetKind> = {
@@ -284,17 +325,20 @@ function parseSheet(
     const warnings: string[] = [];
 
     if (kind === "learning") {
-      const title = get([
+      const topicTitle = get([
         "主题",
         "标题",
-        "知识点",
         "问题标题",
         "名称",
         "title",
         "name",
       ]);
+      const pointTitle =
+        get(["子知识点", "知识点", "point", "子主题"]) || null;
+      /** 冲突匹配 / 展示用叶子标题 */
+      const title = pointTitle || topicTitle;
       if (!title) continue;
-      const points = get(["知识要点", "要点", "内容"]);
+      const points = get(["知识要点", "要点", "内容", "原理"]);
       const source = get(["出处", "来源", "source"]);
       const why =
         get(["为什么", "why"]) ||
@@ -303,6 +347,8 @@ function parseSheet(
         kind: "learning",
         title,
         section_title: get(["板块", "模块", "section"]) || null,
+        topic_title: topicTitle || null,
+        point_title: pointTitle,
         why_text: why,
         principle: get(["原理", "principle"]) || points,
         protocol: get(["协议", "protocol"]),
@@ -312,6 +358,7 @@ function parseSheet(
         source,
         links,
         warnings,
+        sourceRow: r,
       });
     } else if (kind === "optimization") {
       const title = get(["优化建议", "建议", "标题", "title"]);
@@ -327,6 +374,7 @@ function parseSheet(
         source: get(["出处", "来源", "source"]),
         links,
         warnings,
+        sourceRow: r,
       });
     } else if (kind === "competitor") {
       const title = get(["标题", "问题标题", "名称", "title", "name"]);
@@ -343,6 +391,7 @@ function parseSheet(
         module_path: get(["功能模块", "模块", "板块", "module"]) || null,
         links,
         warnings,
+        sourceRow: r,
       });
     } else if (kind === "requirement") {
       const title = get(["标题", "问题标题", "名称", "title", "name"]);
@@ -356,6 +405,7 @@ function parseSheet(
         module_path: get(["功能模块", "模块", "板块", "module"]) || null,
         links,
         warnings,
+        sourceRow: r,
       });
     } else {
       // bug：兼容 Bug表「问题描述 / 现状 / 影响 / 板块 / 出处」
@@ -388,6 +438,7 @@ function parseSheet(
         status: get(["状态", "status"]) || null,
         links,
         warnings,
+        sourceRow: r,
       });
     }
   }
@@ -430,6 +481,9 @@ export async function parseWorkbookBundle(
     optimization: 0,
     linkHints: 0,
     unmatchedLinkHints: [] as string[],
+    creates: 0,
+    updates: 0,
+    embeddedImages: countWorkbookEmbeddedImages(wb),
   };
   for (const s of sheets) {
     if (!s.kind) continue;
@@ -444,7 +498,321 @@ export async function parseWorkbookBundle(
     }
   }
 
-  return { sheets, summary };
+  return { sheets, summary, conflicts: [] };
+}
+
+function mimeFromExt(ext: string): string {
+  const e = ext.toLowerCase().replace(/^\./, "");
+  if (e === "jpg" || e === "jpeg") return "image/jpeg";
+  if (e === "png") return "image/png";
+  if (e === "gif") return "image/gif";
+  if (e === "webp") return "image/webp";
+  if (e === "bmp") return "image/bmp";
+  return "application/octet-stream";
+}
+
+function countWorkbookEmbeddedImages(wb: ExcelJS.Workbook): number {
+  let n = 0;
+  for (const sheet of wb.worksheets) {
+    try {
+      n += sheet.getImages()?.length ?? 0;
+    } catch {
+      /* ignore */
+    }
+  }
+  return n;
+}
+
+type SheetRowImage = {
+  sheetName: string;
+  /** Excel 1-based row */
+  row: number;
+  extension: string;
+  buffer: Buffer;
+};
+
+/** 按 Sheet 名 + 行号收集内嵌图（nativeRow 为 0-based） */
+function collectEmbeddedImagesByRow(
+  wb: ExcelJS.Workbook
+): Map<string, SheetRowImage[]> {
+  const map = new Map<string, SheetRowImage[]>();
+  for (const sheet of wb.worksheets) {
+    let images: ReturnType<ExcelJS.Worksheet["getImages"]> = [];
+    try {
+      images = sheet.getImages() ?? [];
+    } catch {
+      continue;
+    }
+    for (const img of images) {
+      const nativeRow = img.range?.tl?.nativeRow;
+      if (nativeRow == null || Number.isNaN(Number(nativeRow))) continue;
+      const row = Math.floor(Number(nativeRow)) + 1;
+      let media: { extension?: string; buffer?: Buffer } | null = null;
+      try {
+        media = wb.getImage(Number(img.imageId)) as {
+          extension?: string;
+          buffer?: Buffer;
+        };
+      } catch {
+        media = null;
+      }
+      if (!media?.buffer || !media.buffer.length) continue;
+      const extension = (media.extension || "jpeg").replace(/^\./, "");
+      const key = `${sheet.name}::${row}`;
+      const list = map.get(key) ?? [];
+      list.push({
+        sheetName: sheet.name,
+        row,
+        extension,
+        buffer: Buffer.from(media.buffer),
+      });
+      map.set(key, list);
+    }
+  }
+  return map;
+}
+
+function conflictKey(kind: BundleSheetKind, title: string) {
+  return `${kind}:${titleKey(title)}`;
+}
+
+type SimilarCandidate = {
+  id: string;
+  title: string;
+  content: string;
+};
+
+function rowImportContent(row: BundleParsedRow): string {
+  if (row.kind === "learning") {
+    return joinContentParts([
+      row.why_text,
+      row.principle,
+      row.protocol,
+      row.tech_background,
+      row.competitors,
+      row.product_thinking,
+      row.source,
+    ]);
+  }
+  if (row.kind === "competitor") return joinContentParts([row.summary]);
+  if (row.kind === "requirement") {
+    return joinContentParts([row.detail_work, row.acceptance_criteria]);
+  }
+  if (row.kind === "bug") {
+    return joinContentParts([
+      row.repro_steps,
+      row.expected_result,
+      row.actual_result,
+      row.evidence,
+    ]);
+  }
+  return joinContentParts([row.detail, row.benefit, row.source]);
+}
+
+function findBestSimilar(
+  title: string,
+  content: string,
+  candidates: SimilarCandidate[],
+  claimedIds: Set<string>
+): { id: string; title: string; score: number } | null {
+  let best: { id: string; title: string; score: number } | null = null;
+  for (const c of candidates) {
+    if (claimedIds.has(c.id)) continue;
+    const score = contentSimilarity(title, content, c.title, c.content);
+    if (score < CONTENT_SIMILARITY_THRESHOLD) continue;
+    if (!best || score > best.score) {
+      best = { id: c.id, title: c.title, score };
+    }
+  }
+  return best;
+}
+
+/**
+ * 对照项目现有实体，标出新建 / 标题匹配（5a）/ 内容相似（5b）将更新。
+ * 学习按「主题」标题匹配主题或同名知识点；相似匹配同一库内条目只认领一次。
+ */
+export async function annotateWorkbookConflicts(
+  projectIdOrSlug: string,
+  preview: BundlePreview
+): Promise<BundlePreview> {
+  const project = await getProjectById(projectIdOrSlug);
+  if (!project) return preview;
+  const projectId = project.id;
+
+  const [learnings, competitors, bugs] = await Promise.all([
+    listProjectLearningNotes(projectId),
+    listCompetitorEntries(projectId),
+    listBugsByProject(projectId),
+  ]);
+  const { getPoolBundle, listProjectRequirementOptions } = await import(
+    "@/lib/db/local-store"
+  );
+  const requirements = await listProjectRequirementOptions(projectId);
+  const pool = await getPoolBundle(project.id);
+  const fullReqs = pool?.poolRequirements ?? [];
+
+  const learningByTitle = new Map(
+    learnings.map((x) => [titleKey(x.title), x.id] as const)
+  );
+  const competitorByTitle = new Map(
+    competitors.map((x) => [titleKey(x.title), x.id] as const)
+  );
+  const requirementByTitle = new Map(
+    requirements.map((x) => [titleKey(x.title), x.id] as const)
+  );
+  const bugByTitle = new Map(
+    bugs.map((x) => [titleKey(x.title), x.id] as const)
+  );
+
+  const learningCandidates: SimilarCandidate[] = learnings
+    .filter((n) => n.kind !== "section")
+    .map((n) => ({
+      id: n.id,
+      title: n.title,
+      content: joinContentParts([
+        n.why_text,
+        n.principle,
+        n.protocol,
+        n.tech_background,
+        n.competitors,
+        n.product_thinking,
+      ]),
+    }));
+  const competitorCandidates: SimilarCandidate[] = competitors.map((n) => ({
+    id: n.id,
+    title: n.title,
+    content: n.summary ?? "",
+  }));
+  const requirementCandidates: SimilarCandidate[] = fullReqs.map((n) => ({
+    id: n.id,
+    title: n.title,
+    content: joinContentParts([n.detail_work, n.acceptance_criteria]),
+  }));
+  const bugCandidates: SimilarCandidate[] = bugs.map((n) => ({
+    id: n.id,
+    title: n.title,
+    content: joinContentParts([
+      n.repro_steps,
+      n.expected_result,
+      n.actual_result,
+      n.description,
+      n.suggestion,
+    ]),
+  }));
+
+  const conflicts: BundleConflictItem[] = [];
+  let creates = 0;
+  let updates = 0;
+  const claimedIds = new Set<string>();
+
+  for (const sheet of preview.sheets) {
+    if (!sheet.kind) continue;
+    for (const row of sheet.rows) {
+      let existingId: string | undefined;
+      let match: "title" | "similar" | undefined;
+      let similarToTitle: string | undefined;
+      let score: number | undefined;
+
+      if (row.kind === "learning") {
+        existingId = learningByTitle.get(titleKey(row.title));
+        if (existingId) match = "title";
+        else {
+          const hit = findBestSimilar(
+            row.title,
+            rowImportContent(row),
+            learningCandidates,
+            claimedIds
+          );
+          if (hit) {
+            existingId = hit.id;
+            match = "similar";
+            similarToTitle = hit.title;
+            score = hit.score;
+          }
+        }
+      } else if (row.kind === "competitor") {
+        existingId = competitorByTitle.get(titleKey(row.title));
+        if (existingId) match = "title";
+        else {
+          const hit = findBestSimilar(
+            row.title,
+            rowImportContent(row),
+            competitorCandidates,
+            claimedIds
+          );
+          if (hit) {
+            existingId = hit.id;
+            match = "similar";
+            similarToTitle = hit.title;
+            score = hit.score;
+          }
+        }
+      } else if (row.kind === "requirement") {
+        existingId = requirementByTitle.get(titleKey(row.title));
+        if (existingId) match = "title";
+        else {
+          const hit = findBestSimilar(
+            row.title,
+            rowImportContent(row),
+            requirementCandidates,
+            claimedIds
+          );
+          if (hit) {
+            existingId = hit.id;
+            match = "similar";
+            similarToTitle = hit.title;
+            score = hit.score;
+          }
+        }
+      } else if (row.kind === "bug" || row.kind === "optimization") {
+        existingId = bugByTitle.get(titleKey(row.title));
+        if (existingId) match = "title";
+        else {
+          const hit = findBestSimilar(
+            row.title,
+            rowImportContent(row),
+            bugCandidates,
+            claimedIds
+          );
+          if (hit) {
+            existingId = hit.id;
+            match = "similar";
+            similarToTitle = hit.title;
+            score = hit.score;
+          }
+        }
+      }
+
+      if (existingId) claimedIds.add(existingId);
+
+      const action = existingId ? "update" : "create";
+      if (action === "create") creates += 1;
+      else updates += 1;
+
+      conflicts.push({
+        key: conflictKey(row.kind, row.title),
+        kind: row.kind,
+        title: row.title,
+        sheetName: sheet.sheetName,
+        action,
+        existingId,
+        match: existingId ? match ?? "title" : undefined,
+        similarToTitle,
+        score,
+        selected: true,
+      });
+    }
+  }
+
+  return {
+    ...preview,
+    conflicts,
+    summary: {
+      ...preview.summary,
+      creates,
+      updates,
+    },
+  };
 }
 
 function mapBugStatus(raw: string | null): TaskStatus {
@@ -475,11 +843,27 @@ function mergeIds(existing: string[], add: string[]): string[] {
 
 export async function commitWorkbookBundle(
   projectIdOrSlug: string,
-  preview: BundlePreview
+  preview: BundlePreview,
+  options?: { workbookBuffer?: ArrayBuffer | Buffer }
 ): Promise<BundleCommitResult> {
   const project = await getProjectById(projectIdOrSlug);
   if (!project) throw new Error("项目不存在");
   const projectId = project.id;
+
+  /** 未勾选的更新：跳过；无 conflicts 时全部写入 */
+  const skipUpdateKeys = new Set(
+    (preview.conflicts ?? [])
+      .filter((c) => c.action === "update" && !c.selected)
+      .map((c) => c.key)
+  );
+  /** 勾选替换时按冲突里的 existingId 定位（含 5b 标题不同） */
+  const updateTargetByKey = new Map(
+    (preview.conflicts ?? [])
+      .filter(
+        (c) => c.action === "update" && c.selected && Boolean(c.existingId)
+      )
+      .map((c) => [c.key, c.existingId!] as const)
+  );
 
   const result: BundleCommitResult = {
     created: {
@@ -498,7 +882,16 @@ export async function commitWorkbookBundle(
     },
     linksApplied: 0,
     pendingLinks: [],
+    imagesAttached: 0,
   };
+
+  type ImageJob = {
+    target: "learning" | "bug";
+    entityId: string;
+    sheetName: string;
+    sourceRow: number;
+  };
+  const imageJobs: ImageJob[] = [];
 
   // Pass 1: upsert entities (without cross-ids yet)
   const learningByTitle = new Map<string, string>();
@@ -547,6 +940,34 @@ export async function commitWorkbookBundle(
     return created.id;
   }
 
+  /** 主题挂在板块下；同名主题复用 */
+  async function ensureTopic(
+    topicTitle: string,
+    sectionId: string | null
+  ): Promise<string> {
+    const key = titleKey(topicTitle);
+    const existing = learnings.find(
+      (n) =>
+        n.kind === "topic" &&
+        titleKey(n.title) === key &&
+        (sectionId ? n.parent_id === sectionId : true)
+    );
+    if (existing) {
+      learningByTitle.set(key, existing.id);
+      return existing.id;
+    }
+    const created = await createProjectLearningNote({
+      project_id: projectId,
+      title: topicTitle.trim() || "未分主题",
+      kind: "topic",
+      parent_id: sectionId,
+    });
+    learningByTitle.set(key, created.id);
+    learnings = [...learnings, created];
+    result.created.learning += 1;
+    return created.id;
+  }
+
   const pendingLinkJobs: Array<{
     kind: BundleSheetKind;
     id: string;
@@ -554,99 +975,250 @@ export async function commitWorkbookBundle(
     evidence?: string;
   }> = [];
 
+  function resolveByConflictOrTitle<T extends { id: string; title: string }>(
+    kind: BundleSheetKind,
+    title: string,
+    list: T[]
+  ): T | undefined {
+    const forced = updateTargetByKey.get(conflictKey(kind, title));
+    if (forced) return list.find((x) => x.id === forced);
+    return findByTitle(list, title);
+  }
+
   for (const sheet of preview.sheets) {
     if (!sheet.kind) continue;
     for (const row of sheet.rows) {
       if (row.kind === "learning") {
-        const parentId = row.section_title
+        const ck = conflictKey("learning", row.title);
+        if (skipUpdateKeys.has(ck)) continue;
+
+        const sectionId = row.section_title
           ? await ensureSection(row.section_title)
           : null;
-        const existing = findByTitle(learnings, row.title);
-        if (existing) {
-          await updateProjectLearningNote(existing.id, {
-            kind: existing.kind === "section" ? existing.kind : "topic",
-            parent_id:
-              existing.kind === "section"
-                ? null
-                : parentId ?? existing.parent_id,
-            why_text: row.why_text || existing.why_text,
-            principle: row.principle || existing.principle,
-            protocol: row.protocol || existing.protocol,
-            tech_background: row.tech_background || existing.tech_background,
-            competitors: row.competitors || existing.competitors,
-            product_thinking: row.product_thinking || existing.product_thinking,
-          });
-          learningByTitle.set(titleKey(row.title), existing.id);
-          result.updated.learning += 1;
-          pendingLinkJobs.push({
-            kind: "learning",
-            id: existing.id,
-            links: row.links,
-          });
+        const topicName = row.topic_title?.trim() || row.title;
+        const hasPoint = Boolean(row.point_title?.trim());
+        const forcedLearning = updateTargetByKey.get(ck);
+
+        if (hasPoint) {
+          const topicId = await ensureTopic(topicName, sectionId);
+          const pointTitle = row.point_title!.trim();
+          const existing =
+            (forcedLearning
+              ? learnings.find((n) => n.id === forcedLearning)
+              : undefined) ??
+            learnings.find(
+              (n) =>
+                n.kind === "point" &&
+                titleKey(n.title) === titleKey(pointTitle) &&
+                n.parent_id === topicId
+            );
+          if (existing) {
+            await updateProjectLearningNote(existing.id, {
+              title: pointTitle,
+              kind: "point",
+              parent_id: topicId,
+              why_text: row.why_text || existing.why_text,
+              principle: row.principle || existing.principle,
+              protocol: row.protocol || existing.protocol,
+              tech_background:
+                row.tech_background || existing.tech_background,
+              competitors: row.competitors || existing.competitors,
+              product_thinking:
+                row.product_thinking || existing.product_thinking,
+            });
+            learningByTitle.set(titleKey(pointTitle), existing.id);
+            result.updated.learning += 1;
+            pendingLinkJobs.push({
+              kind: "learning",
+              id: existing.id,
+              links: row.links,
+            });
+            if (row.sourceRow) {
+              imageJobs.push({
+                target: "learning",
+                entityId: existing.id,
+                sheetName: sheet.sheetName,
+                sourceRow: row.sourceRow,
+              });
+            }
+          } else {
+            const created = await createProjectLearningNote({
+              project_id: projectId,
+              title: pointTitle,
+              kind: "point",
+              parent_id: topicId,
+              why_text: row.why_text,
+              principle: row.principle,
+              protocol: row.protocol,
+              tech_background: row.tech_background,
+              competitors: row.competitors,
+              product_thinking: row.product_thinking,
+            });
+            learningByTitle.set(titleKey(pointTitle), created.id);
+            learnings = [...learnings, created];
+            result.created.learning += 1;
+            pendingLinkJobs.push({
+              kind: "learning",
+              id: created.id,
+              links: row.links,
+            });
+            if (row.sourceRow) {
+              imageJobs.push({
+                target: "learning",
+                entityId: created.id,
+                sheetName: sheet.sheetName,
+                sourceRow: row.sourceRow,
+              });
+            }
+          }
         } else {
-          const created = await createProjectLearningNote({
-            project_id: projectId,
-            title: row.title,
-            kind: "topic",
-            parent_id: parentId,
-            why_text: row.why_text,
-            principle: row.principle,
-            protocol: row.protocol,
-            tech_background: row.tech_background,
-            competitors: row.competitors,
-            product_thinking: row.product_thinking,
-          });
-          learningByTitle.set(titleKey(row.title), created.id);
-          learnings = [...learnings, created];
-          result.created.learning += 1;
-          pendingLinkJobs.push({
-            kind: "learning",
-            id: created.id,
-            links: row.links,
-          });
+          // 无「子知识点」列：主题即叶子（topic），兼容现有知识表
+          const existing =
+            (forcedLearning
+              ? learnings.find((n) => n.id === forcedLearning)
+              : undefined) ??
+            learnings.find(
+              (n) =>
+                (n.kind === "topic" || n.kind === "point") &&
+                titleKey(n.title) === titleKey(topicName) &&
+                (sectionId ? n.parent_id === sectionId : true)
+            );
+          if (existing) {
+            await updateProjectLearningNote(existing.id, {
+              title: topicName,
+              kind: existing.kind === "point" ? "point" : "topic",
+              parent_id:
+                existing.kind === "section"
+                  ? null
+                  : sectionId ?? existing.parent_id,
+              why_text: row.why_text || existing.why_text,
+              principle: row.principle || existing.principle,
+              protocol: row.protocol || existing.protocol,
+              tech_background:
+                row.tech_background || existing.tech_background,
+              competitors: row.competitors || existing.competitors,
+              product_thinking:
+                row.product_thinking || existing.product_thinking,
+            });
+            learningByTitle.set(titleKey(topicName), existing.id);
+            result.updated.learning += 1;
+            pendingLinkJobs.push({
+              kind: "learning",
+              id: existing.id,
+              links: row.links,
+            });
+            if (row.sourceRow) {
+              imageJobs.push({
+                target: "learning",
+                entityId: existing.id,
+                sheetName: sheet.sheetName,
+                sourceRow: row.sourceRow,
+              });
+            }
+          } else {
+            const created = await createProjectLearningNote({
+              project_id: projectId,
+              title: topicName,
+              kind: "topic",
+              parent_id: sectionId,
+              why_text: row.why_text,
+              principle: row.principle,
+              protocol: row.protocol,
+              tech_background: row.tech_background,
+              competitors: row.competitors,
+              product_thinking: row.product_thinking,
+            });
+            learningByTitle.set(titleKey(topicName), created.id);
+            learnings = [...learnings, created];
+            result.created.learning += 1;
+            pendingLinkJobs.push({
+              kind: "learning",
+              id: created.id,
+              links: row.links,
+            });
+            if (row.sourceRow) {
+              imageJobs.push({
+                target: "learning",
+                entityId: created.id,
+                sheetName: sheet.sheetName,
+                sourceRow: row.sourceRow,
+              });
+            }
+          }
         }
       } else if (row.kind === "optimization") {
-        const sectionId = await ensureSection(row.section_title);
-        const section = learnings.find((n) => n.id === sectionId);
+        // 优化表 → Bug：标题=优化建议，suggestion=内容/收益/出处；可再一键生成需求
+        const ck = conflictKey("optimization", row.title);
+        if (skipUpdateKeys.has(ck)) continue;
+
         const detailParts = [
           row.detail?.trim() || "",
           row.benefit?.trim() ? `预期收益：${row.benefit.trim()}` : "",
           row.source?.trim() ? `出处：${row.source.trim()}` : "",
         ].filter(Boolean);
-        const suggestion = newLearningSuggestion({
-          title: row.title,
-          detail: detailParts.join("\n"),
-        });
-        const existingSug = (section?.suggestions ?? []).find(
-          (s) => titleKey(s.title) === titleKey(row.title)
-        );
-        if (existingSug) {
-          await updateProjectLearningNote(sectionId, {
-            suggestions: (section?.suggestions ?? []).map((s) =>
-              s.id === existingSug.id
-                ? {
-                    ...s,
-                    detail: suggestion.detail || s.detail,
-                  }
-                : s
-            ),
+        const suggestionText = detailParts.join("\n");
+        const existing = resolveByConflictOrTitle("optimization", row.title, bugs);
+        if (existing) {
+          await updateBug(existing.id, {
+            title: row.title,
+            module_path: row.section_title || existing.module_path || undefined,
+            suggestion: suggestionText || existing.suggestion || undefined,
           });
+          bugByTitle.set(titleKey(row.title), existing.id);
           result.updated.optimization += 1;
-        } else {
-          await updateProjectLearningNote(sectionId, {
-            suggestions: [...(section?.suggestions ?? []), suggestion],
+          pendingLinkJobs.push({
+            kind: "bug",
+            id: existing.id,
+            links: row.links,
           });
+          if (row.sourceRow) {
+            imageJobs.push({
+              target: "bug",
+              entityId: existing.id,
+              sheetName: sheet.sheetName,
+              sourceRow: row.sourceRow,
+            });
+          }
+        } else {
+          const created = await createBug({
+            project_id: projectId,
+            title: row.title,
+            module_path: row.section_title || undefined,
+            suggestion: suggestionText || undefined,
+            description: row.section_title
+              ? `来自优化表 · 板块：${row.section_title}`
+              : "来自优化表导入",
+            status: "pending",
+            notify: false,
+          });
+          bugByTitle.set(titleKey(row.title), created.id);
+          bugs = [...bugs, created];
           result.created.optimization += 1;
-        }
-        learnings = await listProjectLearningNotes(projectId);
-        for (const x of learnings) {
-          if (x.kind === "section") sectionByTitle.set(titleKey(x.title), x.id);
-          learningByTitle.set(titleKey(x.title), x.id);
+          pendingLinkJobs.push({
+            kind: "bug",
+            id: created.id,
+            links: row.links,
+          });
+          if (row.sourceRow) {
+            imageJobs.push({
+              target: "bug",
+              entityId: created.id,
+              sheetName: sheet.sheetName,
+              sourceRow: row.sourceRow,
+            });
+          }
         }
       } else if (row.kind === "competitor") {
-        const existing = findByTitle(competitors, row.title);
+        const ck = conflictKey("competitor", row.title);
+        if (skipUpdateKeys.has(ck)) continue;
+        const existing = resolveByConflictOrTitle(
+          "competitor",
+          row.title,
+          competitors
+        );
         if (existing) {
           await updateCompetitorEntry(existing.id, {
+            title: row.title,
             summary: row.summary || existing.summary,
             url: row.url ?? existing.url,
             module_path: row.module_path ?? existing.module_path,
@@ -676,11 +1248,25 @@ export async function commitWorkbookBundle(
           });
         }
       } else if (row.kind === "requirement") {
-        const existing = findByTitle(
-          requirements as Array<{ id: string; title: string }>,
-          row.title
+        const ck = conflictKey("requirement", row.title);
+        if (skipUpdateKeys.has(ck)) continue;
+        const existing = resolveByConflictOrTitle(
+          "requirement",
+          row.title,
+          requirements as Array<{ id: string; title: string }>
         );
         if (existing) {
+          const { updateRequirement } = await import("@/lib/db/local-store");
+          await updateRequirement(
+            existing.id,
+            {
+              title: row.title,
+              detail_work: row.detail_work || undefined,
+              acceptance_criteria: row.acceptance_criteria || undefined,
+              priority: row.priority,
+            },
+            { name: "Auto", role: "admin" }
+          );
           requirementByTitle.set(titleKey(row.title), existing.id);
           result.updated.requirement += 1;
           pendingLinkJobs.push({
@@ -711,7 +1297,9 @@ export async function commitWorkbookBundle(
           });
         }
       } else if (row.kind === "bug") {
-        const existing = findByTitle(bugs, row.title);
+        const ck = conflictKey("bug", row.title);
+        if (skipUpdateKeys.has(ck)) continue;
+        const existing = resolveByConflictOrTitle("bug", row.title, bugs);
         const evidenceUrls = [
           ...row.links.urls,
           ...extractUrls(row.evidence).urls,
@@ -722,6 +1310,7 @@ export async function commitWorkbookBundle(
         ].filter(Boolean);
         if (existing) {
           await updateBug(existing.id, {
+            title: row.title,
             module_path: row.module_path ?? undefined,
             repro_steps: row.repro_steps || existing.repro_steps || undefined,
             expected_result:
@@ -739,6 +1328,14 @@ export async function commitWorkbookBundle(
             links: row.links,
             evidence: row.evidence,
           });
+          if (row.sourceRow) {
+            imageJobs.push({
+              target: "bug",
+              entityId: existing.id,
+              sheetName: sheet.sheetName,
+              sourceRow: row.sourceRow,
+            });
+          }
         } else {
           const created = await createBug({
             project_id: projectId,
@@ -760,6 +1357,14 @@ export async function commitWorkbookBundle(
             links: row.links,
             evidence: row.evidence,
           });
+          if (row.sourceRow) {
+            imageJobs.push({
+              target: "bug",
+              entityId: created.id,
+              sheetName: sheet.sheetName,
+              sourceRow: row.sourceRow,
+            });
+          }
         }
       }
     }
@@ -876,6 +1481,79 @@ export async function commitWorkbookBundle(
     }
   }
 
+  // 内嵌图：按 Sheet+行挂到刚写入的学习 / Bug 附件
+  if (options?.workbookBuffer && imageJobs.length) {
+    try {
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(
+        Buffer.from(options.workbookBuffer as ArrayBuffer) as never
+      );
+      const byRow = collectEmbeddedImagesByRow(wb);
+      const { uploadStudioAssetBuffer } = await import(
+        "@/lib/studio/asset-storage"
+      );
+      const { createLearningNoteAttachment, listLearningAttachmentsForNote } =
+        await import("@/lib/learning-notes/store");
+      const { createBugAttachment, listBugAttachments } = await import(
+        "@/lib/db/local-store"
+      );
+
+      for (const job of imageJobs) {
+        const key = `${job.sheetName}::${job.sourceRow}`;
+        const imgs = byRow.get(key) ?? [];
+        if (!imgs.length) continue;
+
+        const existingTitles = new Set<string>();
+        if (job.target === "learning") {
+          const existing = await listLearningAttachmentsForNote(job.entityId);
+          for (const a of existing) existingTitles.add(a.title);
+        } else {
+          const existing = await listBugAttachments(job.entityId);
+          for (const a of existing) existingTitles.add(a.title);
+        }
+
+        for (let i = 0; i < imgs.length; i++) {
+          const img = imgs[i];
+          const title = `导入图 R${job.sourceRow}-${i + 1}`;
+          if (existingTitles.has(title)) continue;
+          const mime = mimeFromExt(img.extension);
+          const uploaded = await uploadStudioAssetBuffer(
+            projectId,
+            img.buffer,
+            `xlsx-r${job.sourceRow}-${i + 1}.${img.extension}`,
+            mime
+          );
+          if (job.target === "learning") {
+            await createLearningNoteAttachment({
+              project_id: projectId,
+              note_id: job.entityId,
+              title,
+              url: uploaded.url,
+              storage_path: uploaded.storagePath,
+              mime_type: uploaded.mimeType,
+            });
+          } else {
+            await createBugAttachment({
+              project_id: projectId,
+              bug_id: job.entityId,
+              title,
+              url: uploaded.url,
+              storage_path: uploaded.storagePath,
+              mime_type: uploaded.mimeType,
+            });
+          }
+          result.imagesAttached += 1;
+          existingTitles.add(title);
+        }
+      }
+    } catch (e) {
+      // 图失败不阻断文字导入
+      result.pendingLinks.push(
+        `内嵌图:${e instanceof Error ? e.message : "挂载失败"}`
+      );
+    }
+  }
+
   result.pendingLinks = Array.from(new Set(result.pendingLinks));
   return result;
 }
@@ -886,9 +1564,35 @@ const TEMPLATE_SHEETS: Array<{
   sample: string[];
 }> = [
   {
+    name: "知识表",
+    headers: [
+      "板块",
+      "主题",
+      "子知识点",
+      "知识要点",
+      "出处",
+      "关联需求",
+      "关联竞品",
+      "关联Bug",
+    ],
+    sample: [
+      "存储",
+      "RAID",
+      "RAID 10",
+      "先镜像再条带，兼顾速度与安全",
+      "调研笔记",
+      "",
+      "",
+      "",
+    ],
+  },
+  {
     name: "学习",
     headers: [
-      "标题",
+      "板块",
+      "主题",
+      "子知识点",
+      "知识要点",
       "为什么",
       "原理",
       "协议",
@@ -901,7 +1605,10 @@ const TEMPLATE_SHEETS: Array<{
       "外链",
     ],
     sample: [
-      "RAID 原理",
+      "存储",
+      "RAID",
+      "",
+      "条带与校验",
       "为何要学",
       "条带与校验",
       "",
@@ -912,6 +1619,17 @@ const TEMPLATE_SHEETS: Array<{
       "群晖",
       "",
       "https://example.com",
+    ],
+  },
+  {
+    name: "优化表",
+    headers: ["板块", "优化建议", "优化内容", "预期收益", "出处"],
+    sample: [
+      "存储",
+      "一键 RAID 预设",
+      "提供类似 RAID 10 的一键预设",
+      "降低配置门槛",
+      "调研笔记",
     ],
   },
   {
@@ -1016,7 +1734,9 @@ export const WORKBOOK_GRID_SHEETS: GridSheetDef[] = [
     sheetName: "学习",
     columns: [
       { key: "section_title", label: "板块", width: "7rem" },
-      { key: "title", label: "标题", width: "10rem" },
+      { key: "topic_title", label: "主题", width: "9rem" },
+      { key: "point_title", label: "子知识点", width: "9rem" },
+      { key: "title", label: "标题(兼容)", width: "8rem" },
       { key: "why_text", label: "为什么", width: "10rem" },
       { key: "principle", label: "原理", width: "10rem" },
       { key: "protocol", label: "协议", width: "8rem" },
@@ -1105,6 +1825,9 @@ function summarizePreview(sheets: BundleSheetPreview[]): BundlePreview["summary"
     optimization: 0,
     linkHints: 0,
     unmatchedLinkHints: [] as string[],
+    creates: 0,
+    updates: 0,
+    embeddedImages: 0,
   };
   for (const s of sheets) {
     if (!s.kind) continue;
@@ -1136,41 +1859,67 @@ export async function loadWorkbookBundleFromProject(
     listBugsByProject(project.id),
   ]);
 
-  const learningById = new Map(learnings.map((n) => [n.id, n.title]));
+  const learningById = new Map(learnings.map((n) => [n.id, n]));
+  const learningTitleById = new Map(learnings.map((n) => [n.id, n.title]));
   const competitorById = new Map(competitors.map((n) => [n.id, n.title]));
   const requirementById = new Map(requirements.map((n) => [n.id, n.title]));
   const bugById = new Map(bugs.map((n) => [n.id, n.title]));
   const sectionTitleById = new Map(
     learnings.filter((n) => n.kind === "section").map((n) => [n.id, n.title])
   );
+  const topicTitleById = new Map(
+    learnings.filter((n) => n.kind === "topic").map((n) => [n.id, n.title])
+  );
 
   const learningRows: LearningBundleRow[] = learnings
     .filter((n) => n.kind !== "section" && n.title.trim())
-    .map((n) => ({
-      kind: "learning" as const,
-      title: n.title,
-      section_title: n.parent_id
-        ? sectionTitleById.get(n.parent_id) ?? null
-        : null,
-      why_text: n.why_text,
-      principle: n.principle,
-      protocol: n.protocol,
-      tech_background: n.tech_background,
-      competitors: n.competitors,
-      product_thinking: n.product_thinking,
-      source: "",
-      links: {
-        ...emptyLinks(),
-        requirementTitles: splitTitles(
-          idsToTitles(n.linked_requirement_ids ?? [], requirementById)
-        ),
-        competitorTitles: splitTitles(
-          idsToTitles(n.linked_competitor_ids ?? [], competitorById)
-        ),
-        bugTitles: splitTitles(idsToTitles(n.linked_bug_ids ?? [], bugById)),
-      },
-      warnings: [],
-    }));
+    .map((n) => {
+      let section_title: string | null = null;
+      let topic_title: string | null = null;
+      let point_title: string | null = null;
+      if (n.kind === "point") {
+        point_title = n.title;
+        topic_title = n.parent_id
+          ? topicTitleById.get(n.parent_id) ?? null
+          : null;
+        const topic = n.parent_id ? learningById.get(n.parent_id) : null;
+        section_title = topic?.parent_id
+          ? sectionTitleById.get(topic.parent_id) ?? null
+          : null;
+      } else {
+        topic_title = n.title;
+        section_title = n.parent_id
+          ? sectionTitleById.get(n.parent_id) ?? null
+          : null;
+      }
+      return {
+        kind: "learning" as const,
+        title: point_title || topic_title || n.title,
+        section_title,
+        topic_title,
+        point_title,
+        why_text: n.why_text,
+        principle: n.principle,
+        protocol: n.protocol,
+        tech_background: n.tech_background,
+        competitors: n.competitors,
+        product_thinking: n.product_thinking,
+        source: "",
+        links: {
+          ...emptyLinks(),
+          requirementTitles: splitTitles(
+            idsToTitles(n.linked_requirement_ids ?? [], requirementById)
+          ),
+          competitorTitles: splitTitles(
+            idsToTitles(n.linked_competitor_ids ?? [], competitorById)
+          ),
+          bugTitles: splitTitles(idsToTitles(n.linked_bug_ids ?? [], bugById)),
+          learningTitles: [],
+        },
+        warnings: [],
+        sourceRow: 0,
+      };
+    });
 
   const competitorRows: CompetitorBundleRow[] = competitors
     .filter((n) => n.title.trim())
@@ -1183,7 +1932,7 @@ export async function loadWorkbookBundleFromProject(
       links: {
         ...emptyLinks(),
         learningTitles: splitTitles(
-          idsToTitles(n.linked_learning_note_ids ?? [], learningById)
+          idsToTitles(n.linked_learning_note_ids ?? [], learningTitleById)
         ),
         requirementTitles: splitTitles(
           idsToTitles(n.linked_requirement_ids ?? [], requirementById)
@@ -1192,6 +1941,7 @@ export async function loadWorkbookBundleFromProject(
         urls: n.url ? [n.url] : [],
       },
       warnings: [],
+      sourceRow: 0,
     }));
 
   const { getPoolBundle } = await import("@/lib/db/local-store");
@@ -1222,6 +1972,7 @@ export async function loadWorkbookBundleFromProject(
             .map((x) => x.title),
         },
         warnings: [],
+        sourceRow: 0,
       };
     });
 
@@ -1239,7 +1990,7 @@ export async function loadWorkbookBundleFromProject(
       links: {
         ...emptyLinks(),
         learningTitles: splitTitles(
-          idsToTitles(n.linked_learning_note_ids ?? [], learningById)
+          idsToTitles(n.linked_learning_note_ids ?? [], learningTitleById)
         ),
         competitorTitles: splitTitles(
           idsToTitles(n.linked_competitor_ids ?? [], competitorById)
@@ -1251,6 +2002,7 @@ export async function loadWorkbookBundleFromProject(
           : [],
       },
       warnings: [],
+      sourceRow: 0,
     }));
 
   const sheets: BundleSheetPreview[] = [
@@ -1293,6 +2045,8 @@ export function previewToGridState(preview: BundlePreview): WorkbookGridState {
           return {
             ...base,
             section_title: row.section_title ?? "",
+            topic_title: row.topic_title ?? "",
+            point_title: row.point_title ?? "",
             why_text: row.why_text,
             principle: row.principle,
             protocol: row.protocol,
@@ -1373,10 +2127,15 @@ export function gridStateToPreview(state: WorkbookGridState): BundlePreview {
       .map((r) => {
         const links = linksFromGrid(r);
         if (s.kind === "learning") {
+          const topicTitle =
+            r.topic_title?.trim() || r.title.trim() || null;
+          const pointTitle = r.point_title?.trim() || null;
           return {
             kind: "learning" as const,
-            title: r.title.trim(),
+            title: (pointTitle || topicTitle || r.title).trim(),
             section_title: r.section_title?.trim() || null,
+            topic_title: topicTitle,
+            point_title: pointTitle,
             why_text: r.why_text ?? "",
             principle: r.principle ?? "",
             protocol: r.protocol ?? "",
@@ -1386,6 +2145,7 @@ export function gridStateToPreview(state: WorkbookGridState): BundlePreview {
             source: "",
             links,
             warnings: [],
+            sourceRow: 0,
           };
         }
         if (s.kind === "competitor") {
@@ -1401,6 +2161,7 @@ export function gridStateToPreview(state: WorkbookGridState): BundlePreview {
             module_path: r.module_path?.trim() || null,
             links,
             warnings: [],
+            sourceRow: 0,
           };
         }
         if (s.kind === "requirement") {
@@ -1413,6 +2174,7 @@ export function gridStateToPreview(state: WorkbookGridState): BundlePreview {
             module_path: r.module_path?.trim() || null,
             links,
             warnings: [],
+            sourceRow: 0,
           };
         }
         return {
@@ -1426,6 +2188,7 @@ export function gridStateToPreview(state: WorkbookGridState): BundlePreview {
           status: r.status?.trim() || null,
           links,
           warnings: [],
+          sourceRow: 0,
         };
       });
     return {

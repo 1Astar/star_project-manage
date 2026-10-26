@@ -1,15 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 export type CrossLinkOption = {
   id: string;
   title: string;
   href?: string;
+  /** 侧栏展示用 */
+  kind?: "learning" | "bug" | "competitor" | "requirement";
+  badge?: string;
+  fields?: Array<{
+    key?: string;
+    label: string;
+    value: string;
+    multiline?: boolean;
+  }>;
 };
 
-/** 通用：已关联列表 + 下拉挂上 / 取消 */
+/** 通用：已关联列表 + 下拉挂上 / 取消；点击标题可开 Side Peek */
 export function CrossLinkSection({
   title,
   emptyHint,
@@ -19,6 +27,7 @@ export function CrossLinkSection({
   pickPlaceholder = "选择要关联的条目…",
   onLink,
   onUnlink,
+  onOpen,
 }: {
   title: string;
   emptyHint?: string;
@@ -28,6 +37,8 @@ export function CrossLinkSection({
   pickPlaceholder?: string;
   onLink: (id: string) => void;
   onUnlink: (id: string) => void;
+  /** 有则点击标题开侧栏，不再整页跳转 */
+  onOpen?: (opt: CrossLinkOption) => void;
 }) {
   const [pick, setPick] = useState("");
   const byId = new Map(options.map((o) => [o.id, o]));
@@ -45,19 +56,31 @@ export function CrossLinkSection({
           {linkedIds.map((id) => {
             const opt = byId.get(id);
             const label = opt?.title ?? id;
-            const href = opt?.href;
             return (
               <li
                 key={id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm"
               >
-                {href ? (
-                  <Link
-                    href={href}
+                {onOpen && opt ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(opt)}
+                    className="min-w-0 flex-1 text-left text-indigo-700 hover:underline"
+                  >
+                    {opt.badge ? (
+                      <span className="mr-1 text-[10px] text-slate-400">
+                        [{opt.badge}]
+                      </span>
+                    ) : null}
+                    {label}
+                  </button>
+                ) : opt?.href ? (
+                  <a
+                    href={opt.href}
                     className="min-w-0 flex-1 text-indigo-700 hover:underline"
                   >
                     {label}
-                  </Link>
+                  </a>
                 ) : (
                   <span className="min-w-0 flex-1 text-slate-800">{label}</span>
                 )}
@@ -83,6 +106,7 @@ export function CrossLinkSection({
           <option value="">{pickPlaceholder}</option>
           {linkable.map((o) => (
             <option key={o.id} value={o.id}>
+              {o.badge ? `[${o.badge}] ` : ""}
               {o.title}
             </option>
           ))}

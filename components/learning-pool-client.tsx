@@ -10,6 +10,8 @@ import {
   generateRequirementFromLearningSuggestionAction,
   linkLearningNoteRequirementAction,
   unlinkLearningNoteRequirementAction,
+  updateBugAction,
+  updateCompetitorEntryAction,
   updateLearningNoteAction,
   updateLearningSuggestionAction,
 } from "@/lib/actions";
@@ -25,6 +27,10 @@ import {
   CrossLinkSection,
   type CrossLinkOption,
 } from "@/components/cross-link-section";
+import {
+  EntitySidePeek,
+  type EntityPeekPayload,
+} from "@/components/entity-side-peek";
 
 export type LearningReqOption = CrossLinkOption;
 
@@ -794,10 +800,60 @@ function LearningNoteEditor({
   const [linkPick, setLinkPick] = useState("");
   const [sugTitle, setSugTitle] = useState("");
   const [sugDetail, setSugDetail] = useState("");
+  const [peek, setPeek] = useState<EntityPeekPayload | null>(null);
+  const [peekPending, setPeekPending] = useState(false);
 
   const linkedIds = note.linked_requirement_ids ?? [];
   const suggestions = note.suggestions ?? [];
   const linkable = requirements.filter((r) => !linkedIds.includes(r.id));
+
+  function openPeek(opt: CrossLinkOption) {
+    setPeek({
+      kind: opt.kind ?? "requirement",
+      id: opt.id,
+      title: opt.title,
+      href: opt.href,
+      badge: opt.badge,
+      fields: (opt.fields ?? []).map((f, i) => ({
+        key: f.key ?? `f${i}`,
+        label: f.label,
+        value: f.value,
+        multiline: f.multiline,
+      })),
+    });
+  }
+
+  async function savePeek(patch: {
+    title: string;
+    fields: Record<string, string>;
+  }) {
+    if (!peek) return;
+    setPeekPending(true);
+    try {
+      if (peek.kind === "competitor") {
+        await updateCompetitorEntryAction({
+          entryId: peek.id,
+          projectSlug,
+          title: patch.title,
+          summary: patch.fields.summary,
+          url: patch.fields.url || null,
+        });
+      } else if (peek.kind === "bug") {
+        await updateBugAction({
+          bugId: peek.id,
+          projectSlug,
+          updates: {
+            title: patch.title,
+            actualResult: patch.fields.actual || null,
+            suggestion: patch.fields.suggestion || null,
+          },
+        });
+      }
+      setPeek(null);
+    } finally {
+      setPeekPending(false);
+    }
+  }
 
   const parentOptions =
     note.kind === "topic"
@@ -981,6 +1037,7 @@ function LearningNoteEditor({
         pickPlaceholder="选择竞品条目…"
         onLink={onLinkCompetitor}
         onUnlink={onUnlinkCompetitor}
+        onOpen={openPeek}
       />
       <CrossLinkSection
         title="关联 Bug"
@@ -990,7 +1047,21 @@ function LearningNoteEditor({
         pickPlaceholder="选择 Bug…"
         onLink={onLinkBug}
         onUnlink={onUnlinkBug}
+        onOpen={openPeek}
       />
+
+      {peek ? (
+        <EntitySidePeek
+          item={peek}
+          pending={peekPending}
+          onClose={() => setPeek(null)}
+          onSave={
+            peek.kind === "competitor" || peek.kind === "bug"
+              ? savePeek
+              : undefined
+          }
+        />
+      ) : null}
 
       <section className="space-y-2 border-t border-slate-100 pt-3">
         <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>

@@ -2,16 +2,16 @@
  * 竞品分析枢纽外链配置。
  *
  * 映射（已对齐产品口径）：
- * - 市场竞品分析 → competitive_analysis 独立工具（夸克最新；Git / Vercel / CF 正式链待定）
+ * - 市场竞品分析 → competitive_analysis（正式 CF：competition.starry-studio.cn）
  * - 功能竞品分析 → NAS 竞品学习地图（离线 HTML，竞品板块）
  *
- * 正式 Cloudflare 域名就绪后，只改 MARKET_COMPETITOR_FORMAL_URL（或环境变量），
- * 勿把临时 demo 写成「正式地址」。
+ * 可用环境变量 NEXT_PUBLIC_COMPETITIVE_ANALYSIS_URL 覆盖；勿把临时 Vercel demo 写成正式地址。
  */
 
-/** 正式市场工具链（CF）。未配置时为空。 */
+/** 正式市场工具链（CF）。可用 env 覆盖。 */
 export const MARKET_COMPETITOR_FORMAL_URL =
-  process.env.NEXT_PUBLIC_COMPETITIVE_ANALYSIS_URL?.trim() || "";
+  process.env.NEXT_PUBLIC_COMPETITIVE_ANALYSIS_URL?.trim() ||
+  "https://competition.starry-studio.cn";
 
 /**
  * 临时预览（非正式）。仅在正式链为空时作为「可试用」次要入口展示。

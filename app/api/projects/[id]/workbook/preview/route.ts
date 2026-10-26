@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { parseWorkbookBundle } from "@/lib/excel/workbook-bundle";
+import {
+  annotateWorkbookConflicts,
+  parseWorkbookBundle,
+} from "@/lib/excel/workbook-bundle";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params;
+  const { id } = await params;
   const formData = await request.formData();
   const file = formData.get("file");
   if (!(file instanceof Blob)) {
@@ -13,6 +16,7 @@ export async function POST(
   }
 
   const buffer = await file.arrayBuffer();
-  const preview = await parseWorkbookBundle(buffer);
+  const parsed = await parseWorkbookBundle(buffer);
+  const preview = await annotateWorkbookConflicts(id, parsed);
   return NextResponse.json({ preview });
 }

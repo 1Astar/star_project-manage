@@ -32,6 +32,9 @@ IDEAS_CAPTURE_SECRET=
 KV_REST_API_URL=
 KV_REST_API_TOKEN=
 
+# 市场竞品分析正式 CF（可选；未设时前端默认 competition.starry-studio.cn）
+# NEXT_PUBLIC_COMPETITIVE_ANALYSIS_URL=https://competition.starry-studio.cn
+
 # Optional: Git sync, Notion import, Vercel compare_sources, encryption
 STUDIO_IDEAS_REPO=
 GITHUB_TOKEN=

@@ -7,11 +7,22 @@ import {
   addBugCommentAction,
   createBugAction,
   createBugTestPlanAction,
+  generateRequirementFromBugSuggestionAction,
   updateBugAction,
   updateBugStatusAction,
+  updateCompetitorEntryAction,
+  updateLearningNoteAction,
 } from "@/lib/actions";
 import { BackLink } from "@/components/back-button";
 import { BugAttachmentsBlock } from "@/components/bug-attachments";
+import {
+  CrossLinkSection,
+  type CrossLinkOption,
+} from "@/components/cross-link-section";
+import {
+  EntitySidePeek,
+  type EntityPeekPayload,
+} from "@/components/entity-side-peek";
 import { assigneeRosterNames, PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
 import { BugTypeSelect } from "@/components/bug-type-select";
 import {
@@ -1047,6 +1058,8 @@ export function BugDetailEditor({
   iterations = [],
   comments,
   attachments = [],
+  learningOptions = [],
+  competitorOptions = [],
 }: {
   bug: Bug;
   projectId: string;
@@ -1060,12 +1073,22 @@ export function BugDetailEditor({
   iterations?: Iteration[];
   comments: BugComment[];
   attachments?: BugAttachment[];
+  learningOptions?: CrossLinkOption[];
+  competitorOptions?: CrossLinkOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [copyHint, setCopyHint] = useState<string | null>(null);
   const [testPlans, setTestPlans] = useState(initialTestPlans);
+  const [linkedLearningIds, setLinkedLearningIds] = useState<string[]>(
+    () => bug.linked_learning_note_ids ?? []
+  );
+  const [linkedCompetitorIds, setLinkedCompetitorIds] = useState<string[]>(
+    () => bug.linked_competitor_ids ?? []
+  );
+  const [peek, setPeek] = useState<EntityPeekPayload | null>(null);
+  const [peekPending, setPeekPending] = useState(false);
   const [fields, setFields] = useState<SharedFields>(() =>
     EMPTY_FIELDS({
       title: bug.title,
@@ -1090,6 +1113,11 @@ export function BugDetailEditor({
       status: bug.status,
     })
   );
+
+  useEffect(() => {
+    setLinkedLearningIds(bug.linked_learning_note_ids ?? []);
+    setLinkedCompetitorIds(bug.linked_competitor_ids ?? []);
+  }, [bug.id, bug.linked_learning_note_ids, bug.linked_competitor_ids]);
   const [createdAtLocal, setCreatedAtLocal] = useState(() =>
     toDatetimeLocalValue(bug.created_at)
   );
@@ -1175,6 +1203,78 @@ export function BugDetailEditor({
       patch({ status });
       router.refresh();
     });
+  }
+
+  function setCrossLinks(
+    field: "linkedLearningNoteIds" | "linkedCompetitorIds",
+    ids: string[]
+  ) {
+    startTransition(async () => {
+      try {
+        await updateBugAction({
+          bugId: bug.id,
+          projectSlug,
+          updates: { [field]: ids },
+        });
+        if (field === "linkedLearningNoteIds") setLinkedLearningIds(ids);
+        else setLinkedCompetitorIds(ids);
+        setMessage("已更新关联");
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "关联失败");
+      }
+    });
+  }
+
+  function openPeek(opt: CrossLinkOption) {
+    setPeek({
+      kind: opt.kind ?? "learning",
+      id: opt.id,
+      title: opt.title,
+      href: opt.href,
+      badge: opt.badge,
+      fields: (opt.fields ?? []).map((f, i) => ({
+        key: f.key ?? `f${i}`,
+        label: f.label,
+        value: f.value,
+        multiline: f.multiline,
+      })),
+    });
+  }
+
+  async function savePeek(patch: {
+    title: string;
+    fields: Record<string, string>;
+  }) {
+    if (!peek) return;
+    setPeekPending(true);
+    try {
+      if (peek.kind === "learning") {
+        await updateLearningNoteAction({
+          noteId: peek.id,
+          projectSlug,
+          title: patch.title,
+          whyText: patch.fields.why_text,
+          principle: patch.fields.principle,
+          protocol: patch.fields.protocol,
+        });
+      } else if (peek.kind === "competitor") {
+        await updateCompetitorEntryAction({
+          entryId: peek.id,
+          projectSlug,
+          title: patch.title,
+          summary: patch.fields.summary,
+          url: patch.fields.url || null,
+        });
+      }
+      setMessage("已保存关联详情");
+      setPeek(null);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "侧栏保存失败");
+    } finally {
+      setPeekPending(false);
+    }
   }
 
   function submitComment() {
@@ -1277,7 +1377,47 @@ export function BugDetailEditor({
               />
             </section>
             <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+                <button
+                  type="button"
+                  disabled={
+                    pending ||
+                    !fields.suggestion.trim() ||
+                    Boolean(fields.requirementId || bug.requirement_id)
+                  }
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        const r = await generateRequirementFromBugSuggestionAction({
+                          bugId: bug.id,
+                          projectId,
+                          projectSlug,
+                        });
+                        if (r.requirementId) {
+                          patch({ requirementId: r.requirementId });
+                        }
+                        setMessage(
+                          r.created
+                            ? "已从优化建议生成需求"
+                            : "该 Bug 已关联需求"
+                        );
+                        router.refresh();
+                      } catch (error) {
+                        setMessage(
+                          error instanceof Error ? error.message : "生成失败"
+                        );
+                      }
+                    });
+                  }}
+                  className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 disabled:opacity-40"
+                >
+                  一键生成需求
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400">
+                优化表导入会写入此处；生成需求后自动挂到本 Bug。
+              </p>
               <textarea
                 value={fields.suggestion}
                 onChange={(e) => patch({ suggestion: e.target.value })}
@@ -1285,6 +1425,14 @@ export function BugDetailEditor({
                 placeholder="给 +1 / 研发的建议（可选）…"
                 className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
               />
+              {(fields.requirementId || bug.requirement_id) && (
+                <a
+                  href={`/projects/${projectSlug}/requirements/${fields.requirementId || bug.requirement_id}`}
+                  className="inline-block text-xs text-indigo-600 hover:underline"
+                >
+                  已关联需求 →
+                </a>
+              )}
             </section>
             <section className="space-y-2 border-t border-slate-100 pt-3">
               <h4 className="text-xs font-semibold text-slate-500">补充与评论</h4>
@@ -1361,6 +1509,66 @@ export function BugDetailEditor({
               }
               showStatus
             />
+            <section className="rounded-xl border border-slate-200 bg-white p-3">
+              <h3 className="mb-1 text-xs font-semibold text-slate-500">
+                交叉关联
+              </h3>
+              <p className="mb-2 text-[10px] text-slate-400">
+                与学习 / 竞品互相引用；总表导入也可挂上
+              </p>
+              <CrossLinkSection
+                title="关联学习"
+                linkedIds={linkedLearningIds}
+                options={learningOptions}
+                pending={pending}
+                pickPlaceholder="选择学习笔记…"
+                onLink={(id) =>
+                  setCrossLinks("linkedLearningNoteIds", [
+                    ...linkedLearningIds,
+                    id,
+                  ])
+                }
+                onUnlink={(id) =>
+                  setCrossLinks(
+                    "linkedLearningNoteIds",
+                    linkedLearningIds.filter((x) => x !== id)
+                  )
+                }
+                onOpen={openPeek}
+              />
+              <CrossLinkSection
+                title="关联竞品条目"
+                linkedIds={linkedCompetitorIds}
+                options={competitorOptions}
+                pending={pending}
+                pickPlaceholder="选择竞品条目…"
+                onLink={(id) =>
+                  setCrossLinks("linkedCompetitorIds", [
+                    ...linkedCompetitorIds,
+                    id,
+                  ])
+                }
+                onUnlink={(id) =>
+                  setCrossLinks(
+                    "linkedCompetitorIds",
+                    linkedCompetitorIds.filter((x) => x !== id)
+                  )
+                }
+                onOpen={openPeek}
+              />
+            </section>
+            {peek ? (
+              <EntitySidePeek
+                item={peek}
+                pending={peekPending}
+                onClose={() => setPeek(null)}
+                onSave={
+                  peek.kind === "learning" || peek.kind === "competitor"
+                    ? savePeek
+                    : undefined
+                }
+              />
+            ) : null}
             <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
               <h3 className="mb-2 font-semibold text-slate-500">归属</h3>
               <div className="space-y-1.5 text-slate-700">

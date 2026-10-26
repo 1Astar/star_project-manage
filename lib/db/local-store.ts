@@ -35,6 +35,9 @@ import {
   listMembersForProject,
   listBugCommentsForBug,
   listBugAttachmentsForBug,
+  listBugAttachmentsForProject as listBugAttachmentsForProjectSb,
+  listRequirementAttachmentsForProject as listRequirementAttachmentsForProjectSb,
+  listBoardRequirementsForProject as listBoardRequirementsForProjectSb,
   findRequirementTitleById,
   findPoolIterationRow,
   listAllProjects,
@@ -1967,6 +1970,35 @@ export async function listBugsByProject(projectId: string) {
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
+/** 上板需求（in_pool=false），轻量单表，供总览等用 */
+export async function listBoardRequirementsByProject(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listBoardRequirementsForProjectSb(project.id);
+  }
+  const project = await getProjectById(projectId);
+  if (!project) return [];
+  const db = await readDb();
+  return db.requirements
+    .filter((r) => r.project_id === project.id && !r.in_pool)
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+}
+
+export async function listBugAttachmentsByProject(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listBugAttachmentsForProjectSb(project.id);
+  }
+  const project = await getProjectById(projectId);
+  if (!project) return [];
+  const db = await readDb();
+  return (db.bug_attachments ?? [])
+    .filter((a) => a.project_id === project.id)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 export async function listBugAttachments(bugId: string) {
   if (isSupabaseConfigured()) {
     return listBugAttachmentsForBug(bugId);
@@ -2215,6 +2247,11 @@ export async function listRequirementAttachments(requirementId: string) {
 }
 
 export async function listProjectAttachments(projectId: string) {
+  if (isSupabaseConfigured()) {
+    const project = await findProjectBySlugOrId(projectId);
+    if (!project) return [];
+    return listRequirementAttachmentsForProjectSb(project.id);
+  }
   const db = await readDb();
   const project = db.projects.find((p) => p.id === projectId || p.slug === projectId);
   if (!project) return [];

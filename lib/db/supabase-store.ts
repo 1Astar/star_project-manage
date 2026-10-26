@@ -1134,6 +1134,52 @@ export async function listBugAttachmentsForBug(bugId: string): Promise<BugAttach
   return (data ?? []) as BugAttachment[];
 }
 
+export async function listBugAttachmentsForProject(
+  projectId: string
+): Promise<BugAttachment[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("bug_attachments")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (/does not exist|schema cache|too many subrequests/i.test(error.message)) return [];
+    throw new Error(`bug_attachments: ${error.message}`);
+  }
+  return (data ?? []) as BugAttachment[];
+}
+
+export async function listRequirementAttachmentsForProject(
+  projectId: string
+): Promise<import("@/lib/types").RequirementAttachment[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("requirement_attachments")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (/does not exist|schema cache|too many subrequests/i.test(error.message)) return [];
+    throw new Error(`requirement_attachments: ${error.message}`);
+  }
+  return (data ?? []) as import("@/lib/types").RequirementAttachment[];
+}
+
+export async function listBoardRequirementsForProject(
+  projectId: string
+): Promise<import("@/lib/types").Requirement[]> {
+  const sb = client();
+  const { data, error } = await sb
+    .from("requirements")
+    .select("*")
+    .eq("project_id", projectId)
+    .eq("in_pool", false)
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(`requirements board: ${error.message}`);
+  return (data ?? []) as import("@/lib/types").Requirement[];
+}
+
 export async function findRequirementTitleById(
   requirementId: string
 ): Promise<{ id: string; title: string } | null> {
