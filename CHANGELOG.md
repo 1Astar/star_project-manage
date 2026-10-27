@@ -10,6 +10,14 @@
 
 ---
 
+## v1.22.1 · 2026-10-27
+
+相对 **v1.22.0**（本版：**Cloudflare 构建依赖修复**）：
+
+- 从 `dependencies` 移除本机平台包 `@cloudflare/workerd-darwin-arm64`，避免 Linux CI `npm ci` 报 `EBADPLATFORM`（workerd 仍由 wrangler 按平台可选安装）
+
+---
+
 ## v1.22.0 · 2026-10-27
 
 相对 **v1.21.0**（本版主线：**Notion 单页 → 项目 Wiki**）：
