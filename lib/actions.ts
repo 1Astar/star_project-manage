@@ -368,16 +368,20 @@ export async function createBugAction(input: {
   suggestion?: string;
   modulePath?: string | null;
   foundVersion?: string | null;
+  resolvedVersion?: string | null;
   environments?: string[];
   priority?: import("@/lib/types").Bug["priority"];
   assignee?: string;
   reporterName?: string | null;
+  updatedBy?: string | null;
   watchers?: string[];
   requirementId?: string | null;
   testPlanId?: string | null;
+  executionCase?: string | null;
   iterationId?: string | null;
   severity?: import("@/lib/types").BugSeverity;
   bugType?: import("@/lib/types").BugType;
+  customFields?: import("@/lib/types").Bug["custom_fields"];
 }) {
   const bug = await createBug({
     project_id: input.projectId,
@@ -393,13 +397,17 @@ export async function createBugAction(input: {
     suggestion: input.suggestion,
     module_path: input.modulePath,
     found_version: input.foundVersion,
+    resolved_version: input.resolvedVersion,
     environments: input.environments,
     priority: input.priority,
     assignee: input.assignee,
     reporter_name: input.reporterName,
+    updated_by: input.updatedBy ?? input.reporterName ?? null,
     watchers: input.watchers,
     severity: input.severity,
     bug_type: input.bugType,
+    execution_case: input.executionCase,
+    custom_fields: input.customFields,
   });
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${bug.id}`);
@@ -420,24 +428,29 @@ export async function updateBugAction(input: {
     suggestion?: string | null;
     modulePath?: string | null;
     foundVersion?: string | null;
+    resolvedVersion?: string | null;
     environments?: string[];
     priority?: import("@/lib/types").Bug["priority"];
     assignee?: string | null;
     reporterName?: string | null;
+    updatedBy?: string | null;
     watchers?: string[];
     requirementId?: string | null;
     testPlanId?: string | null;
+    executionCase?: string | null;
     iterationId?: string | null;
     status?: import("@/lib/types").TaskStatus;
     severity?: import("@/lib/types").BugSeverity;
     bugType?: import("@/lib/types").BugType;
     linkedLearningNoteIds?: string[];
     linkedCompetitorIds?: string[];
+    customFields?: import("@/lib/types").Bug["custom_fields"];
     createdAt?: string | null;
     updatedAt?: string | null;
   };
 }) {
   const { updateBug } = await import("@/lib/db/local-store");
+  const { PRODUCT_ASSIGNEE_NAME } = await import("@/lib/assignee-roster");
   await updateBug(input.bugId, {
     title: input.updates.title,
     description: input.updates.description,
@@ -448,19 +461,26 @@ export async function updateBugAction(input: {
     suggestion: input.updates.suggestion,
     module_path: input.updates.modulePath,
     found_version: input.updates.foundVersion,
+    resolved_version: input.updates.resolvedVersion,
     environments: input.updates.environments,
     priority: input.updates.priority,
     assignee: input.updates.assignee,
     reporter_name: input.updates.reporterName,
+    updated_by:
+      input.updates.updatedBy !== undefined
+        ? input.updates.updatedBy
+        : PRODUCT_ASSIGNEE_NAME,
     watchers: input.updates.watchers,
     requirement_id: input.updates.requirementId,
     test_plan_id: input.updates.testPlanId,
+    execution_case: input.updates.executionCase,
     iteration_id: input.updates.iterationId,
     status: input.updates.status,
     severity: input.updates.severity,
     bug_type: input.updates.bugType,
     linked_learning_note_ids: input.updates.linkedLearningNoteIds,
     linked_competitor_ids: input.updates.linkedCompetitorIds,
+    custom_fields: input.updates.customFields,
     ...(input.updates.createdAt !== undefined
       ? { created_at: input.updates.createdAt }
       : {}),
@@ -529,8 +549,14 @@ export async function updateBugStatusAction(input: {
   bugId: string;
   projectSlug: string;
   status: TaskStatus;
+  updatedBy?: string | null;
 }) {
-  await updateBugStatus(input.bugId, input.status);
+  const { PRODUCT_ASSIGNEE_NAME } = await import("@/lib/assignee-roster");
+  await updateBugStatus(
+    input.bugId,
+    input.status,
+    input.updatedBy ?? PRODUCT_ASSIGNEE_NAME
+  );
   revalidatePath(`/projects/${input.projectSlug}/bugs`);
   revalidatePath(`/projects/${input.projectSlug}/bugs/${input.bugId}`);
 }

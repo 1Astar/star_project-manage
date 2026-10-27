@@ -18,14 +18,18 @@ export function defaultBugReproMeta(): Pick<
   | "actual_result"
   | "module_path"
   | "found_version"
+  | "resolved_version"
   | "environments"
   | "priority"
   | "test_plan_id"
+  | "execution_case"
   | "iteration_id"
   | "reporter_name"
+  | "updated_by"
   | "watchers"
   | "linked_learning_note_ids"
   | "linked_competitor_ids"
+  | "custom_fields"
 > {
   return {
     precondition: null,
@@ -33,15 +37,40 @@ export function defaultBugReproMeta(): Pick<
     actual_result: null,
     module_path: null,
     found_version: null,
+    resolved_version: null,
     environments: [],
     priority: null,
     test_plan_id: null,
+    execution_case: null,
     iteration_id: null,
     reporter_name: null,
+    updated_by: null,
     watchers: [],
     linked_learning_note_ids: [],
     linked_competitor_ids: [],
+    custom_fields: {},
   };
+}
+
+export function normalizeBugCustomFields(
+  raw: unknown
+): Record<string, string | number | boolean | null> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, string | number | boolean | null> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = String(k ?? "").trim();
+    if (!key) continue;
+    if (v === null || v === undefined) {
+      out[key] = null;
+      continue;
+    }
+    if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      out[key] = v;
+      continue;
+    }
+    out[key] = String(v);
+  }
+  return out;
 }
 
 export type BugEnvTag = (typeof BUG_ENV_OPTIONS)[number] | string;

@@ -71,15 +71,18 @@ type SharedFields = {
   suggestion: string;
   modulePath: string;
   foundVersion: string;
+  resolvedVersion: string;
   environments: string[];
   priority: BugPriority | "";
   severity: BugSeverity;
   bugType: BugType;
   assignee: string;
   reporterName: string;
+  updatedBy: string;
   watchers: string[];
   requirementId: string;
   testPlanId: string;
+  executionCase: string;
   iterationId: string;
   status: TaskStatus;
 };
@@ -94,15 +97,18 @@ const EMPTY_FIELDS = (overrides?: Partial<SharedFields>): SharedFields => ({
   suggestion: "",
   modulePath: "",
   foundVersion: "",
+  resolvedVersion: "",
   environments: [],
   priority: "",
   severity: 3,
   bugType: "code",
   assignee: "",
   reporterName: "",
+  updatedBy: "",
   watchers: [],
   requirementId: "",
   testPlanId: "",
+  executionCase: "",
   iterationId: "",
   status: "pending",
   ...overrides,
@@ -192,14 +198,39 @@ function ReproTemplateFields({
 function SideLayout({
   left,
   right,
+  dense = false,
 }: {
   left: ReactNode;
   right: ReactNode;
+  /** Peek 分栏内更窄：描述在上、属性在下（避免半屏再横拆挤爆） */
+  dense?: boolean;
 }) {
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]">
-      <div className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4">{left}</div>
-      <aside className="space-y-3 lg:sticky lg:top-3 lg:self-start">{right}</aside>
+    <div
+      className={
+        dense
+          ? "grid items-start gap-3"
+          : "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)]"
+      }
+    >
+      <div
+        className={
+          dense
+            ? "min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-3"
+            : "min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4"
+        }
+      >
+        {left}
+      </div>
+      <aside
+        className={
+          dense
+            ? "space-y-3"
+            : "space-y-3 lg:sticky lg:top-3 lg:self-start"
+        }
+      >
+        {right}
+      </aside>
     </div>
   );
 }
@@ -487,6 +518,24 @@ function MetaSelects({
             className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
           />
         </label>
+        <label className="block space-y-1">
+          <span className="text-slate-500">解决版本</span>
+          <input
+            value={value.resolvedVersion}
+            onChange={(e) => onChange({ resolvedVersion: e.target.value })}
+            placeholder="修复所在版本，如 v1.16.0"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-slate-500">关联执行用例</span>
+          <input
+            value={value.executionCase}
+            onChange={(e) => onChange({ executionCase: e.target.value })}
+            placeholder="用例编号或名称（本期自由文本）"
+            className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+          />
+        </label>
         <div className="space-y-1">
           <span className="text-slate-500">环境</span>
           <div className="flex flex-wrap gap-1.5">
@@ -531,6 +580,12 @@ function MetaSelects({
               className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1"
             />
           )}
+        </label>
+        <label className="flex items-center justify-between gap-2">
+          <span className="shrink-0 text-slate-500">更新人</span>
+          <span className="min-w-0 flex-1 truncate text-right text-slate-700">
+            {value.updatedBy || "—"}
+          </span>
         </label>
         <label className="flex items-center justify-between gap-2">
           <span className="shrink-0 text-slate-500">指派</span>
@@ -610,13 +665,16 @@ async function createOneBug(
     suggestion: fields.suggestion.trim() || undefined,
     modulePath: fields.modulePath.trim() || null,
     foundVersion: fields.foundVersion.trim() || null,
+    resolvedVersion: fields.resolvedVersion.trim() || null,
     environments: fields.environments,
     priority: fields.priority || null,
     assignee: fields.assignee || undefined,
     reporterName: fields.reporterName.trim() || null,
+    updatedBy: fields.reporterName.trim() || PRODUCT_ASSIGNEE_NAME,
     watchers: fields.watchers,
     requirementId: fields.requirementId || null,
     testPlanId: fields.testPlanId || null,
+    executionCase: fields.executionCase.trim() || null,
     iterationId: fields.iterationId || null,
     severity: fields.severity,
     bugType: fields.bugType,
@@ -1060,6 +1118,8 @@ export function BugDetailEditor({
   attachments = [],
   learningOptions = [],
   competitorOptions = [],
+  variant = "page",
+  onClose,
 }: {
   bug: Bug;
   projectId: string;
@@ -1075,7 +1135,11 @@ export function BugDetailEditor({
   attachments?: BugAttachment[];
   learningOptions?: CrossLinkOption[];
   competitorOptions?: CrossLinkOption[];
+  /** page=独立全页；peek=列表分栏右栏（约定：左列表右详情） */
+  variant?: "page" | "peek";
+  onClose?: () => void;
 }) {
+  const isPeek = variant === "peek";
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -1100,15 +1164,18 @@ export function BugDetailEditor({
       suggestion: bug.suggestion ?? "",
       modulePath: bug.module_path ?? "",
       foundVersion: bug.found_version ?? "",
+      resolvedVersion: bug.resolved_version ?? "",
       environments: bug.environments ?? [],
       priority: bug.priority ?? "",
       severity: bug.severity ?? 3,
       bugType: bug.bug_type ?? "code",
       assignee: bug.assignee ?? "",
       reporterName: bug.reporter_name ?? "",
+      updatedBy: bug.updated_by ?? "",
       watchers: bug.watchers ?? [],
       requirementId: bug.requirement_id ?? "",
       testPlanId: bug.test_plan_id ?? "",
+      executionCase: bug.execution_case ?? "",
       iterationId: bug.iteration_id ?? "",
       status: bug.status,
     })
@@ -1175,12 +1242,15 @@ export function BugDetailEditor({
             suggestion: fields.suggestion.trim() || null,
             modulePath: fields.modulePath.trim() || null,
             foundVersion: fields.foundVersion.trim() || null,
+            resolvedVersion: fields.resolvedVersion.trim() || null,
             environments: fields.environments,
             priority: fields.priority || null,
             assignee: fields.assignee || null,
+            updatedBy: PRODUCT_ASSIGNEE_NAME,
             watchers: fields.watchers,
             requirementId: fields.requirementId || null,
             testPlanId: fields.testPlanId || null,
+            executionCase: fields.executionCase.trim() || null,
             iterationId: fields.iterationId || null,
             status: fields.status,
             severity: fields.severity,
@@ -1296,6 +1366,357 @@ export function BugDetailEditor({
     });
   }
 
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      {message ? <span className="text-xs text-slate-500">{message}</span> : null}
+      {copyHint ? <span className="text-xs text-emerald-600">{copyHint}</span> : null}
+      <button
+        type="button"
+        onClick={() => void copyBugLink()}
+        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 sm:px-3 sm:py-1.5 sm:text-sm"
+      >
+        复制链接
+      </button>
+      <a
+        href={bugPath}
+        target="_blank"
+        rel="noreferrer"
+        className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50 sm:px-3 sm:py-1.5 sm:text-sm"
+        title="独立全页打开（分享/新标签）"
+      >
+        {isPeek ? "↗ 全页" : "打开链接"}
+      </a>
+      {!resolved ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setStatus("done")}
+          className="rounded-lg border border-emerald-200 px-2.5 py-1 text-xs text-emerald-700 sm:px-3 sm:py-1.5 sm:text-sm"
+        >
+          解决
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => setStatus("pending")}
+          className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 sm:px-3 sm:py-1.5 sm:text-sm"
+        >
+          重开
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={pending || !fields.title.trim()}
+        onClick={save}
+        className="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50 sm:px-3 sm:py-1.5 sm:text-sm"
+      >
+        {pending ? "保存中…" : "保存"}
+      </button>
+    </div>
+  );
+
+  const body = (
+    <SideLayout
+      dense={isPeek}
+      left={
+        <>
+          <input
+            value={fields.title}
+            onChange={(e) => patch({ title: e.target.value })}
+            className="w-full border-0 bg-transparent text-xl font-bold text-slate-900 outline-none"
+          />
+          <ReproTemplateFields value={fields} onChange={patch} />
+          <BugAttachmentsBlock
+            projectId={bug.project_id}
+            bugId={bug.id}
+            attachments={attachments}
+            variant="inline"
+          />
+          <section className="space-y-1.5 border-t border-slate-100 pt-3">
+            <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
+            <textarea
+              value={fields.description}
+              onChange={(e) => patch({ description: e.target.value })}
+              rows={3}
+              placeholder="影响范围、其它上下文（可选）…"
+              className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+            />
+          </section>
+          <section className="space-y-1.5 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
+              <button
+                type="button"
+                disabled={
+                  pending ||
+                  !fields.suggestion.trim() ||
+                  Boolean(fields.requirementId || bug.requirement_id)
+                }
+                onClick={() => {
+                  startTransition(async () => {
+                    try {
+                      const r = await generateRequirementFromBugSuggestionAction({
+                        bugId: bug.id,
+                        projectId,
+                        projectSlug,
+                      });
+                      if (r.requirementId) {
+                        patch({ requirementId: r.requirementId });
+                      }
+                      setMessage(
+                        r.created
+                          ? "已从优化建议生成需求"
+                          : "该 Bug 已关联需求"
+                      );
+                      router.refresh();
+                    } catch (error) {
+                      setMessage(
+                        error instanceof Error ? error.message : "生成失败"
+                      );
+                    }
+                  });
+                }}
+                className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 disabled:opacity-40"
+              >
+                一键生成需求
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              优化表导入会写入此处；生成需求后自动挂到本 Bug。
+            </p>
+            <textarea
+              value={fields.suggestion}
+              onChange={(e) => patch({ suggestion: e.target.value })}
+              rows={3}
+              placeholder="给 +1 / 研发的建议（可选）…"
+              className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
+            />
+            {(fields.requirementId || bug.requirement_id) && (
+              <a
+                href={`/projects/${projectSlug}/requirements/${fields.requirementId || bug.requirement_id}`}
+                className="inline-block text-xs text-indigo-600 hover:underline"
+              >
+                已关联需求 →
+              </a>
+            )}
+          </section>
+          <section className="space-y-2 border-t border-slate-100 pt-3">
+            <h4 className="text-xs font-semibold text-slate-500">补充与评论</h4>
+            {comments.length === 0 ? (
+              <p className="text-xs text-slate-400">还没有补充。不同人都可以在下面留言。</p>
+            ) : (
+              <ul className="space-y-2">
+                {comments.map((c) => (
+                  <li
+                    key={c.id}
+                    className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm"
+                  >
+                    <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">{c.author_name}</span>
+                      <span>{new Date(c.created_at).toLocaleString("zh-CN")}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-slate-800">{c.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="space-y-2 rounded-lg border border-dashed border-slate-200 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span>作者</span>
+                  <select
+                    value={commentAuthor}
+                    onChange={(e) => setCommentAuthor(e.target.value)}
+                    className="rounded-md border border-slate-200 px-2 py-1"
+                  >
+                    {roster.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <textarea
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                rows={3}
+                placeholder="补充现象、截图说明、处理进展…"
+                className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-300"
+              />
+              <button
+                type="button"
+                disabled={pending || !commentBody.trim()}
+                onClick={submitComment}
+                className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700 disabled:opacity-50"
+              >
+                发表补充
+              </button>
+            </div>
+          </section>
+        </>
+      }
+      right={
+        <>
+          <MetaSelects
+            value={fields}
+            onChange={patch}
+            members={members}
+            requirements={requirements}
+            featureModules={featureModules}
+            testPlans={testPlans}
+            iterations={iterations}
+            projectId={projectId}
+            projectSlug={projectSlug}
+            onPlanCreated={(plan) =>
+              setTestPlans((prev) =>
+                prev.some((p) => p.id === plan.id) ? prev : [plan, ...prev]
+              )
+            }
+            showStatus
+          />
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <h3 className="mb-1 text-xs font-semibold text-slate-500">
+              交叉关联
+            </h3>
+            <p className="mb-2 text-[10px] text-slate-400">
+              与学习 / 竞品互相引用；总表导入也可挂上
+            </p>
+            <CrossLinkSection
+              title="关联学习"
+              linkedIds={linkedLearningIds}
+              options={learningOptions}
+              pending={pending}
+              pickPlaceholder="选择学习笔记…"
+              onLink={(id) =>
+                setCrossLinks("linkedLearningNoteIds", [
+                  ...linkedLearningIds,
+                  id,
+                ])
+              }
+              onUnlink={(id) =>
+                setCrossLinks(
+                  "linkedLearningNoteIds",
+                  linkedLearningIds.filter((x) => x !== id)
+                )
+              }
+              onOpen={openPeek}
+            />
+            <CrossLinkSection
+              title="关联竞品条目"
+              linkedIds={linkedCompetitorIds}
+              options={competitorOptions}
+              pending={pending}
+              pickPlaceholder="选择竞品条目…"
+              onLink={(id) =>
+                setCrossLinks("linkedCompetitorIds", [
+                  ...linkedCompetitorIds,
+                  id,
+                ])
+              }
+              onUnlink={(id) =>
+                setCrossLinks(
+                  "linkedCompetitorIds",
+                  linkedCompetitorIds.filter((x) => x !== id)
+                )
+              }
+              onOpen={openPeek}
+            />
+          </section>
+          {peek ? (
+            <EntitySidePeek
+              item={peek}
+              pending={peekPending}
+              onClose={() => setPeek(null)}
+              onSave={
+                peek.kind === "learning" || peek.kind === "competitor"
+                  ? savePeek
+                  : undefined
+              }
+            />
+          ) : null}
+          <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+            <h3 className="mb-2 font-semibold text-slate-500">归属</h3>
+            <div className="space-y-1.5 text-slate-700">
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">项目</span>
+                <span className="text-right">{projectName}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-slate-500">需求</span>
+                {fields.requirementId || bug.requirement_id ? (
+                  <a
+                    href={`/projects/${projectSlug}/requirements/${fields.requirementId || bug.requirement_id}`}
+                    className="max-w-[160px] truncate text-right text-indigo-600 hover:underline"
+                  >
+                    {requirements.find((r) => r.id === (fields.requirementId || bug.requirement_id))
+                      ?.title ||
+                      requirementTitle ||
+                      "查看需求"}
+                  </a>
+                ) : (
+                  <span className="text-slate-400">未关联</span>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 space-y-2 border-t border-slate-100 pt-2">
+              <label className="block space-y-1">
+                <span className="text-slate-500">创建时间</span>
+                <input
+                  type="datetime-local"
+                  value={createdAtLocal}
+                  onChange={(e) => setCreatedAtLocal(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-slate-500">更新时间</span>
+                <input
+                  type="datetime-local"
+                  value={updatedAtLocal}
+                  onChange={(e) => setUpdatedAtLocal(e.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
+                />
+              </label>
+              <p className="text-[10px] text-slate-400">改完点「保存」写入。指派变更会发站内通知。</p>
+            </div>
+            <div className="mt-2 border-t border-slate-100 pt-2 text-slate-400">
+              链接
+              <br />
+              <span className="break-all text-[10px] text-slate-500">{bugPath}</span>
+            </div>
+          </section>
+        </>
+      }
+    />
+  );
+
+  if (isPeek) {
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-white">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-slate-500">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-1.5 py-1 text-slate-500 hover:bg-slate-100"
+              title="收起侧栏"
+              aria-label="收起侧栏"
+            >
+              ≫
+            </button>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">
+              Bug · {TASK_STATUS_LABELS[fields.status] ?? fields.status}
+            </span>
+          </div>
+          {toolbar}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">{body}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1303,326 +1724,9 @@ export function BugDetailEditor({
           fallback={`/projects/${projectSlug}/bugs`}
           label="← 返回 Bug 列表"
         />
-        <div className="flex flex-wrap items-center gap-2">
-          {message ? <span className="text-xs text-slate-500">{message}</span> : null}
-          {copyHint ? <span className="text-xs text-emerald-600">{copyHint}</span> : null}
-          <button
-            type="button"
-            onClick={() => void copyBugLink()}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            复制链接
-          </button>
-          <a
-            href={bugPath}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            打开链接
-          </a>
-          {!resolved ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setStatus("done")}
-              className="rounded-lg border border-emerald-200 px-3 py-1.5 text-sm text-emerald-700"
-            >
-              解决
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => setStatus("pending")}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600"
-            >
-              重开
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={pending || !fields.title.trim()}
-            onClick={save}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {pending ? "保存中…" : "保存"}
-          </button>
-        </div>
+        {toolbar}
       </div>
-
-      <SideLayout
-        left={
-          <>
-            <input
-              value={fields.title}
-              onChange={(e) => patch({ title: e.target.value })}
-              className="w-full border-0 bg-transparent text-xl font-bold text-slate-900 outline-none"
-            />
-            <ReproTemplateFields value={fields} onChange={patch} />
-            <BugAttachmentsBlock
-              projectId={bug.project_id}
-              bugId={bug.id}
-              attachments={attachments}
-              variant="inline"
-            />
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">补充说明</h4>
-              <textarea
-                value={fields.description}
-                onChange={(e) => patch({ description: e.target.value })}
-                rows={3}
-                placeholder="影响范围、其它上下文（可选）…"
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
-              />
-            </section>
-            <section className="space-y-1.5 border-t border-slate-100 pt-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-xs font-semibold text-slate-500">优化建议</h4>
-                <button
-                  type="button"
-                  disabled={
-                    pending ||
-                    !fields.suggestion.trim() ||
-                    Boolean(fields.requirementId || bug.requirement_id)
-                  }
-                  onClick={() => {
-                    startTransition(async () => {
-                      try {
-                        const r = await generateRequirementFromBugSuggestionAction({
-                          bugId: bug.id,
-                          projectId,
-                          projectSlug,
-                        });
-                        if (r.requirementId) {
-                          patch({ requirementId: r.requirementId });
-                        }
-                        setMessage(
-                          r.created
-                            ? "已从优化建议生成需求"
-                            : "该 Bug 已关联需求"
-                        );
-                        router.refresh();
-                      } catch (error) {
-                        setMessage(
-                          error instanceof Error ? error.message : "生成失败"
-                        );
-                      }
-                    });
-                  }}
-                  className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 disabled:opacity-40"
-                >
-                  一键生成需求
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400">
-                优化表导入会写入此处；生成需求后自动挂到本 Bug。
-              </p>
-              <textarea
-                value={fields.suggestion}
-                onChange={(e) => patch({ suggestion: e.target.value })}
-                rows={3}
-                placeholder="给 +1 / 研发的建议（可选）…"
-                className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm outline-none focus:border-indigo-300 focus:bg-white"
-              />
-              {(fields.requirementId || bug.requirement_id) && (
-                <a
-                  href={`/projects/${projectSlug}/requirements/${fields.requirementId || bug.requirement_id}`}
-                  className="inline-block text-xs text-indigo-600 hover:underline"
-                >
-                  已关联需求 →
-                </a>
-              )}
-            </section>
-            <section className="space-y-2 border-t border-slate-100 pt-3">
-              <h4 className="text-xs font-semibold text-slate-500">补充与评论</h4>
-              {comments.length === 0 ? (
-                <p className="text-xs text-slate-400">还没有补充。不同人都可以在下面留言。</p>
-              ) : (
-                <ul className="space-y-2">
-                  {comments.map((c) => (
-                    <li
-                      key={c.id}
-                      className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-sm"
-                    >
-                      <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2 text-xs text-slate-500">
-                        <span className="font-medium text-slate-700">{c.author_name}</span>
-                        <span>{new Date(c.created_at).toLocaleString("zh-CN")}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-slate-800">{c.body}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <div className="space-y-2 rounded-lg border border-dashed border-slate-200 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-1.5 text-xs text-slate-600">
-                    <span>作者</span>
-                    <select
-                      value={commentAuthor}
-                      onChange={(e) => setCommentAuthor(e.target.value)}
-                      className="rounded-md border border-slate-200 px-2 py-1"
-                    >
-                      {roster.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <textarea
-                  value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
-                  rows={3}
-                  placeholder="补充现象、截图说明、处理进展…"
-                  className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-300"
-                />
-                <button
-                  type="button"
-                  disabled={pending || !commentBody.trim()}
-                  onClick={submitComment}
-                  className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-sm text-indigo-700 disabled:opacity-50"
-                >
-                  发表补充
-                </button>
-              </div>
-            </section>
-          </>
-        }
-        right={
-          <>
-            <MetaSelects
-              value={fields}
-              onChange={patch}
-              members={members}
-              requirements={requirements}
-              featureModules={featureModules}
-              testPlans={testPlans}
-              iterations={iterations}
-              projectId={projectId}
-              projectSlug={projectSlug}
-              onPlanCreated={(plan) =>
-                setTestPlans((prev) =>
-                  prev.some((p) => p.id === plan.id) ? prev : [plan, ...prev]
-                )
-              }
-              showStatus
-            />
-            <section className="rounded-xl border border-slate-200 bg-white p-3">
-              <h3 className="mb-1 text-xs font-semibold text-slate-500">
-                交叉关联
-              </h3>
-              <p className="mb-2 text-[10px] text-slate-400">
-                与学习 / 竞品互相引用；总表导入也可挂上
-              </p>
-              <CrossLinkSection
-                title="关联学习"
-                linkedIds={linkedLearningIds}
-                options={learningOptions}
-                pending={pending}
-                pickPlaceholder="选择学习笔记…"
-                onLink={(id) =>
-                  setCrossLinks("linkedLearningNoteIds", [
-                    ...linkedLearningIds,
-                    id,
-                  ])
-                }
-                onUnlink={(id) =>
-                  setCrossLinks(
-                    "linkedLearningNoteIds",
-                    linkedLearningIds.filter((x) => x !== id)
-                  )
-                }
-                onOpen={openPeek}
-              />
-              <CrossLinkSection
-                title="关联竞品条目"
-                linkedIds={linkedCompetitorIds}
-                options={competitorOptions}
-                pending={pending}
-                pickPlaceholder="选择竞品条目…"
-                onLink={(id) =>
-                  setCrossLinks("linkedCompetitorIds", [
-                    ...linkedCompetitorIds,
-                    id,
-                  ])
-                }
-                onUnlink={(id) =>
-                  setCrossLinks(
-                    "linkedCompetitorIds",
-                    linkedCompetitorIds.filter((x) => x !== id)
-                  )
-                }
-                onOpen={openPeek}
-              />
-            </section>
-            {peek ? (
-              <EntitySidePeek
-                item={peek}
-                pending={peekPending}
-                onClose={() => setPeek(null)}
-                onSave={
-                  peek.kind === "learning" || peek.kind === "competitor"
-                    ? savePeek
-                    : undefined
-                }
-              />
-            ) : null}
-            <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-              <h3 className="mb-2 font-semibold text-slate-500">归属</h3>
-              <div className="space-y-1.5 text-slate-700">
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">项目</span>
-                  <span className="text-right">{projectName}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-500">需求</span>
-                  {fields.requirementId || bug.requirement_id ? (
-                    <a
-                      href={`/projects/${projectSlug}/requirements/${fields.requirementId || bug.requirement_id}`}
-                      className="max-w-[160px] truncate text-right text-indigo-600 hover:underline"
-                    >
-                      {requirements.find((r) => r.id === (fields.requirementId || bug.requirement_id))
-                        ?.title ||
-                        requirementTitle ||
-                        "查看需求"}
-                    </a>
-                  ) : (
-                    <span className="text-slate-400">未关联</span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 space-y-2 border-t border-slate-100 pt-2">
-                <label className="block space-y-1">
-                  <span className="text-slate-500">创建时间</span>
-                  <input
-                    type="datetime-local"
-                    value={createdAtLocal}
-                    onChange={(e) => setCreatedAtLocal(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
-                  />
-                </label>
-                <label className="block space-y-1">
-                  <span className="text-slate-500">更新时间</span>
-                  <input
-                    type="datetime-local"
-                    value={updatedAtLocal}
-                    onChange={(e) => setUpdatedAtLocal(e.target.value)}
-                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs"
-                  />
-                </label>
-                <p className="text-[10px] text-slate-400">改完点「保存」写入。指派变更会发站内通知。</p>
-              </div>
-              <div className="mt-2 border-t border-slate-100 pt-2 text-slate-400">
-                链接
-                <br />
-                <span className="break-all text-[10px] text-slate-500">{bugPath}</span>
-              </div>
-            </section>
-          </>
-        }
-      />
+      {body}
     </div>
   );
 }

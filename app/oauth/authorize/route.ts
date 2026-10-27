@@ -4,8 +4,8 @@ import {
   clientAcceptsRedirect,
   ensureDcrClient,
   isAllowedRedirect,
-  randomToken,
-  saveAuthCode,
+  issueAuthCode,
+  publicOrigin,
 } from "@/lib/mcp/oauth/store";
 
 export const runtime = "nodejs";
@@ -123,19 +123,18 @@ export async function POST(request: Request) {
     return htmlPage("<h1>缺少 PKCE S256</h1>", 400);
   }
 
-  const code = randomToken(24);
-  await saveAuthCode({
-    code,
+  const code = await issueAuthCode({
     client_id: p.client_id,
     redirect_uri: p.redirect_uri,
     code_challenge: p.code_challenge,
     code_challenge_method: "S256",
-    scope: p.scope || "star-pm:read star-pm:write",
-    expires_at: Date.now() + 5 * 60 * 1000,
+    scope: p.scope || "star-pm:read star-pm:write offline_access",
   });
 
   const redirect = new URL(p.redirect_uri);
   redirect.searchParams.set("code", code);
+  // RFC 9207 / ChatGPT：authorization_response_iss_parameter_supported
+  redirect.searchParams.set("iss", publicOrigin(request));
   if (p.state) redirect.searchParams.set("state", p.state);
   return NextResponse.redirect(redirect.toString(), 302);
 }

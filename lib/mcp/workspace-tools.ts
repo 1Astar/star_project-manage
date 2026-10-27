@@ -25,6 +25,7 @@ import { isBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import { linkItem } from "@/lib/mcp/link-item";
 import { mcpError, mcpJson } from "@/lib/mcp/response";
 import { registerWikiPageTools } from "@/lib/mcp/wiki-page-tools";
+import { registerLearningTools } from "@/lib/mcp/learning-tools";
 import {
   generateProjectBrief,
   summarizeDay,
@@ -69,6 +70,8 @@ const assetTypeSchema = z.enum([
 const linkEntitySchema = z.enum(["idea", "project", "task", "asset", "module"]);
 
 function slimProject(project: NonNullable<Awaited<ReturnType<typeof getProjectById>>>) {
+  const hubRaw = project.customFields?.projectHubMd;
+  const projectHubMd = typeof hubRaw === "string" ? hubRaw : "";
   return {
     id: project.id,
     title: project.title,
@@ -81,6 +84,7 @@ function slimProject(project: NonNullable<Awaited<ReturnType<typeof getProjectBy
     parentId: project.parentId ?? null,
     featureModules: project.featureModules ?? [],
     githubRepo: project.githubRepo ?? null,
+    projectHubMd,
     updatedAt: project.updatedAt,
   };
 }
@@ -292,7 +296,7 @@ export function registerWorkspaceTools(server: McpServer) {
     {
       title: "Update Project",
       description:
-        "更新项目状态、阶段、下一步、定位、功能板块名单等。featureModules 为完整覆盖写入（每项建议用「体系·功能面·能力」路径）；写入时会增量同步到模块树（首段→一级，其余→子模块）。",
+        "更新项目状态、阶段、下一步、定位、功能板块名单、Hub 正文等。featureModules 为完整覆盖写入（每项建议用「体系·功能面·能力」路径）；写入时会增量同步到模块树（首段→一级，其余→子模块）。projectHubMd 写入 customFields.projectHubMd（项目首页 Hub Markdown）。",
       inputSchema: {
         projectId: z.string().min(1),
         title: z.string().optional(),
@@ -310,6 +314,12 @@ export function registerWorkspaceTools(server: McpServer) {
         portfolioValue: z.string().optional(),
         demoUrl: z.string().nullable().optional(),
         githubRepo: z.string().nullable().optional(),
+        projectHubMd: z
+          .string()
+          .optional()
+          .describe(
+            "项目 Hub 正文 Markdown（存 customFields.projectHubMd）；完整覆盖写入，传空字符串清空为默认稿"
+          ),
         featureModules: z
           .array(z.string())
           .optional()
@@ -322,11 +332,35 @@ export function registerWorkspaceTools(server: McpServer) {
           .describe(
             "true：把本项目已上线但未标完成的需求/任务补标完成（匹配已完成 Studio 任务、标题含 ✅/[done]、机读 status=done；父需求仅在子项全完成时标）"
           ),
+        learningImport: z
+          .array(
+            z.object({
+              title: z.string().min(1),
+              section: z.string().optional(),
+              topic: z.string().optional(),
+              principle: z.string().optional(),
+              whyText: z.string().optional(),
+              source: z.string().optional(),
+            })
+          )
+          .max(200)
+          .optional()
+          .describe(
+            "批量灌学习池（section→topic→point）；同名复用/跳过。Cursor 若未刷出 import_learning_notes 可用此字段。"
+          ),
       },
     },
     async (input) => {
       try {
-        const { projectId, featureModules, markShippedComplete, ...patch } = input;
+        const {
+          projectId,
+          featureModules,
+          markShippedComplete,
+          projectHubMd,
+          learningImport,
+          ...patch
+        } = input;
+        const { PROJECT_HUB_FIELD } = await import("@/lib/modules/project-hub");
         const { project, moduleTreeSync } = await updateStudioProjectWithModuleSync(
           projectId,
           {
@@ -334,6 +368,9 @@ export function registerWorkspaceTools(server: McpServer) {
             status: patch.status as ProjectStatus | undefined,
             priority: patch.priority as ProjectPriority | undefined,
             parentId: patch.parentId,
+            ...(projectHubMd !== undefined
+              ? { customFields: { [PROJECT_HUB_FIELD]: projectHubMd } }
+              : {}),
             ...(featureModules !== undefined
               ? {
                   featureModules: featureModules
@@ -356,6 +393,18 @@ export function registerWorkspaceTools(server: McpServer) {
           shipped = await markShippedCompleteForProject(projectId);
         }
 
+        let learning: {
+          created: { section: number; topic: number; point: number };
+          skipped: string[];
+          points: Array<{ title: string; id: string }>;
+        } | null = null;
+        if (learningImport?.length) {
+          const { importLearningNotesBatch } = await import(
+            "@/lib/mcp/learning-tools"
+          );
+          learning = await importLearningNotesBatch(projectId, learningImport);
+        }
+
         await logAiAction({
           action: "update_project",
           payload: {
@@ -366,6 +415,14 @@ export function registerWorkspaceTools(server: McpServer) {
                 ? { featureModulesCount: featureModules.length }
                 : {}),
               ...(markShippedComplete ? { markShippedComplete: true, shipped } : {}),
+              ...(learning
+                ? {
+                    learningImport: {
+                      created: learning.created,
+                      skipped: learning.skipped.length,
+                    },
+                  }
+                : {}),
             },
           },
         });
@@ -374,6 +431,7 @@ export function registerWorkspaceTools(server: McpServer) {
           project: slimProject(project),
           moduleTreeSync,
           ...(shipped ? { shippedComplete: shipped } : {}),
+          ...(learning ? { learningImport: learning } : {}),
         });
       } catch (error) {
         return mcpError(error instanceof Error ? error.message : "update_project 失败");
@@ -2922,4 +2980,5 @@ export function registerWorkspaceTools(server: McpServer) {
   );
 
   registerWikiPageTools(server);
+  registerLearningTools(server);
 }

@@ -30,11 +30,17 @@ const PUBLIC_PREFIXES = [
 ];
 
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // ChatGPT 创建插件会抓站点图标；没有 /favicon.ico 时校验报「图标…未通过」
+  if (pathname === "/favicon.ico") {
+    return NextResponse.rewrite(new URL("/icon.svg", request.url));
+  }
+
   if (process.env.REQUIRE_AUTH === "false") {
     return NextResponse.next();
   }
 
-  const { pathname } = request.nextUrl;
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
@@ -75,5 +81,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // 勿排除 favicon.ico：上面 rewrite → /icon.svg，否则 ChatGPT 校验报「图标未通过」
+  matcher: ["/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

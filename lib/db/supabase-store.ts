@@ -18,6 +18,7 @@ import type {
 import { BUG_TYPE_LABELS } from "@/lib/types";
 import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import {
+  normalizeBugCustomFields,
   normalizeBugEnvironments,
   normalizeBugPriority,
   normalizeBugWatchers,
@@ -43,20 +44,24 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     suggestion: (row.suggestion as string | null) ?? null,
     module_path: (row.module_path as string | null) ?? null,
     found_version: (row.found_version as string | null) ?? null,
+    resolved_version: (row.resolved_version as string | null) ?? null,
     environments: normalizeBugEnvironments(row.environments),
     priority: normalizeBugPriority(row.priority),
     assignee: (row.assignee as string | null) ?? null,
     reporter_name: (row.reporter_name as string | null) ?? null,
+    updated_by: (row.updated_by as string | null) ?? null,
     watchers: normalizeBugWatchers(row.watchers),
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,
+    execution_case: (row.execution_case as string | null) ?? null,
     linked_learning_note_ids: Array.isArray(row.linked_learning_note_ids)
       ? row.linked_learning_note_ids.map((v) => String(v)).filter(Boolean)
       : [],
     linked_competitor_ids: Array.isArray(row.linked_competitor_ids)
       ? row.linked_competitor_ids.map((v) => String(v)).filter(Boolean)
       : [],
+    custom_fields: normalizeBugCustomFields(row.custom_fields),
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
@@ -437,7 +442,7 @@ async function upsertBugs(rows: DatabaseSnapshot["bugs"]) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (
-      /severity|bug_type|suggestion|precondition|expected_result|actual_result|module_path|found_version|environments|priority|schema cache|column/i.test(
+      /severity|bug_type|suggestion|precondition|expected_result|actual_result|module_path|found_version|resolved_version|environments|priority|execution_case|updated_by|custom_fields|schema cache|column/i.test(
         message
       )
     ) {
@@ -453,8 +458,12 @@ async function upsertBugs(rows: DatabaseSnapshot["bugs"]) {
             actual_result: _a,
             module_path: _m,
             found_version: _f,
+            resolved_version: _rv,
             environments: _env,
             priority: _pr,
+            execution_case: _ec,
+            updated_by: _ub,
+            custom_fields: _cf,
             ...rest
           }) => rest
         )

@@ -398,6 +398,8 @@ export interface Bug {
   module_path: string | null;
   /** 发现版本（自由文本） */
   found_version: string | null;
+  /** 解决版本（自由文本） */
+  resolved_version: string | null;
   /** 环境标签 */
   environments: string[];
   /**
@@ -408,16 +410,22 @@ export interface Bug {
   assignee: string | null;
   /** 报告人（创建时写入；只读展示） */
   reporter_name: string | null;
+  /** 最近更新人显示名 */
+  updated_by: string | null;
   /** 关注人；状态变更 / 评论时通知 */
   watchers: string[];
   status: TaskStatus;
   /** 严重程度：1 致命 … 4 轻微 */
   severity: BugSeverity;
   bug_type: BugType;
+  /** 关联执行用例（自由文本；本期无用例库） */
+  execution_case: string | null;
   /** 可选：关联学习知识点 */
   linked_learning_note_ids: string[];
   /** 可选：关联竞品条目 */
   linked_competitor_ids: string[];
+  /** 自定义列值 key → 标量 */
+  custom_fields: Record<string, string | number | boolean | null>;
   created_at: string;
   updated_at: string;
 }

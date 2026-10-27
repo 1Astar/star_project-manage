@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "20mb",
     },
   },
+  async rewrites() {
+    return [{ source: "/favicon.ico", destination: "/icon.svg" }];
+  },
   webpack: (config) => {
     config.module.rules.push({
       resourceQuery: /raw/,

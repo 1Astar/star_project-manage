@@ -65,6 +65,7 @@ export default async function ProjectBugsPage({
     <ProjectBugsClient
       projectId={pm.id}
       projectSlug={ctx.routeId}
+      projectName={pm.name}
       bugs={bugs}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
@@ -74,6 +75,7 @@ export default async function ProjectBugsPage({
       currentUserName={currentUserName}
       initialShowCreate={sp.new === "1" || Boolean(sp.req)}
       initialRequirementId={sp.req?.trim() || ""}
+      syncPeekUrl
     />
   );
 }

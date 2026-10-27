@@ -10,6 +10,63 @@
 
 ---
 
+## v1.20.5 · 2026-10-27
+
+相对 **v1.20.0**（正式 Tag；本版主线：**Bug 列表飞书风分栏**；并合入此前未打 tag 的 1.20.1–1.20.4 草稿）：
+
+### 需求任务 · Bug 列表
+
+- **飞书风列表**：列可显隐/排序；自定义列可加删；可存视图；可分组上色
+- **分栏 Peek**：点行左列表右详情（前置/步骤/预期/实际 + 附图 + 属性）；`/bugs/[id]` 同为分栏可分享，收起回列表
+- **新字段**：关联执行用例、解决版本、更新人；`custom_fields` 存自定义列值
+- 迁移：`050_bug_resolve_updater_case_custom.sql`（**线上需跑后新列才落库**）
+
+### MCP / ChatGPT（1.20.1–1.20.4 一并入库）
+
+见下方各条草稿说明（Hub 可写、学习池 MCP、签名态 OAuth、插件校验对齐）。
+
+---
+
+## v1.20.4 · 2026-10-27
+
+相对 **v1.20.3**（本版：**ChatGPT 插件校验对齐**）：
+
+- OAuth AS 元数据补齐：`client_id_metadata_document_supported`、`authorization_response_iss_parameter_supported`、`offline_access`、`response_modes_supported`
+- **CIMD**：拉取 `https://chatgpt.com/oauth/client.json` 等 URL 型 client_id
+- 授权回调带 `iss`；增加 `/.well-known/openid-configuration`
+- `/favicon.ico` → `/icon.svg`（修复「图标…未通过验证」；并修正 middleware matcher 此前排除了 favicon 导致 rewrite 未生效）
+
+---
+
+## v1.20.3 · 2026-10-27
+
+相对 **v1.20.2**（本版：**ChatGPT OAuth 可连**）：
+
+- **签名态 OAuth**：授权码 / access / refresh 用 HMAC 自包含，Workers 无 Upstash 也能换 token
+- **mcp-oauth CORS**：OPTIONS + 401 带 `Access-Control-*`，避免 ChatGPT 报「MCP 服务器拒绝了访问」
+- **token 端**：支持 `refresh_token`；`gpt_*` DCR client 跨实例自动恢复
+- 文档：`CONNECT_CHATGPT.md` 补充该报错排查
+
+---
+
+## v1.20.2 · 2026-10-27
+
+相对 **v1.20.1**（本版：**MCP 学习池**）：
+
+- **MCP 学习池**：`list_learning_notes` / `create_learning_note` / `import_learning_notes` / `attach_learning_image`
+- `import_learning_notes`：按板块→主题→子知识点建树，同名复用/跳过
+
+---
+
+## v1.20.1 · 2026-10-27
+
+相对 **v1.20.0**（本版：**MCP 可写 Hub 正文**）：
+
+- **MCP `update_project`**：新增 `projectHubMd` → 写入 `customFields.projectHubMd`；`get_project` / `slimProject` 回传该字段
+- **ChatGPT 连接**：文档补充「We couldn't connect your account」排查（须用 `/api/mcp-oauth/mcp`，与 Cursor Bearer 无关）
+
+---
+
 ## v1.20.0 · 2026-10-27
 
 相对 **v1.19.9**（本版主线：**Notion 风项目 Hub + 层层 Wiki 子页**）：

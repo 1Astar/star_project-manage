@@ -1,17 +1,22 @@
 import { notFound } from "next/navigation";
-import { fetchBugDetail } from "@/lib/actions";
-import { BugDetailEditor } from "@/components/bug-side-form";
+import { BackLink } from "@/components/back-button";
+import { ProjectBugsClient } from "@/components/project-bugs-client";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import {
   getProjectMembers,
+  listBugsByProject,
   listProjectIterations,
   listProjectRequirementOptions,
 } from "@/lib/db/local-store";
 import { listBugTestPlans } from "@/lib/bugs/test-plans";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
-import { listProjectLearningNotes } from "@/lib/learning-notes/store";
-import { listCompetitorEntries } from "@/lib/competitors/store";
+import { getAdminSession } from "@/lib/auth/session";
+import { PRODUCT_ASSIGNEE_NAME } from "@/lib/assignee-roster";
 
+/**
+ * 独立全页约定：URL `/bugs/[id]` 可分享/新开，界面仍是「左列表 + 右详情」分栏（同图2），
+ * 不是单独整页丢列表。
+ */
 export default async function BugDetailPage({
   params,
 }: {
@@ -19,71 +24,61 @@ export default async function BugDetailPage({
 }) {
   const { id, bugId } = await params;
   const ctx = await resolveProjectRoute(id);
-  const detail = await fetchBugDetail(bugId);
-  if (!detail?.bug || !detail.project) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
-  const [
-    members,
-    requirements,
-    testPlans,
-    iterations,
-    learningNotes,
-    competitors,
-  ] = await Promise.all([
-    getProjectMembers(detail.project.id),
-    listProjectRequirementOptions(detail.project.id),
-    listBugTestPlans(detail.project.id, { includeArchived: true }),
-    listProjectIterations(detail.project.id),
-    listProjectLearningNotes(detail.project.id),
-    listCompetitorEntries(detail.project.id),
-  ]);
+  const pm = ctx.pmProject;
+  if (!pm) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8">
+        <h2 className="text-base font-semibold text-slate-900">Bug 反馈</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          当前项目「{ctx.studio?.title ?? id}」尚未接入 PM 需求库，暂无 Bug 数据表可写。
+        </p>
+        <BackLink
+          fallback={`/projects/${ctx.routeId}/tasks`}
+          label="← 返回需求与任务"
+          className="mt-4 inline-block text-sm text-indigo-600 hover:underline"
+        />
+      </div>
+    );
+  }
+
+  const [bugs, members, requirements, testPlans, iterations, session] =
+    await Promise.all([
+      listBugsByProject(pm.id),
+      getProjectMembers(pm.id),
+      listProjectRequirementOptions(pm.id),
+      listBugTestPlans(pm.id, { includeArchived: true }),
+      listProjectIterations(pm.id),
+      getAdminSession(),
+    ]);
+
+  if (!bugs.some((b) => b.id === bugId)) notFound();
+
   const featureModules = resolveFeatureModules(
-    ctx.studio?.id ?? detail.project.id,
+    ctx.studio?.id ?? pm.id,
     ctx.studio?.featureModules,
     ctx.studio?.githubRepo
   );
-
-  const kindBadge =
-    { section: "板块", topic: "主题", point: "子知识" } as const;
-  const learningOptions = learningNotes.map((n) => ({
-    id: n.id,
-    title: n.title,
-    href: `/projects/${ctx.routeId}/learning`,
-    kind: "learning" as const,
-    badge: kindBadge[n.kind] ?? n.kind,
-    fields: [
-      { key: "why_text", label: "为什么", value: n.why_text ?? "", multiline: true },
-      { key: "principle", label: "原理", value: n.principle ?? "", multiline: true },
-      { key: "protocol", label: "协议", value: n.protocol ?? "", multiline: true },
-    ],
-  }));
-  const competitorOptions = competitors.map((c) => ({
-    id: c.id,
-    title: c.title,
-    href: `/projects/${ctx.routeId}/competitors`,
-    kind: "competitor" as const,
-    fields: [
-      { key: "summary", label: "摘要", value: c.summary ?? "", multiline: true },
-      { key: "url", label: "外链", value: c.url ?? "" },
-    ],
-  }));
+  const currentUserName =
+    session?.role === "admin"
+      ? PRODUCT_ASSIGNEE_NAME
+      : session?.email?.split("@")[0]?.trim() || PRODUCT_ASSIGNEE_NAME;
 
   return (
-    <BugDetailEditor
-      bug={detail.bug}
-      projectId={detail.project.id}
+    <ProjectBugsClient
+      projectId={pm.id}
       projectSlug={ctx.routeId}
-      projectName={detail.project.name}
-      requirementTitle={detail.requirement?.title ?? null}
+      projectName={pm.name}
+      bugs={bugs}
       members={members.map((m) => ({ name: m.name }))}
       requirements={requirements}
       featureModules={featureModules}
       testPlans={testPlans}
       iterations={iterations}
-      comments={detail.comments ?? []}
-      attachments={detail.attachments ?? []}
-      learningOptions={learningOptions}
-      competitorOptions={competitorOptions}
+      currentUserName={currentUserName}
+      initialPeekId={bugId}
+      syncPeekUrl
     />
   );
 }

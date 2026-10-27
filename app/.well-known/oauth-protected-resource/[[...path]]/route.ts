@@ -21,7 +21,7 @@ export async function GET(
     {
       resource,
       authorization_servers: [origin],
-      scopes_supported: ["star-pm:read", "star-pm:write"],
+      scopes_supported: ["star-pm:read", "star-pm:write", "offline_access"],
       bearer_methods_supported: ["header"],
       resource_name: "Star PM MCP (GPT OAuth)",
     },

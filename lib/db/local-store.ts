@@ -51,6 +51,7 @@ import { normalizeGithubRepoFullName } from "@/lib/github/client";
 import { normalizeBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import {
   defaultBugReproMeta,
+  normalizeBugCustomFields,
   normalizeBugEnvironments,
   normalizeBugPriority,
   normalizeBugWatchers,
@@ -206,19 +207,23 @@ function normalizeBugRow(bug: Bug): Bug {
     suggestion: bug.suggestion ?? null,
     module_path: bug.module_path ?? null,
     found_version: bug.found_version ?? null,
+    resolved_version: bug.resolved_version ?? null,
     environments: normalizeBugEnvironments(bug.environments),
     priority: normalizeBugPriority(bug.priority),
     assignee: bug.assignee ?? null,
     reporter_name: bug.reporter_name ?? null,
+    updated_by: bug.updated_by ?? null,
     watchers: normalizeBugWatchers(bug.watchers),
     severity,
     bug_type,
+    execution_case: bug.execution_case ?? null,
     linked_learning_note_ids: Array.isArray(bug.linked_learning_note_ids)
       ? bug.linked_learning_note_ids.map(String).filter(Boolean)
       : [],
     linked_competitor_ids: Array.isArray(bug.linked_competitor_ids)
       ? bug.linked_competitor_ids.map(String).filter(Boolean)
       : [],
+    custom_fields: bug.custom_fields ?? {},
   };
 }
 
@@ -1342,13 +1347,17 @@ export async function createBug(input: {
   suggestion?: string;
   module_path?: string | null;
   found_version?: string | null;
+  resolved_version?: string | null;
   environments?: string[];
   priority?: Bug["priority"];
   assignee?: string;
   reporter_name?: string | null;
+  updated_by?: string | null;
   watchers?: string[];
   severity?: BugSeverity;
   bug_type?: BugType;
+  execution_case?: string | null;
+  custom_fields?: Bug["custom_fields"];
   status?: TaskStatus;
   linked_learning_note_ids?: string[];
   linked_competitor_ids?: string[];
@@ -1376,20 +1385,24 @@ export async function createBug(input: {
       suggestion: input.suggestion ?? null,
       module_path: input.module_path?.trim() || null,
       found_version: input.found_version?.trim() || null,
+      resolved_version: input.resolved_version?.trim() || null,
       environments: normalizeBugEnvironments(input.environments),
       priority: normalizeBugPriority(input.priority),
       assignee: input.assignee ?? null,
       reporter_name: input.reporter_name?.trim() || null,
+      updated_by: input.updated_by?.trim() || input.reporter_name?.trim() || null,
       watchers: normalizeBugWatchers(input.watchers),
       status: input.status ?? "pending",
       severity: input.severity ?? 3,
       bug_type: input.bug_type ?? "code",
+      execution_case: input.execution_case?.trim() || null,
       linked_learning_note_ids: Array.isArray(input.linked_learning_note_ids)
         ? input.linked_learning_note_ids.map(String).filter(Boolean)
         : [],
       linked_competitor_ids: Array.isArray(input.linked_competitor_ids)
         ? input.linked_competitor_ids.map(String).filter(Boolean)
         : [],
+      custom_fields: normalizeBugCustomFields(input.custom_fields),
       created_at: createdAt,
       updated_at: createdAt,
     };
@@ -1478,20 +1491,24 @@ export async function createBug(input: {
     suggestion: input.suggestion ?? null,
     module_path: input.module_path?.trim() || null,
     found_version: input.found_version?.trim() || null,
+    resolved_version: input.resolved_version?.trim() || null,
     environments: normalizeBugEnvironments(input.environments),
     priority: normalizeBugPriority(input.priority),
     assignee: input.assignee ?? null,
     reporter_name: input.reporter_name?.trim() || null,
+    updated_by: input.updated_by?.trim() || input.reporter_name?.trim() || null,
     watchers: normalizeBugWatchers(input.watchers),
     status: input.status ?? "pending",
     severity: input.severity ?? 3,
     bug_type: input.bug_type ?? "code",
+    execution_case: input.execution_case?.trim() || null,
     linked_learning_note_ids: Array.isArray(input.linked_learning_note_ids)
       ? input.linked_learning_note_ids.map(String).filter(Boolean)
       : [],
     linked_competitor_ids: Array.isArray(input.linked_competitor_ids)
       ? input.linked_competitor_ids.map(String).filter(Boolean)
       : [],
+    custom_fields: normalizeBugCustomFields(input.custom_fields),
     created_at: createdAt,
     updated_at: createdAt,
   };
@@ -1563,19 +1580,23 @@ export async function updateBug(
     suggestion: string | null;
     module_path: string | null;
     found_version: string | null;
+    resolved_version: string | null;
     environments: string[];
     priority: Bug["priority"];
     assignee: string | null;
     reporter_name: string | null;
+    updated_by: string | null;
     watchers: string[];
     requirement_id: string | null;
     test_plan_id: string | null;
+    execution_case: string | null;
     iteration_id: string | null;
     status: TaskStatus;
     severity: BugSeverity;
     bug_type: BugType;
     linked_learning_note_ids: string[];
     linked_competitor_ids: string[];
+    custom_fields: Bug["custom_fields"];
     created_at: string | null;
     updated_at: string | null;
   }>
@@ -1599,6 +1620,9 @@ export async function updateBug(
     if (patch.found_version !== undefined) {
       bug.found_version = patch.found_version?.trim() || null;
     }
+    if (patch.resolved_version !== undefined) {
+      bug.resolved_version = patch.resolved_version?.trim() || null;
+    }
     if (patch.environments !== undefined) {
       bug.environments = normalizeBugEnvironments(patch.environments);
     }
@@ -1609,12 +1633,18 @@ export async function updateBug(
     if (patch.reporter_name !== undefined) {
       bug.reporter_name = patch.reporter_name?.trim() || null;
     }
+    if (patch.updated_by !== undefined) {
+      bug.updated_by = patch.updated_by?.trim() || null;
+    }
     if (patch.watchers !== undefined) {
       bug.watchers = normalizeBugWatchers(patch.watchers);
     }
     if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
     if (patch.test_plan_id !== undefined) {
       bug.test_plan_id = patch.test_plan_id?.trim() || null;
+    }
+    if (patch.execution_case !== undefined) {
+      bug.execution_case = patch.execution_case?.trim() || null;
     }
     if (patch.iteration_id !== undefined) {
       bug.iteration_id = patch.iteration_id?.trim() || null;
@@ -1632,11 +1662,18 @@ export async function updateBug(
         .map(String)
         .filter(Boolean);
     }
+    if (patch.custom_fields !== undefined) {
+      bug.custom_fields = normalizeBugCustomFields(patch.custom_fields);
+    }
     if (bug.severity == null) bug.severity = 3;
     if (!bug.bug_type) bug.bug_type = "code";
     if (bug.test_plan_id === undefined) bug.test_plan_id = null;
     if (bug.iteration_id === undefined) bug.iteration_id = null;
     if (bug.reporter_name === undefined) bug.reporter_name = null;
+    if (bug.resolved_version === undefined) bug.resolved_version = null;
+    if (bug.execution_case === undefined) bug.execution_case = null;
+    if (bug.updated_by === undefined) bug.updated_by = null;
+    if (!bug.custom_fields) bug.custom_fields = {};
     if (!Array.isArray(bug.environments)) bug.environments = [];
     if (!Array.isArray(bug.watchers)) bug.watchers = [];
     if (!Array.isArray(bug.linked_learning_note_ids)) {
@@ -1652,6 +1689,9 @@ export async function updateBug(
       bug.updated_at = patch.updated_at.trim();
     } else {
       bug.updated_at = nowIso();
+    }
+    if (patch.updated_by === undefined && Object.keys(patch).length > 0) {
+      /* 未显式传更新人时保留原值；由 action 层写入 */
     }
 
     await upsertBugRow(bug);
@@ -1739,6 +1779,9 @@ export async function updateBug(
   if (patch.found_version !== undefined) {
     bug.found_version = patch.found_version?.trim() || null;
   }
+  if (patch.resolved_version !== undefined) {
+    bug.resolved_version = patch.resolved_version?.trim() || null;
+  }
   if (patch.environments !== undefined) {
     bug.environments = normalizeBugEnvironments(patch.environments);
   }
@@ -1749,12 +1792,18 @@ export async function updateBug(
   if (patch.reporter_name !== undefined) {
     bug.reporter_name = patch.reporter_name?.trim() || null;
   }
+  if (patch.updated_by !== undefined) {
+    bug.updated_by = patch.updated_by?.trim() || null;
+  }
   if (patch.watchers !== undefined) {
     bug.watchers = normalizeBugWatchers(patch.watchers);
   }
   if (patch.requirement_id !== undefined) bug.requirement_id = patch.requirement_id;
   if (patch.test_plan_id !== undefined) {
     bug.test_plan_id = patch.test_plan_id?.trim() || null;
+  }
+  if (patch.execution_case !== undefined) {
+    bug.execution_case = patch.execution_case?.trim() || null;
   }
   if (patch.iteration_id !== undefined) {
     bug.iteration_id = patch.iteration_id?.trim() || null;
@@ -1772,11 +1821,18 @@ export async function updateBug(
       .map(String)
       .filter(Boolean);
   }
+  if (patch.custom_fields !== undefined) {
+    bug.custom_fields = normalizeBugCustomFields(patch.custom_fields);
+  }
   if (bug.severity == null) bug.severity = 3;
   if (!bug.bug_type) bug.bug_type = "code";
   if (bug.test_plan_id === undefined) bug.test_plan_id = null;
   if (bug.iteration_id === undefined) bug.iteration_id = null;
   if (bug.reporter_name === undefined) bug.reporter_name = null;
+  if (bug.resolved_version === undefined) bug.resolved_version = null;
+  if (bug.execution_case === undefined) bug.execution_case = null;
+  if (bug.updated_by === undefined) bug.updated_by = null;
+  if (!bug.custom_fields) bug.custom_fields = {};
   if (!Array.isArray(bug.environments)) bug.environments = [];
   if (!Array.isArray(bug.watchers)) bug.watchers = [];
   if (!Array.isArray(bug.linked_learning_note_ids)) {
@@ -1845,8 +1901,15 @@ export async function updateBug(
   return bug;
 }
 
-export async function updateBugStatus(bugId: string, status: TaskStatus) {
-  return updateBug(bugId, { status });
+export async function updateBugStatus(
+  bugId: string,
+  status: TaskStatus,
+  updatedBy?: string | null
+) {
+  return updateBug(bugId, {
+    status,
+    ...(updatedBy !== undefined ? { updated_by: updatedBy } : {}),
+  });
 }
 
 /** 硬删除 Bug 及其评论（用于探针/重复条目清理） */

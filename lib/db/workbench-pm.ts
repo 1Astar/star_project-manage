@@ -54,6 +54,7 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     suggestion: (row.suggestion as string | null) ?? null,
     module_path: (row.module_path as string | null) ?? null,
     found_version: (row.found_version as string | null) ?? null,
+    resolved_version: (row.resolved_version as string | null) ?? null,
     environments: Array.isArray(row.environments)
       ? (row.environments as string[]).map(String).filter(Boolean)
       : [],
@@ -63,18 +64,26 @@ function normalizeBug(row: Record<string, unknown>): Bug {
     })(),
     assignee: (row.assignee as string | null) ?? null,
     reporter_name: (row.reporter_name as string | null) ?? null,
+    updated_by: (row.updated_by as string | null) ?? null,
     watchers: Array.isArray(row.watchers)
       ? (row.watchers as string[]).map(String).filter(Boolean)
       : [],
     status: (row.status as Bug["status"]) ?? "pending",
     severity,
     bug_type,
+    execution_case: (row.execution_case as string | null) ?? null,
     linked_learning_note_ids: Array.isArray(row.linked_learning_note_ids)
       ? row.linked_learning_note_ids.map((v) => String(v)).filter(Boolean)
       : [],
     linked_competitor_ids: Array.isArray(row.linked_competitor_ids)
       ? row.linked_competitor_ids.map((v) => String(v)).filter(Boolean)
       : [],
+    custom_fields:
+      row.custom_fields &&
+      typeof row.custom_fields === "object" &&
+      !Array.isArray(row.custom_fields)
+        ? (row.custom_fields as Bug["custom_fields"])
+        : {},
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
