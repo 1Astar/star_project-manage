@@ -8,6 +8,7 @@ import { PagePropertyRows } from "@/components/page-property-rows";
 import { MarkdownWithLinkedViews } from "@/components/markdown-with-linked-views";
 import { useLinkedViewPeek } from "@/components/use-linked-view-peek";
 import { WikiPagesBlock } from "@/components/wiki-pages-block";
+import { InvestigationAiPanel } from "@/components/investigation-ai-panel";
 import {
   collectModuleNames,
   collectModuleTree,
@@ -210,6 +211,19 @@ export function WikiPageView({
           ) : (
             <p className="text-sm text-slate-400">暂无正文。</p>
           )}
+          {canEdit ? (
+            <InvestigationAiPanel
+              pageTitle={title}
+              moduleName={defaultModuleName}
+              body={body}
+              canEdit={canEdit}
+              onApplyBody={(next) => {
+                setBody(next);
+                setSaved(false);
+                setEditing(true);
+              }}
+            />
+          ) : null}
           {canEdit ? (
             <div className="flex flex-wrap items-center gap-2">
               <button

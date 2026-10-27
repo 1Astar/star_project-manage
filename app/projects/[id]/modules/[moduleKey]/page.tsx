@@ -48,6 +48,7 @@ export default async function ProjectModuleHomePage({
     prds: bundle.prds,
     requirements: bundle.requirements,
     modules: bundle.modules,
+    wikiPages: bundle.wikiPages,
   });
   if (!moduleName || !known.includes(moduleName)) notFound();
 

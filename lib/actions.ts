@@ -1767,6 +1767,174 @@ export async function saveProductModuleBioAction(input: {
   revalidatePath(`/projects/${input.studioProjectId}/modules/${key}`);
 }
 
+/**
+ * 套用 Notion 风格模块主页模板：写入简介关联表；可选创建功能拆解子页 + 调查/测试页。
+ */
+export async function applyModuleHomeTemplateAction(input: {
+  studioProjectId: string;
+  projectId: string;
+  projectSlug: string;
+  moduleName: string;
+  /** 覆盖已有简介；默认仅当简介为空时写入 */
+  overwriteBio?: boolean;
+  /** 创建「功能清单与任务拆解」及功能分区子页 */
+  createFeaturePages?: boolean;
+  goal?: string;
+  capability?: string;
+}) {
+  assertNotViewerWrite();
+  const name = input.moduleName.trim();
+  if (!name) throw new Error("模块名不能为空");
+
+  const {
+    MODULE_BIOS_FIELD,
+    parseModuleBios,
+    serializeModuleBios,
+    encodeModuleKey,
+  } = await import("@/lib/modules/product-module-home");
+  const {
+    buildFeatureInvestigationTemplate,
+    buildFileUploadInvestigationTemplate,
+    defaultFeatureAreasForModule,
+  } = await import("@/lib/modules/module-page-templates");
+  const {
+    ensureBuiltinModuleTemplatesInPm,
+    loadBuiltinTemplateBody,
+    materializeBuiltinTemplateBody,
+    resolveModuleHomeBodyFromBuiltinOrCode,
+  } = await import("@/lib/modules/builtin-templates");
+  const { getProjectById } = await import("@/lib/studio/data");
+  const { updateStudioProject } = await import("@/lib/studio/mutations");
+  const { createWikiPage, listWikiPagesByHost } = await import(
+    "@/lib/wiki-pages/store"
+  );
+
+  // 确保 Star PM 内置模板 Wiki 存在（幂等）
+  try {
+    await ensureBuiltinModuleTemplatesInPm();
+  } catch {
+    /* 内置写入失败不阻断套用，回落代码模板 */
+  }
+
+  const studio = await getProjectById(input.studioProjectId);
+  if (!studio) throw new Error("Studio 项目不存在");
+
+  const bios = parseModuleBios(studio.customFields);
+  const existing = (bios[name] ?? "").trim();
+  const featureAreas = defaultFeatureAreasForModule(name);
+  // 文件管理优先用内置示例主页；其它模块用带 {{模块名}} 的通用主页模板
+  let builtinHome: string | null = null;
+  if (name === "文件管理") {
+    const { findBuiltinTemplatePage, BUILTIN_TEMPLATE_TITLES } = await import(
+      "@/lib/modules/builtin-templates"
+    );
+    const example = await findBuiltinTemplatePage(
+      BUILTIN_TEMPLATE_TITLES.fileManagerHome
+    );
+    builtinHome = example?.body?.trim() || (await loadBuiltinTemplateBody("moduleHome"));
+  } else {
+    builtinHome = await loadBuiltinTemplateBody("moduleHome");
+  }
+  const bio = resolveModuleHomeBodyFromBuiltinOrCode({
+    builtinBody: builtinHome,
+    moduleName: name,
+    goal: input.goal,
+    capability: input.capability,
+  });
+
+  let bioWritten = false;
+  if (!existing || input.overwriteBio) {
+    bios[name] = bio;
+    await updateStudioProject(studio.id, {
+      customFields: {
+        ...studio.customFields,
+        [MODULE_BIOS_FIELD]: serializeModuleBios(bios),
+      },
+    });
+    bioWritten = true;
+  }
+
+  const createdPageIds: string[] = [];
+  if (input.createFeaturePages) {
+    const roots = await listWikiPagesByHost({
+      projectId: input.projectId,
+      hostKind: "module",
+      hostKey: name,
+      parentId: null,
+    });
+    let checklist = roots.find((p) => p.title.trim() === "功能清单与任务拆解");
+    if (!checklist) {
+      checklist = await createWikiPage({
+        project_id: input.projectId,
+        title: "功能清单与任务拆解",
+        body: `先把「${name}」拆成可验证的功能点，再逐项调查与测试。不要一开始就把未知行为判成 Bug。\n\n子页请套用「功能调查与测试」模板。`,
+        host_kind: "module",
+        host_key: name,
+        parent_id: null,
+      });
+      createdPageIds.push(checklist.id);
+    }
+
+    const children = await listWikiPagesByHost({
+      projectId: input.projectId,
+      hostKind: "module",
+      hostKey: name,
+      parentId: checklist.id,
+    });
+    const existingTitles = new Set(children.map((c) => c.title.trim()));
+
+    const builtinUpload = await loadBuiltinTemplateBody("fileUploadInvestigation");
+    const builtinInv = await loadBuiltinTemplateBody("investigation");
+
+    // 已知分区（如文件管理）批量建调查页；其它模块只建清单根页，子功能用「测试模板」逐个建
+    for (const area of featureAreas) {
+      if (existingTitles.has(area.title)) continue;
+      let body: string;
+      if (name === "文件管理" && area.title === "文件上传") {
+        body = builtinUpload
+          ? materializeBuiltinTemplateBody(builtinUpload, {
+              moduleName: name,
+              featureTitle: area.title,
+            })
+          : buildFileUploadInvestigationTemplate(name);
+      } else if (builtinInv) {
+        body = materializeBuiltinTemplateBody(builtinInv, {
+          moduleName: name,
+          featureTitle: area.title,
+        });
+      } else {
+        body = buildFeatureInvestigationTemplate({
+          featureTitle: area.title,
+          moduleName: name,
+          observed: area.bullets?.slice(0, 2),
+          investigate: area.bullets,
+        });
+      }
+      const page = await createWikiPage({
+        project_id: input.projectId,
+        title: area.title,
+        body,
+        host_kind: "module",
+        host_key: name,
+        parent_id: checklist.id,
+      });
+      createdPageIds.push(page.id);
+    }
+  }
+
+  const key = encodeModuleKey(name);
+  revalidatePath(`/projects/${input.projectSlug}/modules`);
+  revalidatePath(`/projects/${input.projectSlug}/modules/${key}`);
+  revalidatePath(`/projects/${input.studioProjectId}/modules/${key}`);
+  revalidateWikiPaths(input.projectSlug);
+
+  return {
+    bioWritten,
+    createdPageIds,
+    skippedBio: Boolean(existing) && !input.overwriteBio,
+  };
+}
+
 function revalidateWikiPaths(projectSlug: string, pageId?: string) {
   revalidatePath(`/projects/${projectSlug}/modules`);
   revalidatePath(`/projects/${projectSlug}/overview`);
@@ -1783,14 +1951,53 @@ export async function createWikiPageAction(input: {
   hostKind: import("@/lib/types").WikiPageHostKind;
   hostKey: string;
   parentId?: string | null;
+  /** 套用「功能调查与测试」正文模板（按 hostKey=模块名筛选关联表） */
+  useInvestigationTemplate?: boolean;
 }) {
   assertNotViewerWrite();
   const { createWikiPage } = await import("@/lib/wiki-pages/store");
   const { encodeModuleKey } = await import("@/lib/modules/product-module-home");
+  let body = input.body;
+  if (input.useInvestigationTemplate) {
+    const { buildFeatureInvestigationTemplate, buildFileUploadInvestigationTemplate } =
+      await import("@/lib/modules/module-page-templates");
+    const {
+      ensureBuiltinModuleTemplatesInPm,
+      loadBuiltinTemplateBody,
+      materializeBuiltinTemplateBody,
+    } = await import("@/lib/modules/builtin-templates");
+    try {
+      await ensureBuiltinModuleTemplatesInPm();
+    } catch {
+      /* ignore */
+    }
+    const title = input.title.trim();
+    const moduleName = input.hostKey.trim();
+    if (moduleName === "文件管理" && title === "文件上传") {
+      const builtin = await loadBuiltinTemplateBody("fileUploadInvestigation");
+      body = builtin
+        ? materializeBuiltinTemplateBody(builtin, {
+            moduleName,
+            featureTitle: title,
+          })
+        : buildFileUploadInvestigationTemplate(moduleName);
+    } else {
+      const builtin = await loadBuiltinTemplateBody("investigation");
+      body = builtin
+        ? materializeBuiltinTemplateBody(builtin, {
+            moduleName,
+            featureTitle: title,
+          })
+        : buildFeatureInvestigationTemplate({
+            featureTitle: title,
+            moduleName,
+          });
+    }
+  }
   const page = await createWikiPage({
     project_id: input.projectId,
     title: input.title,
-    body: input.body,
+    body,
     host_kind: input.hostKind,
     host_key: input.hostKey,
     parent_id: input.parentId,

@@ -42,6 +42,8 @@ export function WikiPagesBlock({
   const [notionOpen, setNotionOpen] = useState(false);
   const [notionUrl, setNotionUrl] = useState("");
   const [notionBusy, setNotionBusy] = useState(false);
+  const [useInvestigationTemplate, setUseInvestigationTemplate] =
+    useState(hostKind === "module");
 
   async function createPage() {
     const name = draft.trim();
@@ -56,6 +58,8 @@ export function WikiPagesBlock({
         hostKind,
         hostKey,
         parentId,
+        useInvestigationTemplate:
+          hostKind === "module" && useInvestigationTemplate,
       });
       setDraft("");
       startTransition(() => {
@@ -226,6 +230,17 @@ export function WikiPagesBlock({
               {notionOpen ? "收起 Notion" : "从 Notion 导入"}
             </button>
           </div>
+          {hostKind === "module" ? (
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-slate-600">
+              <input
+                type="checkbox"
+                checked={useInvestigationTemplate}
+                onChange={(e) => setUseInvestigationTemplate(e.target.checked)}
+                className="rounded border-slate-300"
+              />
+              套用「功能调查与测试」模板（可再 AI 生成任务；含 Bug·优化·知识表）
+            </label>
+          ) : null}
           {notionOpen ? (
             <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-2.5">
               <p className="mb-1.5 text-[11px] text-violet-700/80">

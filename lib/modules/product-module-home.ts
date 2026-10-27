@@ -143,7 +143,7 @@ function reqModuleName(
   return leaf.name;
 }
 
-/** 汇总产品模块名单（功能板块 + 学习板块 + 路径首段 + 需求模块树 L1） */
+/** 汇总产品模块名单（功能板块 + 学习板块 + 路径首段 + 需求模块树 L1 + Wiki 模块挂载） */
 export function collectProductModuleNames(input: {
   studioProjectId: string | null | undefined;
   featureModules: string[] | null | undefined;
@@ -154,6 +154,8 @@ export function collectProductModuleNames(input: {
   prds: ProjectPrd[];
   requirements: Requirement[];
   modules: ModuleNode[];
+  /** 有 Wiki 挂在 module 上时，也算进模块名单（如内置「模块模板」） */
+  wikiPages?: ProjectWikiPage[];
 }): string[] {
   const names = new Set<string>();
   const custom = (input.featureModules ?? []).map((m) => m.trim()).filter(Boolean);
@@ -187,6 +189,11 @@ export function collectProductModuleNames(input: {
   for (const r of input.requirements) {
     const name = reqModuleName(r, modulesById);
     if (name) names.add(name);
+  }
+  for (const w of input.wikiPages ?? []) {
+    if (w.host_kind === "module" && w.host_key.trim()) {
+      names.add(w.host_key.trim());
+    }
   }
 
   if (names.size === 0 && input.studioProjectId) {

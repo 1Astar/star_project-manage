@@ -17,7 +17,10 @@ import type {
   ModuleHomeLinkItem,
   ProductModuleHome,
 } from "@/lib/modules/product-module-home";
-import { saveProductModuleBioAction } from "@/lib/actions";
+import {
+  applyModuleHomeTemplateAction,
+  saveProductModuleBioAction,
+} from "@/lib/actions";
 import {
   extractMarkdownOutline,
   mergeOutline,
@@ -124,6 +127,8 @@ export function ProductModuleHomeView({
   const [bio, setBio] = useState(initial.bio);
   const [error, setError] = useState<string | null>(null);
   const [bioSaved, setBioSaved] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateMsg, setTemplateMsg] = useState<string | null>(null);
   const moduleTree = useMemo(
     () => collectModuleTree(libraries, [home.name]),
     [libraries, home.name]
@@ -198,6 +203,57 @@ export function ProductModuleHomeView({
     }
   }
 
+  async function applyTemplate() {
+    if (!studioProjectId || !canEditBio) return;
+    const hasBio = bio.trim().length > 0;
+    let overwriteBio = !hasBio;
+    if (hasBio) {
+      overwriteBio = window.confirm(
+        "简介已有内容。确定用模块模板覆盖简介？\n选「取消」则只建子页、不改简介。\n（模板含按本模块筛选的需求/Bug/优化/知识/PRD/竞品关联表）"
+      );
+    }
+    const createFeaturePages = window.confirm(
+      "是否创建「功能清单与任务拆解」子页？\n（文件管理会带上上传/下载等调查·测试页；其它模块只建清单根页，再在子页勾选测试模板新建）"
+    );
+    if (!overwriteBio && !createFeaturePages && hasBio) {
+      setTemplateMsg("已取消");
+      return;
+    }
+    if (!overwriteBio && !createFeaturePages && !hasBio) {
+      // 空简介且两步都否 → 仍写简介
+      overwriteBio = true;
+    }
+    setError(null);
+    setTemplateMsg(null);
+    setTemplateBusy(true);
+    try {
+      const result = await applyModuleHomeTemplateAction({
+        studioProjectId,
+        projectId,
+        projectSlug,
+        moduleName: home.name,
+        overwriteBio: overwriteBio || !hasBio,
+        createFeaturePages,
+      });
+      if (result.bioWritten) {
+        setTemplateMsg(
+          `已套用简介模板${result.createdPageIds.length ? `，新建 ${result.createdPageIds.length} 个子页` : ""}`
+        );
+      } else if (result.skippedBio) {
+        setTemplateMsg(
+          `简介未改${result.createdPageIds.length ? `；新建 ${result.createdPageIds.length} 个子页` : ""}`
+        );
+      } else {
+        setTemplateMsg("模板已处理");
+      }
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "套用模板失败");
+    } finally {
+      setTemplateBusy(false);
+    }
+  }
+
   return (
     <div className="relative space-y-4 xl:pr-48">
       <PageFloatingToc items={outline} />
@@ -221,11 +277,34 @@ export function ProductModuleHomeView({
           </p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">{home.name}</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            模块主页：简介 + 子页面 + 相关需求 / PRD / Bug / 知识点 · 右侧可跳大纲
+            模块主页：简介 + 子页面 + 需求 / PRD / Bug / 知识点 · 功能子页可 AI 生成测试任务
             {pending ? " · 刷新中…" : ""}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/projects/star-pm/modules/%E6%A8%A1%E5%9D%97%E6%A8%A1%E6%9D%BF"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            title="打开 Star PM 内置模板库（可改正文）"
+          >
+            内置模板库
+          </Link>
+          {canEditBio && studioProjectId ? (
+            <button
+              type="button"
+              onClick={() => void applyTemplate()}
+              disabled={templateBusy}
+              className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-40"
+              title="对齐 Notion 文件管理：简介关联表 + 可选功能调查子页"
+            >
+              {templateBusy ? "套用中…" : "套用模块模板"}
+            </button>
+          ) : null}
+        </div>
       </div>
+      {templateMsg ? (
+        <p className="text-xs text-emerald-700">{templateMsg}</p>
+      ) : null}
 
       <section
         id="mod-bio"
