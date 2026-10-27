@@ -96,6 +96,7 @@ export function NotionImportPanel() {
       <h2 className="text-sm font-semibold text-violet-800">从 Notion 导入</h2>
       <p className="mt-1 text-xs text-violet-600/80">
         拉取 Notion 灵感库 / 项目页，写入 Supabase；Token 仅存本机浏览器，导入时临时传给接口，不落库。
+        单页长文请到项目 Wiki / 模块子页列表用「从 Notion 导入」。
       </p>
 
       <label className="mt-3 block text-sm">

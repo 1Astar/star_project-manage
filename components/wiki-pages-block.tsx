@@ -7,6 +7,7 @@ import {
   createWikiPageAction,
   deleteWikiPageAction,
 } from "@/lib/actions";
+import { loadNotionSettings } from "@/lib/notion/notion-settings";
 import type { ProjectWikiPage, WikiPageHostKind } from "@/lib/types";
 
 export function WikiPagesBlock({
@@ -38,6 +39,9 @@ export function WikiPagesBlock({
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [notionOpen, setNotionOpen] = useState(false);
+  const [notionUrl, setNotionUrl] = useState("");
+  const [notionBusy, setNotionBusy] = useState(false);
 
   async function createPage() {
     const name = draft.trim();
@@ -73,6 +77,65 @@ export function WikiPagesBlock({
       startTransition(() => router.refresh());
     } catch (e) {
       setError(e instanceof Error ? e.message : "删除失败");
+    }
+  }
+
+  async function importFromNotion(dryRun: boolean) {
+    const pageUrlOrId = notionUrl.trim();
+    if (!pageUrlOrId) {
+      setError("请粘贴 Notion 页面链接");
+      return;
+    }
+    const notionToken = loadNotionSettings()?.token ?? "";
+    if (!notionToken) {
+      setError("请先在「设置 → 从 Notion 导入」保存 Integration Token");
+      return;
+    }
+
+    setError(null);
+    setNotionBusy(true);
+    try {
+      const res = await fetch("/api/studio/import/notion-wiki", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dryRun,
+          notionToken,
+          pageUrlOrId,
+          projectId,
+          hostKind,
+          hostKey,
+          parentId,
+        }),
+      });
+      const data = (await res.json()) as {
+        error?: string;
+        title?: string;
+        page?: { id: string } | null;
+        bodyPreview?: string;
+      };
+      if (!res.ok) {
+        setError(data.error ?? "Notion 导入失败");
+        return;
+      }
+      if (dryRun) {
+        setError(null);
+        window.alert(
+          `预览：将导入「${data.title ?? "未命名"}」\n\n${(data.bodyPreview ?? "").slice(0, 400)}${(data.bodyPreview?.length ?? 0) > 400 ? "…" : ""}`
+        );
+        return;
+      }
+      const pageId = data.page?.id;
+      setNotionUrl("");
+      setNotionOpen(false);
+      startTransition(() => {
+        if (pageId) router.push(`/projects/${projectSlug}/pages/${pageId}`);
+        router.refresh();
+      });
+    } catch {
+      setError("网络错误，请稍后重试");
+    } finally {
+      setNotionBusy(false);
     }
   }
 
@@ -133,27 +196,67 @@ export function WikiPagesBlock({
       )}
 
       {canEdit ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void createPage();
-              }
-            }}
-            placeholder="新子页面标题…"
-            className="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
-          />
-          <button
-            type="button"
-            onClick={() => void createPage()}
-            disabled={!draft.trim() || creating || pending}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-          >
-            {creating ? "创建中…" : "新建子页"}
-          </button>
+        <div className="mt-2 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void createPage();
+                }
+              }}
+              placeholder="新子页面标题…"
+              className="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => void createPage()}
+              disabled={!draft.trim() || creating || pending}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+            >
+              {creating ? "创建中…" : "新建子页"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setNotionOpen((v) => !v)}
+              className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-100"
+            >
+              {notionOpen ? "收起 Notion" : "从 Notion 导入"}
+            </button>
+          </div>
+          {notionOpen ? (
+            <div className="rounded-lg border border-violet-100 bg-violet-50/50 p-2.5">
+              <p className="mb-1.5 text-[11px] text-violet-700/80">
+                粘贴 Notion 页面链接；Token 用设置页已保存的本机 Integration。子页需逐页导入。
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={notionUrl}
+                  onChange={(e) => setNotionUrl(e.target.value)}
+                  placeholder="https://www.notion.so/…"
+                  className="min-w-[12rem] flex-1 rounded-lg border border-violet-200 bg-white px-2.5 py-1.5 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => void importFromNotion(true)}
+                  disabled={!notionUrl.trim() || notionBusy}
+                  className="rounded-lg border border-violet-300 bg-white px-3 py-1.5 text-xs text-violet-700 disabled:opacity-40"
+                >
+                  预览
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void importFromNotion(false)}
+                  disabled={!notionUrl.trim() || notionBusy}
+                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                >
+                  {notionBusy ? "导入中…" : "导入"}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

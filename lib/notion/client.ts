@@ -2,6 +2,13 @@ const NOTION_VERSION = "2022-06-28";
 
 export interface NotionRichText {
   plain_text: string;
+  href?: string | null;
+  annotations?: {
+    bold?: boolean;
+    italic?: boolean;
+    strikethrough?: boolean;
+    code?: boolean;
+  };
 }
 
 export interface NotionPage {
@@ -80,7 +87,8 @@ export class NotionClient {
     return pages;
   }
 
-  async listBlockChildren(blockId: string): Promise<NotionBlock[]> {
+  /** 只拉直接子块，不递归（供 Markdown 转换保层级） */
+  async listBlockChildrenShallow(blockId: string): Promise<NotionBlock[]> {
     const blocks: NotionBlock[] = [];
     let cursor: string | undefined;
 
@@ -91,16 +99,24 @@ export class NotionClient {
         next_cursor: string | null;
       }>(`/blocks/${blockId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ""}`);
 
-      for (const block of data.results) {
-        blocks.push(block);
-        if (block.has_children) {
-          const nested = await this.listBlockChildren(block.id);
-          blocks.push(...nested);
-        }
-      }
-
+      blocks.push(...data.results);
       cursor = data.has_more && data.next_cursor ? data.next_cursor : undefined;
     } while (cursor);
+
+    return blocks;
+  }
+
+  async listBlockChildren(blockId: string): Promise<NotionBlock[]> {
+    const blocks: NotionBlock[] = [];
+    const shallow = await this.listBlockChildrenShallow(blockId);
+
+    for (const block of shallow) {
+      blocks.push(block);
+      if (block.has_children) {
+        const nested = await this.listBlockChildren(block.id);
+        blocks.push(...nested);
+      }
+    }
 
     return blocks;
   }
