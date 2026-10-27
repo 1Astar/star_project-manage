@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-button";
 import { ProjectResearchWorkbench } from "@/components/project-research-workbench";
+import { getAdminSession } from "@/lib/auth/session";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 import {
   listLearningAttachmentsForProject,
@@ -23,6 +24,7 @@ import {
   pickThumbnails,
   type OverviewThumbnail,
 } from "@/lib/overview/thumbnails";
+import { listProjectWikiPages } from "@/lib/wiki-pages/store";
 
 function buildThumbMaps(
   learningAtts: Array<{
@@ -131,6 +133,7 @@ export default async function ProjectOverviewPage({
     bugAtts,
     reqAtts,
     prds,
+    wikiPages,
   ] = await Promise.all([
     listProjectLearningNotes(project.id),
     listBugsByProject(project.id),
@@ -142,7 +145,10 @@ export default async function ProjectOverviewPage({
     listBugAttachmentsByProject(project.id),
     listProjectAttachments(project.id),
     listProjectPrds(project.id),
+    listProjectWikiPages(project.id),
   ]);
+  const session = await getAdminSession();
+  const canEditPages = session?.role === "admin";
 
   const byId = new Map(
     [...(pool?.poolRequirements ?? []), ...boardReqs].map((r) => [r.id, r])
@@ -178,12 +184,15 @@ export default async function ProjectOverviewPage({
 
   return (
     <ProjectResearchWorkbench
+      projectId={project.id}
       projectSlug={projectSlug}
       projectTitle={ctx.studio?.title ?? project.name}
       rows={rows}
       bugs={bugs}
       requirements={requirements}
       relationIndex={relationIndex}
+      wikiPages={wikiPages}
+      canEditPages={canEditPages}
     />
   );
 }

@@ -598,6 +598,7 @@ export function createSeedData(): DatabaseSnapshot {
     learning_note_attachments: [],
     competitor_entries: [],
     project_workbooks: [],
+    project_wiki_pages: [],
     project_prds: [],
     prd_review_comments: [],
     interview_requirement_links: [],

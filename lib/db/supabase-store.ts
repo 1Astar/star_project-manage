@@ -162,6 +162,7 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
   );
   const competitor_entries = await loadOptionalTable(sb, "competitor_entries");
   const project_workbooks = await loadOptionalTable(sb, "project_workbooks");
+  const project_wiki_pages = await loadOptionalTable(sb, "project_wiki_pages");
   const project_prds = await loadOptionalTable(sb, "project_prds");
   const prd_review_comments = await loadOptionalTable(sb, "prd_review_comments");
   const bug_test_plans = await loadOptionalTable(sb, "bug_test_plans");
@@ -335,6 +336,31 @@ export async function readSupabaseDb(): Promise<DatabaseSnapshot> {
         updated_at: String(row.updated_at ?? new Date().toISOString()),
       })
     ),
+    project_wiki_pages: ((project_wiki_pages ?? []) as Record<string, unknown>[]).map(
+      (row) => ({
+        id: String(row.id),
+        project_id: String(row.project_id),
+        parent_id:
+          row.parent_id != null && String(row.parent_id).trim()
+            ? String(row.parent_id)
+            : null,
+        title: String(row.title ?? ""),
+        body: String(row.body ?? ""),
+        sort_order: Number.isFinite(Number(row.sort_order))
+          ? Number(row.sort_order)
+          : 0,
+        host_kind: String(row.host_kind ?? "module") as
+          | "module"
+          | "requirement"
+          | "bug"
+          | "learning"
+          | "prd"
+          | "competitor",
+        host_key: String(row.host_key ?? ""),
+        created_at: String(row.created_at ?? new Date().toISOString()),
+        updated_at: String(row.updated_at ?? new Date().toISOString()),
+      })
+    ),
     project_prds: ((project_prds ?? []) as Record<string, unknown>[]).map((row) =>
       normalizeProjectPrdRow(row)
     ),
@@ -457,6 +483,7 @@ async function deleteMissing(table: string, keepIds: string[]) {
       table === "learning_note_attachments" ||
       table === "competitor_entries" ||
       table === "project_workbooks" ||
+      table === "project_wiki_pages" ||
       table === "project_prds" ||
       table === "prd_review_comments"
     ) {
@@ -575,6 +602,14 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
       if (!/project_workbooks|schema cache|does not exist/i.test(msg)) throw e;
     }
   }
+  if ((snapshot.project_wiki_pages ?? []).length) {
+    try {
+      await upsertRows("project_wiki_pages", snapshot.project_wiki_pages ?? []);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      if (!/project_wiki_pages|schema cache|does not exist/i.test(msg)) throw e;
+    }
+  }
   if ((snapshot.project_prds ?? []).length) {
     try {
       await upsertRows("project_prds", snapshot.project_prds ?? []);
@@ -629,6 +664,10 @@ export async function writeSupabaseDb(snapshot: DatabaseSnapshot): Promise<void>
   await deleteMissing(
     "project_workbooks",
     (snapshot.project_workbooks ?? []).map((r) => r.id)
+  );
+  await deleteMissing(
+    "project_wiki_pages",
+    (snapshot.project_wiki_pages ?? []).map((r) => r.id)
   );
   await deleteMissing(
     "prd_review_comments",

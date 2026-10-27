@@ -93,6 +93,10 @@ export const BUILTIN_MCP_TOOL_NAMES = new Set([
   "add_mcp_tool",
   "list_dynamic_mcp_tools",
   "disable_mcp_tool",
+  "list_wiki_pages",
+  "get_wiki_page",
+  "create_wiki_page",
+  "update_wiki_page",
 ]);
 
 const NAME_RE = /^[a-z][a-z0-9_]{1,63}$/;

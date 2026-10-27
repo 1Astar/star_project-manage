@@ -60,16 +60,20 @@ export default async function ProjectModuleHomePage({
     prds: bundle.prds,
     requirements: bundle.requirements,
     modules: bundle.modules,
+    wikiPages: bundle.wikiPages,
   });
 
   const session = await getAdminSession();
   const canEditBio = session?.role === "admin" && Boolean(ctx.studio?.id);
+  const canEditPages = session?.role === "admin";
 
   return (
     <ProductModuleHomeView
+      projectId={bundle.project.id}
       projectSlug={ctx.pmSlug ?? bundle.project.slug}
       studioProjectId={ctx.studio?.id ?? null}
       canEditBio={canEditBio}
+      canEditPages={canEditPages}
       home={home}
     />
   );

@@ -4,6 +4,7 @@ import type {
   ModuleNode,
   ProjectLearningNote,
   ProjectPrd,
+  ProjectWikiPage,
   Requirement,
 } from "@/lib/types";
 import { resolveFeatureModules } from "@/lib/studio/project-modules";
@@ -108,6 +109,8 @@ export type ProductModuleHome = {
   prds: ModuleHomeLinkItem[];
   bugs: ModuleHomeLinkItem[];
   competitors: ModuleHomeLinkItem[];
+  /** 挂在本模块下的根 Wiki 子页（parent_id 为空） */
+  childPages: ProjectWikiPage[];
 };
 
 function learningSectionTitle(
@@ -212,6 +215,7 @@ export function buildProductModuleSummaries(input: {
   prds: ProjectPrd[];
   requirements: Requirement[];
   modules: ModuleNode[];
+  wikiPages?: ProjectWikiPage[];
 }): ProductModuleSummary[] {
   const bios = parseModuleBios(input.customFields);
   const names = collectProductModuleNames(input);
@@ -243,12 +247,24 @@ export function buildProductModuleHome(input: {
   prds: ProjectPrd[];
   requirements: Requirement[];
   modules: ModuleNode[];
+  wikiPages?: ProjectWikiPage[];
 }): ProductModuleHome {
   const name = input.moduleName.trim();
   const bios = input.bios ?? parseModuleBios(input.customFields);
   const byId = new Map(input.learnings.map((n) => [n.id, n]));
   const modulesById = new Map(input.modules.map((m) => [m.id, m]));
   const routeId = input.routeId;
+  const childPages = (input.wikiPages ?? [])
+    .filter(
+      (p) =>
+        p.host_kind === "module" &&
+        p.host_key === name &&
+        (p.parent_id ?? null) === null
+    )
+    .sort(
+      (a, b) =>
+        a.sort_order - b.sort_order || a.title.localeCompare(b.title, "zh")
+    );
 
   const learnings: ModuleHomeLinkItem[] = [];
   for (const n of input.learnings) {
@@ -416,5 +432,6 @@ export function buildProductModuleHome(input: {
     prds,
     bugs,
     competitors,
+    childPages,
   };
 }

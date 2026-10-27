@@ -28,9 +28,12 @@
 | 项目 | `list_projects` / `get_project` / `search` |
 | 需求 | `create_requirement` / `update_requirement` / `list_requirements` |
 | Bug | `create_bug` / `list_bugs` / `update_bug` / `get_bug` |
+| Wiki 页树（模块/功能拆解） | `list_wiki_pages` / `get_wiki_page` / `create_wiki_page` / `update_wiki_page` |
 | 决策/演进 | `add_decision` / `add_evolution` |
 | 变更会话 | `start_change_session` / `finish_change_session` |
 | 发版 | 仅用户明确要求时 `publish_release` |
+
+搭调研框架：先 `create_wiki_page`（hostKind=`module`，hostKey=模块名）建根拆解页，再带 `parentId` 建子页；`body` 用 Markdown（`##` 标题）。不要编造模块名——用项目已有 `featureModules` 或先问用户。
 
 字段：标题、类型、项目、产生时间、聊天主题、原始想法、AI 补充、为什么、状态、优先级、下一步 — **有则写**。
 

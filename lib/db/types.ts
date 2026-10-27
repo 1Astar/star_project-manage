@@ -24,6 +24,7 @@ import type {
   BugComment,
   CompetitorEntry,
   ProjectWorkbook,
+  ProjectWikiPage,
   RequirementComment,
   RequirementLink,
   RoleTask,
@@ -60,6 +61,7 @@ export interface DatabaseSnapshot {
   learning_note_attachments: LearningNoteAttachment[];
   competitor_entries: CompetitorEntry[];
   project_workbooks: ProjectWorkbook[];
+  project_wiki_pages: ProjectWikiPage[];
   project_prds: ProjectPrd[];
   prd_review_comments: PrdReviewComment[];
 }

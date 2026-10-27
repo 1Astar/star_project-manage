@@ -10,6 +10,20 @@
 
 ---
 
+## v1.20.0 · 2026-10-27
+
+相对 **v1.19.9**（本版主线：**Notion 风项目 Hub + 层层 Wiki 子页**）：
+
+- **项目 Hub**：`/projects/[id]` 为 Notion 风首页（定位/原则/工作方式等 Markdown + 可点模块导航 + 悬浮大纲）；原项目卡挪到 `/recovery`
+- **Wiki 页树**：`project_wiki_pages`（任意嵌套 parent_id），可挂模块主页或总览实体；模块主页可建功能拆解子页
+- **总览 Side Peek**：条目下可建子页（调查笔记层层挂载）
+- **悬浮大纲**：Wiki/模块/Hub 页右侧 TOC，点章节跳转、滚动高亮
+- **MCP Wiki**：`list_wiki_pages` / `get_wiki_page` / `create_wiki_page` / `update_wiki_page`
+- **Excel 导入**：知识表无表头 / 总表混合行可解析（NAS 调研笔记兼容）
+- 迁移：`049_project_wiki_pages.sql`（**线上需跑迁移后 Wiki 才持久**）
+
+---
+
 ## v1.19.9 · 2026-10-26
 
 相对 **v1.19.8**（本版主线：**发版构建修复**）：

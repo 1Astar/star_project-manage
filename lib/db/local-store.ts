@@ -244,6 +244,7 @@ function normalizeDb(db: DatabaseSnapshot): DatabaseSnapshot {
     learning_note_attachments: db.learning_note_attachments ?? [],
     competitor_entries: db.competitor_entries ?? [],
     project_workbooks: db.project_workbooks ?? [],
+    project_wiki_pages: db.project_wiki_pages ?? [],
     project_prds: (db.project_prds ?? []).map((p) => ({
       ...p,
       versions: Array.isArray(p.versions) ? p.versions : [],

@@ -206,6 +206,8 @@ const SHEET_KIND: Record<string, BundleSheetKind> = {
   优化表: "optimization",
   优化建议: "optimization",
   optimization: "optimization",
+  /** 总览混合表：按「类型」列拆成 Bug / 优化（见 parseOverviewSheet） */
+  总表: "bug",
 };
 
 function normHeader(v: unknown): string {
@@ -316,11 +318,128 @@ function colGetter(sheet: ExcelJS.Worksheet, headers: Map<string, number>, row: 
   };
 }
 
+/**
+ * 知识表常见无表头：A 板块 / B 主题 / C 标题 / D 要点 / F 出处
+ * （第一行已是数据，不能走 headerMap）
+ */
+function parseLearningSheetPositional(
+  sheet: ExcelJS.Worksheet
+): BundleParsedRow[] {
+  const rows: BundleParsedRow[] = [];
+  const max = sheet.rowCount || 0;
+  for (let r = 1; r <= max; r++) {
+    const section = cellText(sheet.getRow(r).getCell(1).value);
+    const topic = cellText(sheet.getRow(r).getCell(2).value);
+    const title = cellText(sheet.getRow(r).getCell(3).value);
+    const principle = cellText(sheet.getRow(r).getCell(4).value);
+    const source = cellText(sheet.getRow(r).getCell(6).value);
+    if (!title && !topic) continue;
+    // 跳过误把表头当数据
+    if (title === "标题" || topic === "主题" || section === "板块") continue;
+    const leaf = title || topic;
+    rows.push({
+      kind: "learning",
+      title: leaf,
+      section_title: section || null,
+      topic_title: topic || leaf,
+      point_title: title && topic && title !== topic ? title : null,
+      why_text: source ? `出处：${source}` : "",
+      principle,
+      protocol: "",
+      tech_background: "",
+      competitors: "",
+      product_thinking: "",
+      source,
+      links: emptyLinks(),
+      warnings: [],
+      sourceRow: r,
+    });
+  }
+  return rows;
+}
+
+/** 总表：板块 / 类型 / 条目 / 涉及知识点 / 竞品参考 / 出处 */
+function parseOverviewSheet(sheet: ExcelJS.Worksheet): BundleParsedRow[] {
+  const headers = headerMap(sheet);
+  const rows: BundleParsedRow[] = [];
+  const max = sheet.rowCount || 0;
+  const hasType = headers.has(normHeader("类型"));
+  if (!hasType) return rows;
+
+  for (let r = 2; r <= max; r++) {
+    const get = colGetter(sheet, headers, r);
+    const typeRaw = get(["类型", "type"]);
+    const title = get(["条目", "标题", "问题描述", "名称", "title"]);
+    if (!title) continue;
+    const section = get(["板块", "模块", "section"]) || "未分板块";
+    const knowledge = get(["涉及知识点", "知识点"]);
+    const competitor = get(["竞品/聊天参考", "竞品参考", "竞品"]);
+    const source = get(["出处", "来源", "source"]);
+    const links = emptyLinks();
+    if (knowledge) links.learningTitles.push(...splitTitles(knowledge));
+    if (competitor) {
+      const { text, urls } = extractUrls(competitor);
+      links.urls.push(...urls);
+      if (text) links.competitorTitles.push(...splitTitles(text));
+    }
+
+    const typeKey = typeRaw.replace(/\s+/g, "").toLowerCase();
+    if (typeKey === "bug" || typeKey === "缺陷") {
+      rows.push({
+        kind: "bug",
+        title,
+        module_path: section,
+        repro_steps: "",
+        expected_result: "",
+        actual_result: competitor || "",
+        evidence: [knowledge ? `知识点：${knowledge}` : "", source ? `出处：${source}` : ""]
+          .filter(Boolean)
+          .join("\n"),
+        status: null,
+        links,
+        warnings: [],
+        sourceRow: r,
+      });
+    } else if (
+      typeKey === "优化" ||
+      typeKey === "优化建议" ||
+      typeKey.includes("optim")
+    ) {
+      rows.push({
+        kind: "optimization",
+        title,
+        section_title: section,
+        detail: competitor || knowledge || "",
+        benefit: "",
+        source,
+        links,
+        warnings: [],
+        sourceRow: r,
+      });
+    }
+  }
+  return rows;
+}
+
 function parseSheet(
   sheet: ExcelJS.Worksheet,
   kind: BundleSheetKind
 ): BundleParsedRow[] {
+  if (sheet.name.trim() === "总表") {
+    return parseOverviewSheet(sheet);
+  }
+
   const headers = headerMap(sheet);
+  /** 知识表无表头：第一格是板块名而非「板块」 */
+  if (
+    kind === "learning" &&
+    !headers.has(normHeader("板块")) &&
+    !headers.has(normHeader("主题")) &&
+    !headers.has(normHeader("标题"))
+  ) {
+    return parseLearningSheetPositional(sheet);
+  }
+
   const rows: BundleParsedRow[] = [];
   const max = sheet.rowCount || 0;
   for (let r = 2; r <= max; r++) {

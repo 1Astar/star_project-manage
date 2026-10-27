@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   EntitySidePeek,
   type EntityPeekPayload,
 } from "@/components/entity-side-peek";
+import { PageFloatingToc } from "@/components/page-floating-toc";
+import { MarkdownPreview } from "@/components/studio/markdown-preview";
+import { WikiPagesBlock } from "@/components/wiki-pages-block";
 import type {
   ModuleHomeLinkItem,
   ProductModuleHome,
@@ -18,20 +21,29 @@ import {
   updateCompetitorEntryAction,
   updateLearningNoteAction,
 } from "@/lib/actions";
+import {
+  extractMarkdownOutline,
+  mergeOutline,
+} from "@/lib/wiki-pages/outline";
 
 function RelatedBlock({
   title,
   items,
   emptyHint,
   onOpen,
+  sectionId,
 }: {
   title: string;
   items: ModuleHomeLinkItem[];
   emptyHint: string;
   onOpen: (item: ModuleHomeLinkItem) => void;
+  sectionId?: string;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
+    <section
+      id={sectionId}
+      className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4"
+    >
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         <span className="text-xs text-slate-400">{items.length}</span>
@@ -93,14 +105,18 @@ function RelatedBlock({
 }
 
 export function ProductModuleHomeView({
+  projectId,
   projectSlug,
   studioProjectId,
   canEditBio,
+  canEditPages = false,
   home: initial,
 }: {
+  projectId: string;
   projectSlug: string;
   studioProjectId: string | null;
   canEditBio: boolean;
+  canEditPages?: boolean;
   home: ProductModuleHome;
 }) {
   const router = useRouter();
@@ -116,6 +132,20 @@ export function ProductModuleHomeView({
     setHome(initial);
     setBio(initial.bio);
   }, [initial]);
+
+  const outline = useMemo(
+    () =>
+      mergeOutline(
+        extractMarkdownOutline(bio),
+        { id: "mod-child-pages", text: "功能拆解与子页面", level: 2 },
+        { id: "mod-learnings", text: "知识点", level: 2 },
+        { id: "mod-requirements", text: "需求", level: 2 },
+        { id: "mod-prds", text: "PRD", level: 2 },
+        { id: "mod-bugs", text: "Bug", level: 2 },
+        { id: "mod-competitors", text: "竞品", level: 2 }
+      ),
+    [bio]
+  );
 
   function openItem(item: ModuleHomeLinkItem) {
     if (!item.peekKind) return;
@@ -213,7 +243,9 @@ export function ProductModuleHomeView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4 xl:pr-48">
+      <PageFloatingToc items={outline} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-slate-400">
@@ -233,13 +265,16 @@ export function ProductModuleHomeView({
           </p>
           <h2 className="mt-1 text-lg font-semibold text-slate-900">{home.name}</h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            模块主页：简介 + 相关需求 / PRD / Bug / 知识点
+            模块主页：简介 + 子页面 + 相关需求 / PRD / Bug / 知识点 · 右侧可跳大纲
             {pending ? " · 刷新中…" : ""}
           </p>
         </div>
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
+      <section
+        id="mod-bio"
+        className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-4"
+      >
         <h3 className="text-sm font-semibold text-slate-900">简介</h3>
         {canEditBio && studioProjectId ? (
           <div className="mt-2 space-y-2">
@@ -249,9 +284,11 @@ export function ProductModuleHomeView({
                 setBio(e.target.value);
                 setBioSaved(false);
               }}
-              rows={4}
-              placeholder="这个模块是做什么的、边界是什么、当前关注点…"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800"
+              rows={10}
+              placeholder={
+                "支持 Markdown。用 ## 写章节，右侧会出现悬浮大纲。\n\n## 项目定位\n…\n\n## 使用原则\n- …\n\n## 模块工作流\n发现问题 → …"
+              }
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed text-slate-800"
             />
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -266,42 +303,79 @@ export function ProductModuleHomeView({
                 <span className="text-xs text-emerald-600">已保存</span>
               ) : null}
             </div>
+            {bio.trim() ? (
+              <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
+                <p className="mb-2 text-[11px] text-slate-400">预览</p>
+                <MarkdownPreview
+                  content={bio}
+                  withHeadingIds
+                  preferInAppLinks
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : home.bio.trim() ? (
+          <div className="mt-2">
+            <MarkdownPreview
+              content={home.bio}
+              withHeadingIds
+              preferInAppLinks
+            />
           </div>
         ) : (
-          <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
-            {home.bio.trim() || "暂无简介。登录管理员后可编辑。"}
+          <p className="mt-2 text-sm text-slate-400">
+            暂无简介。登录管理员后可编辑（支持 ## 标题与站内链接）。
           </p>
         )}
       </section>
+
+      <div id="mod-child-pages" className="scroll-mt-24">
+        <WikiPagesBlock
+          projectId={projectId}
+          projectSlug={projectSlug}
+          hostKind="module"
+          hostKey={home.name}
+          parentId={null}
+          pages={home.childPages}
+          canEdit={canEditPages}
+          title="功能拆解与子页面"
+          emptyHint="像 Notion 一样在模块下建子页，例如「文件上传」「搜索与浏览」。子页里还能再挂下一层；也可在简介里用 Markdown 链接跳转。"
+        />
+      </div>
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
 
       <div className="grid gap-3 lg:grid-cols-2">
         <RelatedBlock
+          sectionId="mod-learnings"
           title="知识点"
           items={home.learnings}
           emptyHint="该模块下暂无知识点（按学习池板块名匹配）。"
           onOpen={openItem}
         />
         <RelatedBlock
+          sectionId="mod-requirements"
           title="需求"
           items={home.requirements}
           emptyHint="该模块下暂无需求（按需求模块树一级名匹配）。"
           onOpen={openItem}
         />
         <RelatedBlock
+          sectionId="mod-prds"
           title="PRD"
           items={home.prds}
           emptyHint="该模块下暂无 PRD（按 module_path 首段匹配）。"
           onOpen={openItem}
         />
         <RelatedBlock
+          sectionId="mod-bugs"
           title="Bug"
           items={home.bugs}
           emptyHint="该模块下暂无 Bug（按 module_path 首段匹配）。"
           onOpen={openItem}
         />
         <RelatedBlock
+          sectionId="mod-competitors"
           title="竞品"
           items={home.competitors}
           emptyHint="该模块下暂无竞品条目（按 module_path 首段匹配）。"

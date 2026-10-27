@@ -1684,6 +1684,28 @@ export async function deleteCompetitorEntryAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/competitors`);
 }
 
+/** 项目 Hub 正文（存 Studio customFields.projectHubMd） */
+export async function saveProjectHubAction(input: {
+  studioProjectId: string;
+  projectSlug: string;
+  markdown: string;
+}) {
+  assertNotViewerWrite();
+  const { getProjectById } = await import("@/lib/studio/data");
+  const { updateStudioProject } = await import("@/lib/studio/mutations");
+  const { PROJECT_HUB_FIELD } = await import("@/lib/modules/project-hub");
+  const studio = await getProjectById(input.studioProjectId);
+  if (!studio) throw new Error("Studio 项目不存在");
+  await updateStudioProject(studio.id, {
+    customFields: {
+      ...studio.customFields,
+      [PROJECT_HUB_FIELD]: input.markdown,
+    },
+  });
+  revalidatePath(`/projects/${input.projectSlug}`);
+  revalidatePath(`/projects/${input.studioProjectId}`);
+}
+
 /** 产品模块主页简介（存 Studio customFields.moduleBiosJson） */
 export async function saveProductModuleBioAction(input: {
   studioProjectId: string;
@@ -1718,3 +1740,81 @@ export async function saveProductModuleBioAction(input: {
   revalidatePath(`/projects/${input.studioProjectId}/modules`);
   revalidatePath(`/projects/${input.studioProjectId}/modules/${key}`);
 }
+
+function revalidateWikiPaths(projectSlug: string, pageId?: string) {
+  revalidatePath(`/projects/${projectSlug}/modules`);
+  revalidatePath(`/projects/${projectSlug}/overview`);
+  revalidatePath(`/projects/${projectSlug}/pages`);
+  if (pageId) revalidatePath(`/projects/${projectSlug}/pages/${pageId}`);
+}
+
+/** Notion 风 Wiki 子页 */
+export async function createWikiPageAction(input: {
+  projectId: string;
+  projectSlug: string;
+  title: string;
+  body?: string;
+  hostKind: import("@/lib/types").WikiPageHostKind;
+  hostKey: string;
+  parentId?: string | null;
+}) {
+  assertNotViewerWrite();
+  const { createWikiPage } = await import("@/lib/wiki-pages/store");
+  const { encodeModuleKey } = await import("@/lib/modules/product-module-home");
+  const page = await createWikiPage({
+    project_id: input.projectId,
+    title: input.title,
+    body: input.body,
+    host_kind: input.hostKind,
+    host_key: input.hostKey,
+    parent_id: input.parentId,
+  });
+  revalidateWikiPaths(input.projectSlug, page.id);
+  if (page.host_kind === "module") {
+    const key = encodeModuleKey(page.host_key);
+    revalidatePath(`/projects/${input.projectSlug}/modules/${key}`);
+  }
+  return page;
+}
+
+export async function updateWikiPageAction(input: {
+  pageId: string;
+  projectSlug: string;
+  title?: string;
+  body?: string;
+  parentId?: string | null;
+  sortOrder?: number;
+}) {
+  assertNotViewerWrite();
+  const { updateWikiPage } = await import("@/lib/wiki-pages/store");
+  const { encodeModuleKey } = await import("@/lib/modules/product-module-home");
+  const page = await updateWikiPage(input.pageId, {
+    title: input.title,
+    body: input.body,
+    parent_id: input.parentId,
+    sort_order: input.sortOrder,
+  });
+  revalidateWikiPaths(input.projectSlug, page.id);
+  if (page.host_kind === "module") {
+    const key = encodeModuleKey(page.host_key);
+    revalidatePath(`/projects/${input.projectSlug}/modules/${key}`);
+  }
+  return page;
+}
+
+export async function deleteWikiPageAction(input: {
+  pageId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deleteWikiPage, getWikiPage } = await import("@/lib/wiki-pages/store");
+  const { encodeModuleKey } = await import("@/lib/modules/product-module-home");
+  const existing = await getWikiPage(input.pageId);
+  await deleteWikiPage(input.pageId);
+  revalidateWikiPaths(input.projectSlug, input.pageId);
+  if (existing?.host_kind === "module") {
+    const key = encodeModuleKey(existing.host_key);
+    revalidatePath(`/projects/${input.projectSlug}/modules/${key}`);
+  }
+}
+

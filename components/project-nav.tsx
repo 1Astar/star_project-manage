@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-/** 按产品工作流：调研 → 需求 → 方案 → 原型验收 → 缺陷 → 排期复盘 → 资料 → 项目卡 */
+/** 按产品工作流：Hub → 调研 → 需求 → 方案 → 原型验收 → 缺陷 → 排期复盘 → 资料 */
 const TABS = [
+  { suffix: "", label: "Hub" },
   { suffix: "/overview", label: "总览" },
   { suffix: "/modules", label: "模块" },
   { suffix: "/interviews", label: "访谈库" },
@@ -19,7 +20,7 @@ const TABS = [
   { suffix: "/schedule", label: "进度排期" },
   { suffix: "/evolution", label: "迭代记录" },
   { suffix: "/resources", label: "资源中心" },
-  { suffix: "", label: "项目恢复" },
+  { suffix: "/recovery", label: "项目恢复" },
 ] as const;
 
 export function ProjectNav({ routeId }: { routeId: string }) {
@@ -32,7 +33,7 @@ export function ProjectNav({ routeId }: { routeId: string }) {
         const href = tab.suffix ? `${base}${tab.suffix}` : base;
         const active =
           tab.suffix === ""
-            ? pathname === base
+            ? pathname === base || pathname === `${base}/`
             : pathname === href || pathname.startsWith(`${href}/`);
 
         return (

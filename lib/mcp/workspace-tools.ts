@@ -24,6 +24,7 @@ import { logAiAction } from "@/lib/mcp/action-log";
 import { isBugTypeKey } from "@/lib/bugs/bug-type-catalog";
 import { linkItem } from "@/lib/mcp/link-item";
 import { mcpError, mcpJson } from "@/lib/mcp/response";
+import { registerWikiPageTools } from "@/lib/mcp/wiki-page-tools";
 import {
   generateProjectBrief,
   summarizeDay,
@@ -2919,4 +2920,6 @@ export function registerWorkspaceTools(server: McpServer) {
       }
     }
   );
+
+  registerWikiPageTools(server);
 }

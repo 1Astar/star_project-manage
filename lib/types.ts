@@ -509,6 +509,33 @@ export interface LearningNoteAttachment {
   created_at: string;
 }
 
+/** Wiki 页宿主：模块主页或总览实体（Notion 风层层子页） */
+export type WikiPageHostKind =
+  | "module"
+  | "requirement"
+  | "bug"
+  | "learning"
+  | "prd"
+  | "competitor";
+
+/**
+ * 项目 Wiki 页树（任意嵌套）。
+ * 根页挂在 host（模块名或实体 id）；子页用 parent_id，host 字段继承根页。
+ */
+export interface ProjectWikiPage {
+  id: string;
+  project_id: string;
+  parent_id: string | null;
+  title: string;
+  body: string;
+  sort_order: number;
+  host_kind: WikiPageHostKind;
+  /** module=模块名；其余=实体 id */
+  host_key: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /** PRD 内挂载的原型引用 */
 export interface PrdPrototypeLink {
   prototype_id: string;

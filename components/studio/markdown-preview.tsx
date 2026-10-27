@@ -1,15 +1,95 @@
 "use client";
 
+import Link from "next/link";
+import type { ReactNode } from "react";
+import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  extractMarkdownOutline,
+  slugifyHeading,
+  type OutlineItem,
+} from "@/lib/wiki-pages/outline";
 
 type MarkdownPreviewProps = {
   content: string;
   className?: string;
+  /** 给 h1–h3 打锚点 id，供悬浮大纲跳转 */
+  withHeadingIds?: boolean;
+  /** 站内相对链接同页打开（如 /projects/.../pages/...） */
+  preferInAppLinks?: boolean;
 };
 
+function textFromChildren(children: ReactNode): string {
+  if (typeof children === "string") return children;
+  if (typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(textFromChildren).join("");
+  if (children && typeof children === "object" && "props" in children) {
+    const props = (children as { props?: { children?: ReactNode } }).props;
+    return textFromChildren(props?.children);
+  }
+  return "";
+}
+
 /** 只读 Markdown 渲染（GFM：表格/任务列表/删除线等）。 */
-export function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
+export function MarkdownPreview({
+  content,
+  className,
+  withHeadingIds = false,
+  preferInAppLinks = false,
+}: MarkdownPreviewProps) {
+  const used = new Set<string>();
+  const outline = withHeadingIds ? extractMarkdownOutline(content) : [];
+  let headingCursor = 0;
+
+  const heading =
+    (Tag: "h1" | "h2" | "h3") =>
+    ({ children }: { children?: ReactNode }) => {
+      const text = textFromChildren(children).trim();
+      let id: string | undefined;
+      if (withHeadingIds && text) {
+        const fromOutline = outline[headingCursor];
+        if (fromOutline && fromOutline.text === text) {
+          id = fromOutline.id;
+          headingCursor += 1;
+        } else {
+          id = slugifyHeading(text, used);
+        }
+      }
+      return (
+        <Tag id={id} className="scroll-mt-24">
+          {children}
+        </Tag>
+      );
+    };
+
+  const components: Components = {
+    a: ({ href, children }) => {
+      const url = href ?? "";
+      const inApp =
+        preferInAppLinks &&
+        (url.startsWith("/") || url.startsWith("#")) &&
+        !url.startsWith("//");
+      if (inApp) {
+        return (
+          <Link href={url} className="text-indigo-600 underline">
+            {children}
+          </Link>
+        );
+      }
+      return (
+        <a href={url || undefined} target="_blank" rel="noreferrer noopener">
+          {children}
+        </a>
+      );
+    },
+  };
+  if (withHeadingIds) {
+    components.h1 = heading("h1");
+    components.h2 = heading("h2");
+    components.h3 = heading("h3");
+  }
+
   return (
     <div
       className={[
@@ -33,21 +113,14 @@ export function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
         className ?? "",
       ].join(" ")}
     >
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer noopener">
-              {children}
-            </a>
-          ),
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>
     </div>
   );
 }
+
+export type { OutlineItem };
 
 export function looksLikeMarkdownAsset(opts: {
   title?: string | null;

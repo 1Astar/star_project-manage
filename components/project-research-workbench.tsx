@@ -8,6 +8,7 @@ import {
   type EntityPeekPayload,
 } from "@/components/entity-side-peek";
 import { OverviewRelationLayer } from "@/components/overview-relation-layer";
+import { WikiPagesBlock } from "@/components/wiki-pages-block";
 import {
   OVERVIEW_TYPE_CARDS,
   OVERVIEW_TYPE_FILTERS,
@@ -30,7 +31,7 @@ import {
   type WorkbenchShellView,
 } from "@/lib/overview/workbench";
 import { encodeModuleKey } from "@/lib/modules/product-module-home";
-import type { Bug, Requirement } from "@/lib/types";
+import type { Bug, ProjectWikiPage, Requirement } from "@/lib/types";
 import {
   saveRequirementDetailAction,
   updateBugAction,
@@ -140,13 +141,17 @@ function RowList({
 }
 
 export function ProjectResearchWorkbench({
+  projectId,
   projectSlug,
   projectTitle,
   rows: initialRows,
   bugs,
   requirements,
   relationIndex = {},
+  wikiPages = [],
+  canEditPages = false,
 }: {
+  projectId: string;
   projectSlug: string;
   projectTitle?: string;
   rows: OverviewMatrixRow[];
@@ -154,6 +159,8 @@ export function ProjectResearchWorkbench({
   requirements: Requirement[];
   /** 服务端预计算的关联包 peekKind:entityId → bundle */
   relationIndex?: Record<string, OverviewRelationBundle>;
+  wikiPages?: ProjectWikiPage[];
+  canEditPages?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -174,6 +181,16 @@ export function ProjectResearchWorkbench({
   const [error, setError] = useState<string | null>(null);
 
   const selectedBundle = selectedKey ? relationIndex[selectedKey] ?? null : null;
+
+  const peekRootPages = useMemo(() => {
+    if (!peek) return [];
+    return wikiPages.filter(
+      (p) =>
+        p.host_kind === peek.kind &&
+        p.host_key === peek.id &&
+        (p.parent_id ?? null) === null
+    );
+  }, [peek, wikiPages]);
 
   const pendingItems = useMemo(
     () => buildWorkbenchPending({ rows, bugs, requirements }),
@@ -762,15 +779,29 @@ export function ProjectResearchWorkbench({
             onClose={closePeek}
             onSave={savePeek}
           >
-            {selectedBundle ? (
-              <OverviewRelationLayer
-                variant="embed"
-                bundle={selectedBundle}
-                onOpenItem={openRelationItem}
+            <div className="space-y-4">
+              <WikiPagesBlock
+                projectId={projectId}
+                projectSlug={projectSlug}
+                hostKind={peek.kind}
+                hostKey={peek.id}
+                parentId={null}
+                pages={peekRootPages}
+                canEdit={canEditPages}
+                compact
+                title="子页面"
+                emptyHint="像 Notion 一样在这条下建子页，写下调查与结论。"
               />
-            ) : (
-              <p className="text-xs text-slate-400">暂无关联数据。</p>
-            )}
+              {selectedBundle ? (
+                <OverviewRelationLayer
+                  variant="embed"
+                  bundle={selectedBundle}
+                  onOpenItem={openRelationItem}
+                />
+              ) : (
+                <p className="text-xs text-slate-400">暂无关联数据。</p>
+              )}
+            </div>
           </EntitySidePeek>
         </div>
       ) : null}
