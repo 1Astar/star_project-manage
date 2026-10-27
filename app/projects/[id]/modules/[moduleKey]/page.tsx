@@ -8,6 +8,7 @@ import {
   decodeModuleKey,
 } from "@/lib/modules/product-module-home";
 import { loadModuleHomeBundle } from "@/lib/modules/load-module-home-data";
+import { buildLinkedViewLibraryRows } from "@/lib/linked-views/build-libraries";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 
 export default async function ProjectModuleHomePage({
@@ -66,6 +67,15 @@ export default async function ProjectModuleHomePage({
   const session = await getAdminSession();
   const canEditBio = session?.role === "admin" && Boolean(ctx.studio?.id);
   const canEditPages = session?.role === "admin";
+  const libraries = buildLinkedViewLibraryRows({
+    routeId: ctx.routeId,
+    learnings: bundle.learnings,
+    bugs: bundle.bugs,
+    competitors: bundle.competitors,
+    prds: bundle.prds,
+    requirements: bundle.requirements,
+    modules: bundle.modules,
+  });
 
   return (
     <ProductModuleHomeView
@@ -75,6 +85,7 @@ export default async function ProjectModuleHomePage({
       canEditBio={canEditBio}
       canEditPages={canEditPages}
       home={home}
+      libraries={libraries}
     />
   );
 }

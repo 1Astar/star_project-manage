@@ -4,8 +4,23 @@ import { getMcpSecret } from "@/lib/mcp/auth";
 /** Workers 无共享内存时，用 HMAC 自包含 code/token，不依赖 Redis。 */
 const PREFIX = "spm1";
 
+function bytesToB64url(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function b64urlToBytes(s: string): Uint8Array {
+  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 function nonce(bytes = 12) {
-  return randomBytes(bytes).toString("base64url");
+  return bytesToB64url(new Uint8Array(randomBytes(bytes)));
 }
 
 type CodePayload = {
@@ -43,16 +58,24 @@ function signingKey() {
 }
 
 function b64urlJson(obj: unknown) {
-  return Buffer.from(JSON.stringify(obj), "utf8").toString("base64url");
+  return bytesToB64url(new TextEncoder().encode(JSON.stringify(obj)));
 }
 
 function sign(body: string) {
-  return createHmac("sha256", signingKey()).update(body).digest("base64url");
+  const digest = createHmac("sha256", signingKey()).update(body).digest();
+  return bytesToB64url(digest instanceof Uint8Array ? digest : new Uint8Array(digest));
 }
 
 function seal(payload: CodePayload | AccessPayload | RefreshPayload) {
   const body = b64urlJson(payload);
   return `${PREFIX}.${body}.${sign(body)}`;
+}
+
+function timingSafeStr(a: string, b: string) {
+  const ba = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (ba.length !== bb.length) return false;
+  return timingSafeEqual(ba, bb);
 }
 
 function open<T extends { typ: string; exp: number }>(
@@ -65,14 +88,12 @@ function open<T extends { typ: string; exp: number }>(
   if (!body || !mac) return null;
   const expected = sign(body);
   try {
-    const a = Buffer.from(mac);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    if (!timingSafeStr(mac, expected)) return null;
   } catch {
     return null;
   }
   try {
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;
+    const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(body))) as T;
     if (payload.typ !== typ) return null;
     if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
     return payload;

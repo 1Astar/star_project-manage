@@ -47,11 +47,15 @@ const memory = {
 };
 
 function redis(): Redis | null {
-  const url = process.env.KV_REST_API_URL?.trim() || process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const token =
-    process.env.KV_REST_API_TOKEN?.trim() || process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!url || !token) return null;
-  return new Redis({ url, token });
+  try {
+    const url = process.env.KV_REST_API_URL?.trim() || process.env.UPSTASH_REDIS_REST_URL?.trim();
+    const token =
+      process.env.KV_REST_API_TOKEN?.trim() || process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+    if (!url || !token) return null;
+    return new Redis({ url, token });
+  } catch {
+    return null;
+  }
 }
 
 function key(parts: string[]) {
@@ -80,11 +84,15 @@ export function mcpOAuthResourceUrl(origin: string) {
 }
 
 export async function saveClient(client: OAuthClient) {
-  const r = redis();
-  if (r) {
-    // ChatGPT caches client_id indefinitely; keep DCR clients ≥1y
-    await r.set(key(["client", client.client_id]), client, { ex: 60 * 60 * 24 * 400 });
-    return;
+  try {
+    const r = redis();
+    if (r) {
+      // ChatGPT caches client_id indefinitely; keep DCR clients ≥1y
+      await r.set(key(["client", client.client_id]), client, { ex: 60 * 60 * 24 * 400 });
+      return;
+    }
+  } catch {
+    /* Workers 无 KV / Redis 失败时退回内存 */
   }
   memory.clients.set(client.client_id, client);
 }
@@ -106,21 +114,29 @@ async function loadStoredClient(clientId: string): Promise<OAuthClient | null> {
   if (clientId === staticGptClient().client_id) {
     return staticGptClient();
   }
-  const r = redis();
-  if (r) {
-    return (await r.get<OAuthClient>(key(["client", clientId]))) ?? null;
+  try {
+    const r = redis();
+    if (r) {
+      return (await r.get<OAuthClient>(key(["client", clientId]))) ?? null;
+    }
+  } catch {
+    /* ignore */
   }
   return memory.clients.get(clientId) ?? null;
 }
 
 export async function getClient(clientId: string): Promise<OAuthClient | null> {
-  const stored = await loadStoredClient(clientId);
-  if (stored) return stored;
-  if (!clientId.startsWith("https://")) return null;
-  const cimd = await fetchCimdClient(clientId);
-  if (!cimd) return null;
-  await saveClient(cimd);
-  return cimd;
+  try {
+    const stored = await loadStoredClient(clientId);
+    if (stored) return stored;
+    if (!clientId.startsWith("https://")) return null;
+    const cimd = await fetchCimdClient(clientId);
+    if (!cimd) return null;
+    await saveClient(cimd);
+    return cimd;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -189,31 +205,42 @@ export async function issueAuthCode(input: {
     scope: input.scope,
     expires_at: Date.now() + 5 * 60 * 1000,
   };
-  const r = redis();
-  if (r) {
-    await r.set(key(["code", code]), record, { ex: 5 * 60 });
-  } else {
-    memory.codes.set(code, record);
+  try {
+    const r = redis();
+    if (r) {
+      await r.set(key(["code", code]), record, { ex: 5 * 60 });
+      return code;
+    }
+  } catch {
+    /* ignore Redis */
   }
+  memory.codes.set(code, record);
   return code;
 }
 
 export async function takeAuthCode(code: string): Promise<AuthCode | null> {
-  // 优先验签名（无 Redis 也能换 token）
-  const signed = verifySignedAuthCode(code);
+  let signed: ReturnType<typeof verifySignedAuthCode> = null;
+  try {
+    signed = verifySignedAuthCode(code);
+  } catch {
+    signed = null;
+  }
   if (signed) {
-    const r = redis();
-    if (r) {
-      const k = key(["code", code]);
-      const stored = await r.get<AuthCode>(k);
-      if (stored) await r.del(k);
-      // 已用过：Redis 有过记录但已被删 → 拒绝；首次无记录也允许（仅签名）
-      const usedKey = key(["code-used", signed.jti]);
-      const used = await r.get<string>(usedKey);
-      if (used) return null;
-      await r.set(usedKey, "1", { ex: 10 * 60 });
-    } else if (memory.codes.has(code)) {
-      memory.codes.delete(code);
+    try {
+      const r = redis();
+      if (r) {
+        const k = key(["code", code]);
+        const stored = await r.get<AuthCode>(k);
+        if (stored) await r.del(k);
+        const usedKey = key(["code-used", signed.jti]);
+        const used = await r.get<string>(usedKey);
+        if (used) return null;
+        await r.set(usedKey, "1", { ex: 10 * 60 });
+      } else if (memory.codes.has(code)) {
+        memory.codes.delete(code);
+      }
+    } catch {
+      /* Redis 失败仍接受签名码 */
     }
     return {
       code,
@@ -226,12 +253,16 @@ export async function takeAuthCode(code: string): Promise<AuthCode | null> {
     };
   }
 
-  const r = redis();
-  if (r) {
-    const k = key(["code", code]);
-    const data = await r.get<AuthCode>(k);
-    if (data) await r.del(k);
-    return data;
+  try {
+    const r = redis();
+    if (r) {
+      const k = key(["code", code]);
+      const data = await r.get<AuthCode>(k);
+      if (data) await r.del(k);
+      return data;
+    }
+  } catch {
+    /* ignore */
   }
   const data = memory.codes.get(code) ?? null;
   if (data) memory.codes.delete(code);
@@ -242,18 +273,22 @@ export async function takeAuthCode(code: string): Promise<AuthCode | null> {
 export async function issueTokenPair(input: { client_id: string; scope: string }) {
   const access = mintSignedAccessToken(input);
   const refresh = mintSignedRefreshToken(input);
-  const r = redis();
-  if (r) {
-    await r.set(
-      key(["token", access.token]),
-      {
-        token: access.token,
-        client_id: input.client_id,
-        scope: input.scope,
-        expires_at: Date.now() + access.expires_in * 1000,
-      } satisfies AccessTokenRecord,
-      { ex: access.expires_in }
-    );
+  try {
+    const r = redis();
+    if (r) {
+      await r.set(
+        key(["token", access.token]),
+        {
+          token: access.token,
+          client_id: input.client_id,
+          scope: input.scope,
+          expires_at: Date.now() + access.expires_in * 1000,
+        } satisfies AccessTokenRecord,
+        { ex: access.expires_in }
+      );
+    }
+  } catch {
+    /* ignore */
   }
   return {
     access_token: access.token,

@@ -63,7 +63,12 @@ export async function GET(request: Request) {
     return htmlPage("<h1>redirect_uri 不被允许</h1>", 400);
   }
 
-  const client = await ensureDcrClient(p.client_id, p.redirect_uri);
+  let client;
+  try {
+    client = await ensureDcrClient(p.client_id, p.redirect_uri);
+  } catch {
+    return htmlPage("<h1>无法校验 client</h1><p>拉取 ChatGPT 客户端元数据失败，请重试。</p>", 400);
+  }
   if (!client) {
     return htmlPage(
       "<h1>未知 client_id</h1><p>请先完成 Dynamic Client Registration，或在 ChatGPT 里删掉连接后重新添加（走 DCR）。也可手动填固定 client_id：<code>star-pm-gpt</code>。</p>",
@@ -115,7 +120,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const client = await ensureDcrClient(p.client_id, p.redirect_uri);
+  let client;
+  try {
+    client = await ensureDcrClient(p.client_id, p.redirect_uri);
+  } catch {
+    return htmlPage("<h1>无法校验 client</h1>", 400);
+  }
   if (!client || !clientAcceptsRedirect(client, p.redirect_uri)) {
     return htmlPage("<h1>client / redirect_uri 无效</h1>", 400);
   }
@@ -123,20 +133,31 @@ export async function POST(request: Request) {
     return htmlPage("<h1>缺少 PKCE S256</h1>", 400);
   }
 
-  const code = await issueAuthCode({
-    client_id: p.client_id,
-    redirect_uri: p.redirect_uri,
-    code_challenge: p.code_challenge,
-    code_challenge_method: "S256",
-    scope: p.scope || "star-pm:read star-pm:write offline_access",
-  });
+  let code: string;
+  try {
+    code = await issueAuthCode({
+      client_id: p.client_id,
+      redirect_uri: p.redirect_uri,
+      code_challenge: p.code_challenge,
+      code_challenge_method: "S256",
+      scope: p.scope || "star-pm:read star-pm:write offline_access",
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "issueAuthCode";
+    return htmlPage(`<h1>签发授权码失败</h1><p>${escapeHtml(msg)}</p>`, 500);
+  }
 
-  const redirect = new URL(p.redirect_uri);
-  redirect.searchParams.set("code", code);
-  // RFC 9207 / ChatGPT：authorization_response_iss_parameter_supported
-  redirect.searchParams.set("iss", publicOrigin(request));
-  if (p.state) redirect.searchParams.set("state", p.state);
-  return NextResponse.redirect(redirect.toString(), 302);
+  try {
+    const redirect = new URL(p.redirect_uri);
+    redirect.searchParams.set("code", code);
+    // RFC 9207 / ChatGPT：authorization_response_iss_parameter_supported
+    redirect.searchParams.set("iss", publicOrigin(request));
+    if (p.state) redirect.searchParams.set("state", p.state);
+    return NextResponse.redirect(redirect.toString(), 302);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "redirect";
+    return htmlPage(`<h1>回跳失败</h1><p>${escapeHtml(msg)}</p>`, 500);
+  }
 }
 
 function escapeAttr(value: string) {

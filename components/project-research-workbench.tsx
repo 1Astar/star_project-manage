@@ -334,7 +334,7 @@ export function ProjectResearchWorkbench({
           url: patch.fields.url || null,
           modulePath: patch.fields.module_path || null,
         });
-      } else {
+      } else if (peek.kind === "requirement") {
         await saveRequirementDetailAction({
           requirementId: peek.id,
           projectSlug,
@@ -346,7 +346,9 @@ export function ProjectResearchWorkbench({
           },
         });
       }
-      patchLocalRow(peek.id, peek.kind, patch);
+      if (peek.kind !== "prd") {
+        patchLocalRow(peek.id, peek.kind, patch);
+      }
       setPeek(null);
       setSelectedKey(null);
       startTransition(() => router.refresh());

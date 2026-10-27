@@ -28,6 +28,23 @@ function isHttpsRedirect(uri: string) {
   }
 }
 
+/** ChatGPT 稳定 CIMD；Workers 出站拉 chatgpt.com 失败时仍能授权。 */
+function knownChatGptClient(clientId: string): CimdClient | null {
+  if (clientId !== "https://chatgpt.com/oauth/client.json") return null;
+  return {
+    client_id: clientId,
+    redirect_uris: [
+      "https://chatgpt.com/connector_platform_oauth_redirect",
+      "https://chatgpt.com/connector/oauth/callback",
+    ],
+    token_endpoint_auth_method: "none",
+    client_name: "ChatGPT",
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    scope: "star-pm:read star-pm:write offline_access",
+  };
+}
+
 /**
  * Client ID Metadata Document：client_id 为 https URL。
  * 稳定文档：https://chatgpt.com/oauth/client.json
@@ -43,11 +60,19 @@ export async function fetchCimdClient(clientId: string): Promise<CimdClient | nu
   if (url.protocol !== "https:" || !isAllowedCimdHost(url.hostname)) return null;
   if (!url.pathname || url.pathname === "/") return null;
 
-  const res = await fetch(clientId, {
-    headers: { Accept: "application/json" },
-    redirect: "error",
-    signal: AbortSignal.timeout(8000),
-  });
+  const known = knownChatGptClient(clientId);
+  // 固定 ChatGPT 文档不必出站 fetch（Workers 拉 chatgpt.com 常抛错）
+  if (known) return known;
+
+  let res: Response;
+  try {
+    res = await fetch(clientId, {
+      headers: { Accept: "application/json" },
+      redirect: "follow",
+    });
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
 
   let doc: Record<string, unknown>;
@@ -57,7 +82,7 @@ export async function fetchCimdClient(clientId: string): Promise<CimdClient | nu
     return null;
   }
 
-  if (doc.client_id !== clientId) return null;
+  if (doc.client_id !== clientId) return knownChatGptClient(clientId);
 
   const rawUris = Array.isArray(doc.redirect_uris) ? doc.redirect_uris : [];
   const redirect_uris = rawUris.filter(

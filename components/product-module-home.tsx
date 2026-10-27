@@ -3,24 +3,21 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import {
-  EntitySidePeek,
-  type EntityPeekPayload,
-} from "@/components/entity-side-peek";
 import { PageFloatingToc } from "@/components/page-floating-toc";
-import { MarkdownPreview } from "@/components/studio/markdown-preview";
+import { MarkdownWithLinkedViews } from "@/components/markdown-with-linked-views";
+import { useLinkedViewPeek } from "@/components/use-linked-view-peek";
 import { WikiPagesBlock } from "@/components/wiki-pages-block";
+import { hasLinkedViewFence } from "@/lib/linked-views/config";
+import {
+  collectModuleNames,
+  collectModuleTree,
+  type LinkedViewLibraryRows,
+} from "@/lib/linked-views/build-libraries";
 import type {
   ModuleHomeLinkItem,
   ProductModuleHome,
 } from "@/lib/modules/product-module-home";
-import {
-  saveProductModuleBioAction,
-  saveRequirementDetailAction,
-  updateBugAction,
-  updateCompetitorEntryAction,
-  updateLearningNoteAction,
-} from "@/lib/actions";
+import { saveProductModuleBioAction } from "@/lib/actions";
 import {
   extractMarkdownOutline,
   mergeOutline,
@@ -111,6 +108,7 @@ export function ProductModuleHomeView({
   canEditBio,
   canEditPages = false,
   home: initial,
+  libraries,
 }: {
   projectId: string;
   projectSlug: string;
@@ -118,39 +116,60 @@ export function ProductModuleHomeView({
   canEditBio: boolean;
   canEditPages?: boolean;
   home: ProductModuleHome;
+  libraries: LinkedViewLibraryRows;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [home, setHome] = useState(initial);
   const [bio, setBio] = useState(initial.bio);
-  const [peek, setPeek] = useState<EntityPeekPayload | null>(null);
-  const [peekPending, setPeekPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bioSaved, setBioSaved] = useState(false);
+  const moduleTree = useMemo(
+    () => collectModuleTree(libraries, [home.name]),
+    [libraries, home.name]
+  );
+  const moduleOptions = useMemo(
+    () => collectModuleNames(libraries, [home.name]),
+    [libraries, home.name]
+  );
+  const {
+    openRow,
+    openPeek,
+    peekNode,
+    peekError,
+  } = useLinkedViewPeek(projectSlug, canEditBio, {
+    projectId,
+    moduleOptions,
+    moduleTree,
+  });
 
   useEffect(() => {
     setHome(initial);
     setBio(initial.bio);
   }, [initial]);
 
+  const hideFooterRelated = hasLinkedViewFence(bio);
   const outline = useMemo(
     () =>
       mergeOutline(
         extractMarkdownOutline(bio),
         { id: "mod-child-pages", text: "功能拆解与子页面", level: 2 },
-        { id: "mod-learnings", text: "知识点", level: 2 },
-        { id: "mod-requirements", text: "需求", level: 2 },
-        { id: "mod-prds", text: "PRD", level: 2 },
-        { id: "mod-bugs", text: "Bug", level: 2 },
-        { id: "mod-competitors", text: "竞品", level: 2 }
+        ...(hideFooterRelated
+          ? []
+          : [
+              { id: "mod-learnings", text: "知识点", level: 2 as const },
+              { id: "mod-requirements", text: "需求", level: 2 as const },
+              { id: "mod-prds", text: "PRD", level: 2 as const },
+              { id: "mod-bugs", text: "Bug", level: 2 as const },
+              { id: "mod-competitors", text: "竞品", level: 2 as const },
+            ])
       ),
-    [bio]
+    [bio, hideFooterRelated]
   );
 
   function openItem(item: ModuleHomeLinkItem) {
     if (!item.peekKind) return;
-    setError(null);
-    setPeek({
+    openPeek({
       kind: item.peekKind,
       id: item.id,
       title: item.title,
@@ -176,69 +195,6 @@ export function ProductModuleHomeView({
       startTransition(() => router.refresh());
     } catch (e) {
       setError(e instanceof Error ? e.message : "简介保存失败");
-    }
-  }
-
-  async function savePeek(patch: {
-    title: string;
-    fields: Record<string, string>;
-  }) {
-    if (!peek) return;
-    setPeekPending(true);
-    setError(null);
-    try {
-      if (peek.kind === "learning") {
-        await updateLearningNoteAction({
-          noteId: peek.id,
-          projectSlug,
-          title: patch.title,
-          whyText: patch.fields.why_text,
-          principle: patch.fields.principle,
-          protocol: patch.fields.protocol,
-          techBackground: patch.fields.tech_background,
-          productThinking: patch.fields.product_thinking,
-        });
-      } else if (peek.kind === "bug") {
-        await updateBugAction({
-          bugId: peek.id,
-          projectSlug,
-          updates: {
-            title: patch.title,
-            reproSteps: patch.fields.repro_steps,
-            expectedResult: patch.fields.expected_result,
-            actualResult: patch.fields.actual_result,
-            description: patch.fields.description || null,
-            suggestion: patch.fields.suggestion || null,
-            modulePath: patch.fields.module_path || null,
-          },
-        });
-      } else if (peek.kind === "competitor") {
-        await updateCompetitorEntryAction({
-          entryId: peek.id,
-          projectSlug,
-          title: patch.title,
-          summary: patch.fields.summary,
-          url: patch.fields.url || null,
-          modulePath: patch.fields.module_path || null,
-        });
-      } else {
-        await saveRequirementDetailAction({
-          requirementId: peek.id,
-          projectSlug,
-          updates: {
-            title: patch.title,
-            detail_work: patch.fields.detail_work || null,
-            acceptance_criteria: patch.fields.acceptance_criteria || null,
-            priority: patch.fields.priority || null,
-          },
-        });
-      }
-      setPeek(null);
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setPeekPending(false);
     }
   }
 
@@ -278,17 +234,20 @@ export function ProductModuleHomeView({
         <h3 className="text-sm font-semibold text-slate-900">简介</h3>
         {canEditBio && studioProjectId ? (
           <div className="mt-2 space-y-2">
-            <textarea
-              value={bio}
-              onChange={(e) => {
-                setBio(e.target.value);
+            <MarkdownWithLinkedViews
+              content={bio}
+              projectId={projectId}
+              projectSlug={projectSlug}
+              libraries={libraries}
+              canEdit
+              editing
+              defaultModuleName={home.name}
+              moduleOptions={moduleOptions}
+              onChange={(next) => {
+                setBio(next);
                 setBioSaved(false);
               }}
-              rows={10}
-              placeholder={
-                "支持 Markdown。用 ## 写章节，右侧会出现悬浮大纲。\n\n## 项目定位\n…\n\n## 使用原则\n- …\n\n## 模块工作流\n发现问题 → …"
-              }
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed text-slate-800"
+              onOpenRow={openRow}
             />
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -303,28 +262,22 @@ export function ProductModuleHomeView({
                 <span className="text-xs text-emerald-600">已保存</span>
               ) : null}
             </div>
-            {bio.trim() ? (
-              <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3">
-                <p className="mb-2 text-[11px] text-slate-400">预览</p>
-                <MarkdownPreview
-                  content={bio}
-                  withHeadingIds
-                  preferInAppLinks
-                />
-              </div>
-            ) : null}
           </div>
         ) : home.bio.trim() ? (
           <div className="mt-2">
-            <MarkdownPreview
+            <MarkdownWithLinkedViews
               content={home.bio}
-              withHeadingIds
-              preferInAppLinks
+              projectId={projectId}
+              projectSlug={projectSlug}
+              libraries={libraries}
+              defaultModuleName={home.name}
+              moduleOptions={moduleOptions}
+              onOpenRow={openRow}
             />
           </div>
         ) : (
           <p className="mt-2 text-sm text-slate-400">
-            暂无简介。登录管理员后可编辑（支持 ## 标题与站内链接）。
+            暂无简介。登录管理员后可编辑（支持 ## 标题与站内链接，可插入关联视图）。
           </p>
         )}
       </section>
@@ -343,8 +296,11 @@ export function ProductModuleHomeView({
         />
       </div>
 
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      {error || peekError ? (
+        <p className="text-xs text-red-600">{error || peekError}</p>
+      ) : null}
 
+      {hideFooterRelated ? null : (
       <div className="grid gap-3 lg:grid-cols-2">
         <RelatedBlock
           sectionId="mod-learnings"
@@ -382,15 +338,9 @@ export function ProductModuleHomeView({
           onOpen={openItem}
         />
       </div>
+      )}
 
-      {peek ? (
-        <EntitySidePeek
-          item={peek}
-          pending={peekPending}
-          onClose={() => setPeek(null)}
-          onSave={savePeek}
-        />
-      ) : null}
+      {peekNode}
     </div>
   );
 }

@@ -6,6 +6,10 @@ import { resolveProjectRoute } from "@/lib/project-bridge";
 import { buildProductModuleSummaries } from "@/lib/modules/product-module-home";
 import { resolveProjectHubMd } from "@/lib/modules/project-hub";
 import { loadModuleHomeBundle } from "@/lib/modules/load-module-home-data";
+import {
+  buildLinkedViewLibraryRows,
+  EMPTY_LINKED_VIEW_LIBRARIES,
+} from "@/lib/linked-views/build-libraries";
 
 export default async function ProjectHubPage({
   params,
@@ -31,6 +35,17 @@ export default async function ProjectHubPage({
   });
 
   const bundle = await loadModuleHomeBundle(ctx);
+  const libraries = bundle
+    ? buildLinkedViewLibraryRows({
+        routeId: ctx.routeId,
+        learnings: bundle.learnings,
+        bugs: bundle.bugs,
+        competitors: bundle.competitors,
+        prds: bundle.prds,
+        requirements: bundle.requirements,
+        modules: bundle.modules,
+      })
+    : EMPTY_LINKED_VIEW_LIBRARIES;
   const modules = bundle
     ? buildProductModuleSummaries({
         routeId: ctx.routeId,
@@ -62,6 +77,7 @@ export default async function ProjectHubPage({
   return (
     <div className="space-y-4">
       <ProjectHubView
+        projectId={bundle?.project.id ?? ctx.pmProject?.id ?? null}
         projectSlug={projectSlug}
         studioProjectId={ctx.studio?.id ?? null}
         title={title}
@@ -70,6 +86,7 @@ export default async function ProjectHubPage({
         modules={modules}
         canEdit={canEdit}
         workLinks={workLinks}
+        libraries={libraries}
       />
       {!ctx.studio ? (
         <p className="mx-auto max-w-3xl text-xs text-slate-400">
