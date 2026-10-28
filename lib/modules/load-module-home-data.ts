@@ -11,7 +11,7 @@ import { listProjectPrds } from "@/lib/prds/store";
 import type { ResolveProjectRouteResult } from "@/lib/project-bridge";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Bug, Requirement } from "@/lib/types";
+import type { Bug, ProjectLearningNote, ProjectWikiPage, Requirement } from "@/lib/types";
 import { listProjectWikiPages } from "@/lib/wiki-pages/store";
 
 const HUB_ROW_CAP = 300;
@@ -67,7 +67,8 @@ function cap<T>(rows: T[]): T[] {
   return rows.length > HUB_ROW_CAP ? rows.slice(0, HUB_ROW_CAP) : rows;
 }
 
-async function listHubRequirements(projectId: string): Promise<Requirement[]> {
+/** 项目页共用：轻量需求列表（替代 getPoolBundle） */
+export async function listHubRequirements(projectId: string): Promise<Requirement[]> {
   if (isSupabaseConfigured()) {
     const project = await findProjectBySlugOrId(projectId);
     if (!project) return [];
@@ -100,7 +101,8 @@ async function listHubRequirements(projectId: string): Promise<Requirement[]> {
   );
 }
 
-async function listHubBugs(projectId: string): Promise<Bug[]> {
+/** 项目页共用：轻量 Bug 列表 */
+export async function listHubBugs(projectId: string): Promise<Bug[]> {
   if (isSupabaseConfigured()) {
     const project = await findProjectBySlugOrId(projectId);
     if (!project) return [];
@@ -165,6 +167,24 @@ async function listHubBugs(projectId: string): Promise<Bug[]> {
   );
 }
 
+function slimLearningForHub(n: ProjectLearningNote): ProjectLearningNote {
+  // Hub 只要标题/归属计数；长正文留详情页，避免 NAS 等项目 RSC 爆内存
+  return {
+    ...n,
+    why_text: "",
+    principle: "",
+    protocol: "",
+    tech_background: "",
+    competitors: "",
+    product_thinking: "",
+    suggestions: [],
+  };
+}
+
+function slimWikiForHub(p: ProjectWikiPage): ProjectWikiPage {
+  return { ...p, body: "" };
+}
+
 /** 模块主页 / 项目 Hub 轻量包：列裁剪 + 单表失败降级，避免 CF Worker 1102 */
 export async function loadModuleHomeBundle(ctx: ResolveProjectRouteResult) {
   const project = ctx.pmProject;
@@ -183,12 +203,12 @@ export async function loadModuleHomeBundle(ctx: ResolveProjectRouteResult) {
 
   return {
     project,
-    learnings: cap(learnings),
+    learnings: cap(learnings).map(slimLearningForHub),
     bugs,
     competitors: cap(competitors),
     prds: cap(prds),
     modules,
     requirements,
-    wikiPages: cap(wikiPages),
+    wikiPages: cap(wikiPages).map(slimWikiForHub),
   };
 }

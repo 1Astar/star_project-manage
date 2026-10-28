@@ -4,9 +4,9 @@ import { resolveProjectRoute } from "@/lib/project-bridge";
 import { listCompetitorEntries } from "@/lib/competitors/store";
 import { listProjectLearningNotes } from "@/lib/learning-notes/store";
 import {
-  getPoolBundle,
-  listBugsByProject,
-} from "@/lib/db/local-store";
+  listHubBugs,
+  listHubRequirements,
+} from "@/lib/modules/load-module-home-data";
 
 export default async function ProjectCompetitorsPage({
   params,
@@ -29,11 +29,11 @@ export default async function ProjectCompetitorsPage({
     );
   }
 
-  const [entries, notes, pool, bugs] = await Promise.all([
+  const [entries, notes, hubReqs, bugs] = await Promise.all([
     listCompetitorEntries(project.id),
     listProjectLearningNotes(project.id),
-    getPoolBundle(project.id),
-    listBugsByProject(project.id),
+    listHubRequirements(project.id),
+    listHubBugs(project.id),
   ]);
 
   const learningOptions = notes.map((n) => ({
@@ -41,7 +41,7 @@ export default async function ProjectCompetitorsPage({
     title: n.title,
     href: `/projects/${ctx.routeId}/learning`,
   }));
-  const requirementOptions = (pool?.poolRequirements ?? []).map((r) => ({
+  const requirementOptions = hubReqs.map((r) => ({
     id: r.id,
     title: r.title,
     href: `/projects/${ctx.routeId}/requirements/${r.id}`,

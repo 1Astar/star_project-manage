@@ -7,7 +7,10 @@ import {
   listProjectLearningNotes,
 } from "@/lib/learning-notes/store";
 import { listCompetitorEntries } from "@/lib/competitors/store";
-import { getPoolBundle, listBugsByProject } from "@/lib/db/local-store";
+import {
+  listHubBugs,
+  listHubRequirements,
+} from "@/lib/modules/load-module-home-data";
 
 export default async function ProjectLearningPoolPage({
   params,
@@ -36,21 +39,21 @@ export default async function ProjectLearningPoolPage({
     );
   }
 
-  const [notes, pool, attachments, competitors, bugs] = await Promise.all([
+  const [notes, hubReqs, attachments, competitors, bugs] = await Promise.all([
     listProjectLearningNotes(project.id),
-    getPoolBundle(project.id),
+    listHubRequirements(project.id),
     listLearningAttachmentsForProject(project.id),
     listCompetitorEntries(project.id),
-    listBugsByProject(project.id),
+    listHubBugs(project.id),
   ]);
 
-  const requirements = (pool?.poolRequirements ?? []).map((r) => ({
+  const requirements = hubReqs.map((r) => ({
     id: r.id,
     title: r.title,
     href: `/projects/${ctx.routeId}/requirements/${r.id}`,
     kind: "requirement" as const,
     fields: [
-      { key: "detail", label: "详情", value: r.detail_work ?? "", multiline: true },
+      { key: "detail", label: "详情", value: "", multiline: true },
     ],
   }));
   const competitorOptions = competitors.map((c) => ({
@@ -72,13 +75,13 @@ export default async function ProjectLearningPoolPage({
       {
         key: "actual",
         label: "现状 / 实际",
-        value: b.actual_result ?? b.description ?? "",
+        value: "",
         multiline: true,
       },
       {
         key: "suggestion",
         label: "优化建议",
-        value: b.suggestion ?? "",
+        value: "",
         multiline: true,
       },
     ],

@@ -10,13 +10,15 @@ import {
 import { listCompetitorEntries } from "@/lib/competitors/store";
 import { listProjectPrds } from "@/lib/prds/store";
 import {
-  getPoolBundle,
   listBoardRequirementsByProject,
   listBugAttachmentsByProject,
-  listBugsByProject,
   listProjectAttachments,
   listProjectModules,
 } from "@/lib/db/local-store";
+import {
+  listHubBugs,
+  listHubRequirements,
+} from "@/lib/modules/load-module-home-data";
 import { buildOverviewMatrixRows } from "@/lib/overview/matrix-rows";
 import { buildOverviewRelationIndex } from "@/lib/overview/relations";
 import {
@@ -25,6 +27,15 @@ import {
   type OverviewThumbnail,
 } from "@/lib/overview/thumbnails";
 import { listProjectWikiPages } from "@/lib/wiki-pages/store";
+
+async function soft<T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    console.error("overview soft-fail", label, e);
+    return fallback;
+  }
+}
 
 function buildThumbMaps(
   learningAtts: Array<{
@@ -126,7 +137,7 @@ export default async function ProjectOverviewPage({
     learnings,
     bugs,
     competitors,
-    pool,
+    hubReqs,
     boardReqs,
     modules,
     learningAtts,
@@ -135,23 +146,23 @@ export default async function ProjectOverviewPage({
     prds,
     wikiPages,
   ] = await Promise.all([
-    listProjectLearningNotes(project.id),
-    listBugsByProject(project.id),
-    listCompetitorEntries(project.id),
-    getPoolBundle(project.id),
-    listBoardRequirementsByProject(project.id),
-    listProjectModules(project.id),
-    listLearningAttachmentsForProject(project.id),
-    listBugAttachmentsByProject(project.id),
-    listProjectAttachments(project.id),
-    listProjectPrds(project.id),
-    listProjectWikiPages(project.id),
+    soft("learnings", () => listProjectLearningNotes(project.id), []),
+    soft("bugs", () => listHubBugs(project.id), []),
+    soft("competitors", () => listCompetitorEntries(project.id), []),
+    soft("hubReqs", () => listHubRequirements(project.id), []),
+    soft("boardReqs", () => listBoardRequirementsByProject(project.id), []),
+    soft("modules", () => listProjectModules(project.id), []),
+    soft("learningAtts", () => listLearningAttachmentsForProject(project.id), []),
+    soft("bugAtts", () => listBugAttachmentsByProject(project.id), []),
+    soft("reqAtts", () => listProjectAttachments(project.id), []),
+    soft("prds", () => listProjectPrds(project.id), []),
+    soft("wikiPages", () => listProjectWikiPages(project.id), []),
   ]);
   const session = await getAdminSession();
   const canEditPages = session?.role === "admin";
 
   const byId = new Map(
-    [...(pool?.poolRequirements ?? []), ...boardReqs].map((r) => [r.id, r])
+    [...hubReqs, ...boardReqs].map((r) => [r.id, r])
   );
   const requirements = Array.from(byId.values());
   const { thumbsByEntityId, attachmentCountByEntityId } = buildThumbMaps(
@@ -159,6 +170,9 @@ export default async function ProjectOverviewPage({
     bugAtts,
     reqAtts
   );
+
+  // Wiki 正文改 Peek 再拉；SSR 只带壳，避免 NAS 等模块模板页拖垮 Worker
+  const slimWiki = wikiPages.map((p) => ({ ...p, body: "" }));
 
   const rows = buildOverviewMatrixRows({
     routeId: ctx.routeId,
@@ -191,7 +205,7 @@ export default async function ProjectOverviewPage({
       bugs={bugs}
       requirements={requirements}
       relationIndex={relationIndex}
-      wikiPages={wikiPages}
+      wikiPages={slimWiki}
       canEditPages={canEditPages}
     />
   );
