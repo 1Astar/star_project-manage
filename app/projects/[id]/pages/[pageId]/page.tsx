@@ -45,6 +45,7 @@ export default async function ProjectWikiPageRoute({
         prds: bundle.prds,
         requirements: bundle.requirements,
         modules: bundle.modules,
+        slimPeek: true,
       })
     : EMPTY_LINKED_VIEW_LIBRARIES;
 

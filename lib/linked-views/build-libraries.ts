@@ -101,6 +101,14 @@ export function collectModuleNames(
   return collectModuleTree(libraries, extras).map((m) => m.name);
 }
 
+function clipPeek(value: string | null | undefined, slim: boolean): string {
+  const raw = value ?? "";
+  if (!slim) return raw;
+  // Hub SSR 不塞长正文，避免 CF Worker 内存/CPU 爆；Peek 仍有字段壳可编辑
+  if (raw.length <= 160) return raw;
+  return `${raw.slice(0, 160)}…`;
+}
+
 export function buildLinkedViewLibraryRows(input: {
   routeId: string;
   learnings: ProjectLearningNote[];
@@ -109,8 +117,11 @@ export function buildLinkedViewLibraryRows(input: {
   prds: ProjectPrd[];
   requirements: Requirement[];
   modules: ModuleNode[];
+  /** Hub / 模块主页：截断大字段，防 RSC 载荷拖垮 Worker */
+  slimPeek?: boolean;
 }): LinkedViewLibraryRows {
   const routeId = input.routeId;
+  const slim = input.slimPeek === true;
   const modulesById = new Map(input.modules.map((m) => [m.id, m]));
   const learnById = new Map(input.learnings.map((n) => [n.id, n]));
 
@@ -141,13 +152,13 @@ export function buildLinkedViewLibraryRows(input: {
           {
             key: "detail_work",
             label: "详情",
-            value: r.detail_work ?? "",
+            value: clipPeek(r.detail_work, slim),
             multiline: true,
           },
           {
             key: "acceptance_criteria",
             label: "验收",
-            value: r.acceptance_criteria ?? "",
+            value: clipPeek(r.acceptance_criteria, slim),
             multiline: true,
           },
           { key: "priority", label: "优先级", value: r.priority ?? "" },
@@ -170,31 +181,31 @@ export function buildLinkedViewLibraryRows(input: {
       {
         key: "repro_steps",
         label: "操作步骤",
-        value: b.repro_steps ?? "",
+        value: clipPeek(b.repro_steps, slim),
         multiline: true,
       },
       {
         key: "expected_result",
         label: "预期",
-        value: b.expected_result ?? "",
+        value: clipPeek(b.expected_result, slim),
         multiline: true,
       },
       {
         key: "actual_result",
         label: "实际 / 现状",
-        value: b.actual_result ?? "",
+        value: clipPeek(b.actual_result, slim),
         multiline: true,
       },
       {
         key: "description",
         label: "描述 / 证据",
-        value: b.description ?? "",
+        value: clipPeek(b.description, slim),
         multiline: true,
       },
       {
         key: "suggestion",
         label: "优化建议",
-        value: b.suggestion ?? "",
+        value: clipPeek(b.suggestion, slim),
         multiline: true,
       },
       ...peekModuleFields(b.module_path ?? ""),

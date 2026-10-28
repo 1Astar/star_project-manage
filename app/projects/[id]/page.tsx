@@ -44,6 +44,7 @@ export default async function ProjectHubPage({
         prds: bundle.prds,
         requirements: bundle.requirements,
         modules: bundle.modules,
+        slimPeek: true,
       })
     : EMPTY_LINKED_VIEW_LIBRARIES;
   const modules = bundle

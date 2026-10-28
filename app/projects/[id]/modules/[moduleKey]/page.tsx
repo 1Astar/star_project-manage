@@ -76,6 +76,7 @@ export default async function ProjectModuleHomePage({
     prds: bundle.prds,
     requirements: bundle.requirements,
     modules: bundle.modules,
+    slimPeek: true,
   });
 
   return (
