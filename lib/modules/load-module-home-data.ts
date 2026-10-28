@@ -113,7 +113,7 @@ async function listHubBugs(projectId: string): Promise<Bug[]> {
       .order("created_at", { ascending: false })
       .limit(HUB_ROW_CAP);
     if (error) throw new Error(`bugs: ${error.message}`);
-    return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
       id: String(row.id),
       project_id: String(row.project_id),
       requirement_id: (row.requirement_id as string | null) ?? null,
