@@ -131,6 +131,9 @@ OpenNext 对 Next 15.5.x 会报「version not supported」：`ci-build` / `cf-bu
 
 本地一键：`npm run deploy`（内部先 OpenNext build 再 deploy，带 `--keep-vars`）。纯 Next：`npm run build:next`。
 
+**禁止双轨盖版本（硬规则）**：覆盖事故里所有坏部署的 `source` 都是 **`wrangler`**、作者同一账号。若 Cloudflare **Workers Builds**（控制台 Git 连接）在 `git push` 后自动 `wrangler deploy`，会在本地 `npm run deploy` 之后几分钟再盖一版（常见间隔 3～5 分钟），把刚修好的版本冲掉并再触发 1102。  
+**只留一条发版路径**：要么关 Workers Builds 自动部署、只本机/`npm run deploy`；要么只用控制台 Builds、本地不要再 `deploy`。发版后到 Dashboard 核对 Current Version，确认没有第二波上传。
+
 1. 安装依赖：`npm install`
 2. **Build 环境变量**：OpenNext/Next 在 `build` 阶段内联 `NEXT_PUBLIC_*`，需通过 `.env.local` / `.env*`（或 CI 环境变量）提供；`.dev.vars` 仅用于 Wrangler **运行时** secrets / `preview`，不参与 Next build。本地 preview 请保持两者值一致。
 3. 复制 `.dev.vars.example` → `.dev.vars`，填入运行时密钥（本地 preview 用）

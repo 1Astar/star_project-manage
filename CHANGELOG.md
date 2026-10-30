@@ -10,6 +10,18 @@
 
 ---
 
+## v1.23.3 · 2026-10-30
+
+相对 **v1.23.2**（本版：**MCP CPU 超时 + 查清盖版本来源**）：
+
+### 运行时 · MCP / Worker
+
+- **MCP 懒注册**：`initialize` / `ping` 等轻请求不再全量 `registerStarPmTools`（60+ 工具）；仅 `tools/list`、`tools/call` 等才注册，降低 `POST /api/mcp` CPU → 1102
+- **`wrangler.jsonc` `limits.cpu_ms: 60000`**：标准用量模型下提高单次调用 CPU 上限
+- **发版说明**：覆盖坏版本均为同账号 `wrangler`；禁止本机 deploy 与 Cloudflare Workers Builds 双轨同时开（README）
+
+---
+
 ## v1.23.2 · 2026-10-28
 
 相对 **v1.23.1**（本版：**NAS 等重项目打开仍 1102**）：
