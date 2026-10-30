@@ -83,6 +83,10 @@ export type OptimizationBundleRow = BundleRowBase & {
   detail: string;
   benefit: string;
   source: string;
+  /** 出现问题（调研笔记新列） */
+  problem?: string;
+  /** 影响（调研笔记新列） */
+  impact?: string;
 };
 
 export type CompetitorBundleRow = BundleRowBase & {
@@ -103,11 +107,17 @@ export type RequirementBundleRow = BundleRowBase & {
 export type BugBundleRow = BundleRowBase & {
   kind: "bug";
   module_path: string | null;
+  precondition?: string;
   repro_steps: string;
   expected_result: string;
   actual_result: string;
   evidence: string;
+  suggestion?: string;
   status: string | null;
+  priority?: string | null;
+  severity?: number | null;
+  /** 情况 / 原因 / 意见 / 时间等扩展列 */
+  custom_fields?: Record<string, string>;
 };
 
 export type BundleParsedRow =
@@ -488,13 +498,17 @@ function parseSheet(
       if (!title) continue;
       const section = get(["板块", "模块", "section"]);
       if (!section) warnings.push("缺板块，导入时挂到「未分板块」");
+      const knowledge = get(["知识点", "涉及知识点", "关联学习"]);
+      if (knowledge) links.learningTitles.push(...splitTitles(knowledge));
       rows.push({
         kind: "optimization",
         title,
         section_title: section || "未分板块",
         detail: get(["优化内容", "内容", "详情", "detail"]),
         benefit: get(["预期收益", "收益", "benefit"]),
-        source: get(["出处", "来源", "source"]),
+        source: get(["出处", "来源", "source", "时间"]),
+        problem: get(["出现问题", "问题", "problem"]) || undefined,
+        impact: get(["影响", "impact"]) || undefined,
         links,
         warnings,
         sourceRow: r,
@@ -531,7 +545,7 @@ function parseSheet(
         sourceRow: r,
       });
     } else {
-      // bug：兼容 Bug表「问题描述 / 现状 / 影响 / 板块 / 出处」
+      // bug：兼容 Bug表「问题描述 / 步骤 / 影响 / 情况 / 优先级 / 严重程度 …」
       const title = get([
         "问题描述",
         "标题",
@@ -543,22 +557,49 @@ function parseSheet(
       if (!title) continue;
       const statusQuo = get(["现状", "实际", "实际结果", "actual"]);
       const impact = get(["影响", "impact"]);
-      const source = get(["出处", "来源", "source"]);
+      const source = get(["出处", "来源", "source", "时间"]);
+      const situation = get(["情况", "现状分类"]);
+      const cause = get(["原因", "cause"]);
+      const opinion = get(["意见", "备注", "note"]);
+      const knowledge = get(["知识点", "涉及知识点", "关联学习"]);
+      if (knowledge) links.learningTitles.push(...splitTitles(knowledge));
       const evidenceParts = [
         get(["证据", "截图", "日志", "evidence"]),
         impact ? `影响：${impact}` : "",
+        situation ? `情况：${situation}` : "",
+        cause ? `原因：${cause}` : "",
+        opinion ? `意见：${opinion}` : "",
         source ? `出处：${source}` : "",
       ].filter(Boolean);
+      const custom_fields: Record<string, string> = {};
+      if (situation) custom_fields.situation = situation;
+      if (cause) custom_fields.cause = cause;
+      if (opinion) custom_fields.opinion = opinion;
+      if (impact) custom_fields.impact = impact;
+      if (source) custom_fields.source_date = source;
       rows.push({
         kind: "bug",
         title,
         module_path:
           get(["功能模块", "模块", "板块", "module"]) || null,
-        repro_steps: get(["操作步骤", "复现步骤", "steps", "repro"]),
+        precondition: get(["前置条件", "precondition"]) || undefined,
+        repro_steps: get([
+          "步骤",
+          "操作步骤",
+          "复现步骤",
+          "steps",
+          "repro",
+        ]),
         expected_result: get(["预期", "预期结果", "expected"]),
         actual_result: statusQuo || get(["实际", "实际结果", "actual"]),
         evidence: evidenceParts.join("\n"),
+        suggestion: get(["优化建议", "建议", "suggestion"]) || undefined,
+        // 「情况」是调研分类（已提/原业务问题…），不是工作流状态
         status: get(["状态", "status"]) || null,
+        priority: get(["优先级", "priority"]) || null,
+        severity: mapBugSeverity(get(["严重程度", "severity", "等级"])),
+        custom_fields:
+          Object.keys(custom_fields).length > 0 ? custom_fields : undefined,
         links,
         warnings,
         sourceRow: r,
@@ -594,6 +635,30 @@ export async function parseWorkbookBundle(
       rows: parseSheet(sheet, kind),
       ignored: false,
     });
+  }
+
+  // 有专用 Bug表/优化表时跳过「总表」，避免同一条目导入两遍
+  const hasDedicatedBug = sheets.some(
+    (s) =>
+      !s.ignored &&
+      s.kind === "bug" &&
+      s.sheetName.trim() !== "总表" &&
+      s.rows.length > 0
+  );
+  const hasDedicatedOpt = sheets.some(
+    (s) =>
+      !s.ignored &&
+      s.kind === "optimization" &&
+      s.sheetName.trim() !== "总表" &&
+      s.rows.length > 0
+  );
+  if (hasDedicatedBug || hasDedicatedOpt) {
+    for (const s of sheets) {
+      if (s.sheetName.trim() !== "总表" || s.ignored) continue;
+      s.ignored = true;
+      s.rows = [];
+      s.note = "已有 Bug表/优化表，跳过总表以免重复导入";
+    }
   }
 
   const summary = {
@@ -948,8 +1013,59 @@ function mapBugStatus(raw: string | null): TaskStatus {
   return "pending";
 }
 
+/** 1 致命 … 4 轻微；兼容中文「严重/一般/建议」 */
+function mapBugSeverity(raw: string | null): number | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  if (/^[1-4]$/.test(t)) return Number(t);
+  if (/致命|critical/i.test(t)) return 1;
+  if (/严重|高|high/i.test(t)) return 2;
+  if (/一般|中|medium|normal/i.test(t)) return 3;
+  if (/轻微|建议|低|low|trivial/i.test(t)) return 4;
+  return null;
+}
+
+/** 优先级：较高/一般 → P1/P2 */
+function mapBugPriority(raw: string | null): "P0" | "P1" | "P2" | "P3" | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  if (/^P[0-3]$/i.test(t)) return t.toUpperCase() as "P0" | "P1" | "P2" | "P3";
+  if (/紧急|最高|P0|致命/.test(t)) return "P0";
+  if (/较高|高|重要|P1/.test(t)) return "P1";
+  if (/一般|中|普通|P2/.test(t)) return "P2";
+  if (/较低|低|建议|P3/.test(t)) return "P3";
+  return null;
+}
+
+/** 去 [模块]/【优化】 前缀再比标题，避免重复入库 */
 function titleKey(s: string) {
-  return s.trim().toLowerCase().replace(/\s+/g, "");
+  return s
+    .trim()
+    .replace(/^[\[【][^\]】]+[\]】]\s*/u, "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function withModuleTitlePrefix(modulePath: string | null | undefined, title: string): string {
+  const t = title.trim();
+  if (!t) return t;
+  if (/^[\[【]/.test(t)) return t;
+  const mod = (modulePath ?? "")
+    .trim()
+    .replace(/^[\[【]+/, "")
+    .replace(/[\]】]+$/, "")
+    .trim();
+  if (!mod) return t;
+  return `[${mod}] ${t}`;
+}
+
+function withOptimizationTitle(title: string): string {
+  const t = title.trim();
+  if (!t) return t;
+  if (/^[\[【]\s*优化\s*[\]】]/.test(t)) return t;
+  // 已有其它 [模块] 前缀则保留
+  if (/^[\[【]/.test(t)) return t;
+  return `[优化] ${t}`;
 }
 
 function findByTitle<T extends { id: string; title: string }>(
@@ -1270,24 +1386,39 @@ export async function commitWorkbookBundle(
           }
         }
       } else if (row.kind === "optimization") {
-        // 优化表 → Bug：标题=优化建议，suggestion=内容/收益/出处；可再一键生成需求
+        // 优化表 → Bug 表行：标题带 [优化]，suggestion=问题/内容/收益/出处，便于总览分「优化建议」
         const ck = conflictKey("optimization", row.title);
         if (skipUpdateKeys.has(ck)) continue;
 
+        const title = withOptimizationTitle(row.title);
         const detailParts = [
+          row.problem?.trim() ? `出现问题：${row.problem.trim()}` : "",
+          row.impact?.trim() ? `影响：${row.impact.trim()}` : "",
           row.detail?.trim() || "",
           row.benefit?.trim() ? `预期收益：${row.benefit.trim()}` : "",
           row.source?.trim() ? `出处：${row.source.trim()}` : "",
         ].filter(Boolean);
         const suggestionText = detailParts.join("\n");
+        const description = row.section_title
+          ? `来自优化表 · 板块：${row.section_title}`
+          : "来自优化表导入";
+        const optFields: Record<string, string> = {};
+        if (row.problem?.trim()) optFields.problem = row.problem.trim();
+        if (row.impact?.trim()) optFields.impact = row.impact.trim();
+        if (row.source?.trim()) optFields.source_date = row.source.trim();
         const existing = resolveByConflictOrTitle("optimization", row.title, bugs);
         if (existing) {
           await updateBug(existing.id, {
-            title: row.title,
+            title,
             module_path: row.section_title || existing.module_path || undefined,
             suggestion: suggestionText || existing.suggestion || undefined,
+            description: description || existing.description || undefined,
+            custom_fields: {
+              ...(existing.custom_fields ?? {}),
+              ...optFields,
+            },
           });
-          bugByTitle.set(titleKey(row.title), existing.id);
+          bugByTitle.set(titleKey(title), existing.id);
           result.updated.optimization += 1;
           pendingLinkJobs.push({
             kind: "bug",
@@ -1305,16 +1436,15 @@ export async function commitWorkbookBundle(
         } else {
           const created = await createBug({
             project_id: projectId,
-            title: row.title,
+            title,
             module_path: row.section_title || undefined,
             suggestion: suggestionText || undefined,
-            description: row.section_title
-              ? `来自优化表 · 板块：${row.section_title}`
-              : "来自优化表导入",
+            description,
             status: "pending",
+            custom_fields: Object.keys(optFields).length ? optFields : undefined,
             notify: false,
           });
-          bugByTitle.set(titleKey(row.title), created.id);
+          bugByTitle.set(titleKey(title), created.id);
           bugs = [...bugs, created];
           result.created.optimization += 1;
           pendingLinkJobs.push({
@@ -1423,6 +1553,7 @@ export async function commitWorkbookBundle(
         const ck = conflictKey("bug", row.title);
         if (skipUpdateKeys.has(ck)) continue;
         const existing = resolveByConflictOrTitle("bug", row.title, bugs);
+        const title = withModuleTitlePrefix(row.module_path, row.title);
         const evidenceUrls = [
           ...row.links.urls,
           ...extractUrls(row.evidence).urls,
@@ -1431,19 +1562,38 @@ export async function commitWorkbookBundle(
           row.evidence?.trim() ? `证据：${row.evidence.trim()}` : "",
           evidenceUrls.length ? `链接：${evidenceUrls.join(" ")}` : "",
         ].filter(Boolean);
+        const priority = mapBugPriority(row.priority ?? null);
+        const severityRaw = row.severity ?? undefined;
+        const severity =
+          severityRaw === 1 ||
+          severityRaw === 2 ||
+          severityRaw === 3 ||
+          severityRaw === 4
+            ? severityRaw
+            : undefined;
+        const customFields = row.custom_fields ?? {};
         if (existing) {
           await updateBug(existing.id, {
-            title: row.title,
+            title,
             module_path: row.module_path ?? undefined,
+            precondition:
+              row.precondition || existing.precondition || undefined,
             repro_steps: row.repro_steps || existing.repro_steps || undefined,
             expected_result:
               row.expected_result || existing.expected_result || undefined,
             actual_result:
               row.actual_result || existing.actual_result || undefined,
+            suggestion: row.suggestion || existing.suggestion || undefined,
             description: descParts.join("\n") || existing.description || undefined,
-            status: mapBugStatus(row.status),
+            status: row.status ? mapBugStatus(row.status) : undefined,
+            priority: priority ?? undefined,
+            severity,
+            custom_fields: {
+              ...(existing.custom_fields ?? {}),
+              ...customFields,
+            },
           });
-          bugByTitle.set(titleKey(row.title), existing.id);
+          bugByTitle.set(titleKey(title), existing.id);
           result.updated.bug += 1;
           pendingLinkJobs.push({
             kind: "bug",
@@ -1462,16 +1612,23 @@ export async function commitWorkbookBundle(
         } else {
           const created = await createBug({
             project_id: projectId,
-            title: row.title,
+            title,
             module_path: row.module_path ?? undefined,
+            precondition: row.precondition || undefined,
             repro_steps: row.repro_steps || undefined,
             expected_result: row.expected_result || undefined,
             actual_result: row.actual_result || undefined,
+            suggestion: row.suggestion || undefined,
             description: descParts.join("\n") || undefined,
             status: mapBugStatus(row.status),
+            priority: priority ?? undefined,
+            severity,
+            custom_fields: Object.keys(customFields).length
+              ? customFields
+              : undefined,
             notify: false,
           });
-          bugByTitle.set(titleKey(row.title), created.id);
+          bugByTitle.set(titleKey(title), created.id);
           bugs = [...bugs, created];
           result.created.bug += 1;
           pendingLinkJobs.push({
@@ -1746,13 +1903,27 @@ const TEMPLATE_SHEETS: Array<{
   },
   {
     name: "优化表",
-    headers: ["板块", "优化建议", "优化内容", "预期收益", "出处"],
+    headers: [
+      "板块",
+      "优化建议",
+      "出现问题",
+      "影响",
+      "优化内容",
+      "预期收益",
+      "出处",
+      "相关图",
+      "相关图2",
+    ],
     sample: [
       "存储",
       "一键 RAID 预设",
+      "创建池门槛高",
+      "小白配不出安全阵列",
       "提供类似 RAID 10 的一键预设",
       "降低配置门槛",
       "调研笔记",
+      "",
+      "",
     ],
   },
   {
@@ -1802,13 +1973,20 @@ const TEMPLATE_SHEETS: Array<{
   {
     name: "Bug",
     headers: [
-      "问题标题",
+      "问题描述",
       "功能模块",
-      "操作步骤",
+      "步骤",
       "预期",
-      "实际",
-      "证据",
-      "状态",
+      "现状",
+      "影响",
+      "情况",
+      "原因",
+      "意见",
+      "优先级",
+      "严重程度",
+      "出处",
+      "相关图",
+      "相关图2",
       "关联学习",
       "关联竞品",
       "关联需求",
@@ -1820,8 +1998,15 @@ const TEMPLATE_SHEETS: Array<{
       "打开帮助",
       "术语正确",
       "写错校验位",
-      "见截图",
-      "待确认",
+      "用户误解可靠性",
+      "已提",
+      "文案过时",
+      "改文案+加图示",
+      "P1",
+      "3",
+      "调研笔记",
+      "",
+      "",
       "RAID 原理",
       "群晖",
       "存储可靠性",
