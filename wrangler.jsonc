@@ -31,10 +31,7 @@
   "vars": {
     "NEXT_PUBLIC_CF_WORKER": "1"
   },
-  // Paid / standard：提高单次调用 CPU，缓解 MCP 全量注册与重页面 1102
-  "limits": {
-    "cpu_ms": 60000
-  },
+  // Free 套餐不支持 limits.cpu_ms（API 100328）；升级 Paid 后再加，例如 "cpu_ms": 60000
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

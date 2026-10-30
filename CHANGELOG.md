@@ -17,7 +17,7 @@
 ### 运行时 · MCP / Worker
 
 - **MCP 懒注册**：`initialize` / `ping` 等轻请求不再全量 `registerStarPmTools`（60+ 工具）；仅 `tools/list`、`tools/call` 等才注册，降低 `POST /api/mcp` CPU → 1102
-- **`wrangler.jsonc` `limits.cpu_ms: 60000`**：标准用量模型下提高单次调用 CPU 上限
+- **CPU 上限**：当前账号为 Free，无法设 `limits.cpu_ms`（API 100328）；升级 Paid 后再加。本版靠懒注册减负
 - **发版说明**：覆盖坏版本均为同账号 `wrangler`；禁止本机 deploy 与 Cloudflare Workers Builds 双轨同时开（README）
 
 ---
