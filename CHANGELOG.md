@@ -10,6 +10,18 @@
 
 ---
 
+## v1.23.4 · 2026-11-03
+
+相对 **v1.23.3**（本版：**PRD 页签 MCP 导入/删除**）：
+
+### MCP · PRD 工作区
+
+- **`list_prds` / `create_prd` / `update_prd` / `delete_prd`**：写入 `project_prds`，出现在项目「PRD」页签（不是 Wiki 子页）
+- **`create_prd`**：可传 `markdown`（经 `import-text` 转 HTML 大纲）或 `htmlContent`；`modulePath` 用于左侧板块分组
+- **配套**：落地 `lib/prds/import-text.ts`（md/html/纯文本 → PRD HTML）
+
+---
+
 ## v1.23.3 · 2026-10-30
 
 相对 **v1.23.2**（本版：**MCP CPU 超时 + 查清盖版本来源**）：
