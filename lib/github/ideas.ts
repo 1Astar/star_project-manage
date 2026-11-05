@@ -1,4 +1,4 @@
-import { parseRepoFullName } from "@/lib/github/client";
+import { githubApiHeaders, parseRepoFullName } from "@/lib/github/client";
 
 export interface GitHubIssue {
   number: number;
@@ -11,12 +11,6 @@ export interface GitHubIssue {
   updated_at: string;
 }
 
-function getGitHubToken(): string {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("未配置 GITHUB_TOKEN 环境变量");
-  return token;
-}
-
 export function getIdeasRepoFullName(): string {
   return process.env.STUDIO_IDEAS_REPO?.trim() || "1Astar/star_project-manage";
 }
@@ -25,9 +19,7 @@ async function githubFetch(path: string, init?: RequestInit) {
   const res = await fetch(`https://api.github.com${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${getGitHubToken()}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
+      ...githubApiHeaders(),
       ...(init?.headers ?? {}),
     },
     next: { revalidate: 0 },

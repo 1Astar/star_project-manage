@@ -24,7 +24,10 @@ export const MARKET_COMPETITOR_LINK_STATUS = MARKET_COMPETITOR_FORMAL_URL
   ? ("formal" as const)
   : ("pending_formal" as const);
 
-/** 功能竞品：站内静态离线学习地图 */
+/**
+ * 功能竞品：站内静态离线学习地图。
+ * 图已拆到 /competitor-maps/assets/，勿再把大图 base64 塞回单 HTML（CF Worker 易 1102）。
+ */
 export const FEATURE_COMPETITOR_MAP_PATH = "/competitor-maps/nas-offline.html";
 
 /** 功能页默认锚定到能力地图（含深度对照） */

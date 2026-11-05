@@ -14,7 +14,7 @@ import {
   collectModuleTree,
   type LinkedViewLibraryRows,
 } from "@/lib/linked-views/build-libraries";
-import { updateWikiPageAction } from "@/lib/actions";
+import { deleteWikiPageAction, updateWikiPageAction } from "@/lib/actions";
 import { joinPageProps, splitPageProps } from "@/lib/wiki-pages/page-props";
 import { encodeModuleKey } from "@/lib/modules/product-module-home";
 import {
@@ -114,7 +114,7 @@ export function WikiPageView({
   const displayBody = splitPageProps(editing ? body : page.body).markdown.trim();
 
   return (
-    <div className="relative xl:pr-48">
+    <div className="relative">
       <PageFloatingToc items={outline} />
 
       <div className="mx-auto max-w-3xl space-y-4">
@@ -154,7 +154,7 @@ export function WikiPageView({
           {pending ? <span className="ml-2">刷新中…</span> : null}
         </nav>
 
-        <article className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 sm:p-6">
+        <article className="space-y-3 px-1 sm:px-2">
           {canEdit ? (
             <input
               value={title}
@@ -248,6 +248,40 @@ export function WikiPageView({
                   取消
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-600"
+                onClick={() => {
+                  if (
+                    !confirm(
+                      "删除此页及其全部子页？此操作不可撤销。"
+                    )
+                  ) {
+                    return;
+                  }
+                  setError(null);
+                  startTransition(async () => {
+                    try {
+                      await deleteWikiPageAction({
+                        pageId: page.id,
+                        projectSlug,
+                      });
+                      const back =
+                        parentPage
+                          ? `/projects/${projectSlug}/pages/${parentPage.id}`
+                          : moduleHref || `/projects/${projectSlug}/overview`;
+                      router.push(back);
+                      router.refresh();
+                    } catch (e) {
+                      setError(
+                        e instanceof Error ? e.message : "删除失败"
+                      );
+                    }
+                  });
+                }}
+              >
+                删除此页
+              </button>
               {saved ? (
                 <span className="text-xs text-emerald-600">已保存</span>
               ) : null}

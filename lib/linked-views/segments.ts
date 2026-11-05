@@ -66,16 +66,26 @@ export function explodeMdBlocks(segments: BodySegment[]): BodySegment[] {
 
 export function joinBodySegments(segments: BodySegment[]): string {
   let out = "";
+  let prevType: BodySegment["type"] | null = null;
   for (const s of segments) {
     const chunk =
       s.type === "md" ? s.text : serializeLinkedViewFence(s.config);
     if (!chunk) continue;
     if (!out) {
       out = chunk;
+      prevType = s.type;
       continue;
     }
-    const needNl = !out.endsWith("\n") && !chunk.startsWith("\n");
-    out += (needNl ? "\n" : "") + chunk;
+    // Markdown 块之间保留空行，否则标题/表格/引用粘连后会解析坏
+    if (prevType === "md" && s.type === "md") {
+      if (out.endsWith("\n\n")) out += chunk;
+      else if (out.endsWith("\n")) out += `\n${chunk}`;
+      else out += `\n\n${chunk}`;
+    } else {
+      const needNl = !out.endsWith("\n") && !chunk.startsWith("\n");
+      out += (needNl ? "\n" : "") + chunk;
+    }
+    prevType = s.type;
   }
   return out;
 }

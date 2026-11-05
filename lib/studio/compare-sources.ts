@@ -1,5 +1,5 @@
 import { getBundledCanonicalRules } from "@/lib/studio/bundled-docs";
-import { parseRepoFullName } from "@/lib/github/client";
+import { githubApiHeaders, parseRepoFullName } from "@/lib/github/client";
 import { getProjectById } from "@/lib/studio/data";
 
 export type SourceSnapshot = {
@@ -24,17 +24,12 @@ async function fetchGitHubTip(
   repoFullName: string,
   branch: string
 ): Promise<{ sha: string; date: string; message: string } | null> {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return null;
+  if (!process.env.GITHUB_TOKEN) return null;
   const { owner, repo } = parseRepoFullName(repoFullName);
   const res = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(branch)}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: githubApiHeaders(),
       next: { revalidate: 0 },
     }
   );

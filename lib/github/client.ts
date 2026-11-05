@@ -18,6 +18,17 @@ function getGitHubToken(): string {
   return token;
 }
 
+/** GitHub REST 强制要求 User-Agent，缺省会被 403 Forbidden */
+export function githubApiHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    Authorization: `Bearer ${getGitHubToken()}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+    "User-Agent": "star-pm",
+    ...extra,
+  };
+}
+
 /**
  * 把 GitHub 仓库输入归一为 owner/repo。
  * 接受：owner/repo、https://github.com/owner/repo(.git)、git@github.com:owner/repo.git
@@ -74,11 +85,7 @@ export async function fetchRecentCommits(
   }
 
   const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${getGitHubToken()}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
+    headers: githubApiHeaders(),
     next: { revalidate: 0 },
   });
 
@@ -107,11 +114,7 @@ export interface GitHubTag {
 
 async function githubFetch<T>(url: string): Promise<T> {
   const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${getGitHubToken()}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
+    headers: githubApiHeaders(),
     next: { revalidate: 0 },
   });
   if (!res.ok) {
@@ -197,12 +200,7 @@ export async function createGitHubRelease(
 
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${getGitHubToken()}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-    },
+    headers: githubApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
   if (!res.ok) {

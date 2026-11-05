@@ -393,7 +393,7 @@ export function EntitySidePeek({
 
   if (isPanel) {
     return (
-      <aside className="flex h-full min-h-0 w-full flex-col border-l border-slate-200 bg-white">
+      <aside className="flex max-h-[inherit] min-h-0 w-full flex-col bg-white">
         {body}
       </aside>
     );

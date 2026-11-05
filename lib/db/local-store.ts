@@ -2400,6 +2400,27 @@ export async function addPrototype(input: {
   return proto;
 }
 
+export async function deletePrototype(prototypeId: string): Promise<Prototype | null> {
+  const db = await readDb();
+  const existing = db.prototypes.find((p) => p.id === prototypeId) ?? null;
+  if (!existing) return null;
+
+  if (isSupabaseConfigured()) {
+    const { createServiceClient } = await import("@/lib/supabase/server");
+    const sb = createServiceClient();
+    if (sb) {
+      const { error } = await sb.from("prototypes").delete().eq("id", prototypeId);
+      if (error && !/schema cache|does not exist|Could not find/i.test(error.message)) {
+        throw new Error(error.message);
+      }
+    }
+  }
+
+  db.prototypes = db.prototypes.filter((p) => p.id !== prototypeId);
+  await saveDb(db);
+  return existing;
+}
+
 export async function getMyTodos(recipientName?: string) {
   const db = await readDb();
   const pendingTasks = db.role_tasks

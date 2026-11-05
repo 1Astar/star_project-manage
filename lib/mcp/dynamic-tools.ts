@@ -101,6 +101,7 @@ export const BUILTIN_MCP_TOOL_NAMES = new Set([
   "get_wiki_page",
   "create_wiki_page",
   "update_wiki_page",
+  "delete_wiki_page",
 ]);
 
 const NAME_RE = /^[a-z][a-z0-9_]{1,63}$/;

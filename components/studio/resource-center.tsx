@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AddAssetForm } from "@/components/studio/add-asset-form";
 import { ProjectAssetsTable } from "@/components/studio/project-assets-table";
+import { ProjectSecretsPanel } from "@/components/studio/project-secrets-panel";
 import {
   RESOURCE_CATEGORIES,
   assetTypeLabel,
   buildAutoResourceItems,
   countAssetsInCategory,
+  isResourcePanelCategory,
   normalizeAssetCategory,
   type ResourceCategoryId,
 } from "@/lib/studio/asset-categories";
@@ -20,16 +22,41 @@ type Props = {
   project: Project;
   assets: Asset[];
   releases: StudioRelease[];
+  /** 是否管理员（密钥分类仅管理员可见） */
+  isAdmin?: boolean;
 };
 
 const VERSION_STORAGE = (projectId: string) => `star-pm:resource-version:${projectId}`;
 
-export function ResourceCenter({ project, assets, releases }: Props) {
+function parseCatParam(raw: string | null): ResourceCategoryId | "all" | null {
+  if (!raw) return null;
+  if (raw === "all") return "all";
+  if (RESOURCE_CATEGORIES.some((c) => c.id === raw)) return raw as ResourceCategoryId;
+  return null;
+}
+
+export function ResourceCenter({ project, assets, releases, isAdmin = false }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
-  const [active, setActive] = useState<ResourceCategoryId | "all">("all");
+  const catFromUrl = parseCatParam(searchParams.get("cat"));
+  const [active, setActive] = useState<ResourceCategoryId | "all">(
+    catFromUrl && (catFromUrl === "secrets" ? isAdmin : true) ? catFromUrl : "all"
+  );
   const [versionTag, setVersionTag] = useState("");
+
+  const visibleCategories = useMemo(
+    () => RESOURCE_CATEGORIES.filter((c) => !c.adminOnly || isAdmin),
+    [isAdmin]
+  );
+
+  useEffect(() => {
+    const next = parseCatParam(searchParams.get("cat"));
+    if (!next) return;
+    if (next === "secrets" && !isAdmin) return;
+    setActive(next);
+  }, [searchParams, isAdmin]);
 
   useEffect(() => {
     try {
@@ -39,6 +66,14 @@ export function ResourceCenter({ project, assets, releases }: Props) {
       /* ignore */
     }
   }, [project.id]);
+
+  function selectCategory(id: ResourceCategoryId | "all") {
+    setActive(id);
+    const url = new URL(window.location.href);
+    if (id === "all") url.searchParams.delete("cat");
+    else url.searchParams.set("cat", id);
+    router.replace(`${url.pathname}${url.search}`, { scroll: false });
+  }
 
   const auto = useMemo(
     () => buildAutoResourceItems(project, { releaseTag: versionTag || null }),
@@ -71,8 +106,9 @@ export function ResourceCenter({ project, assets, releases }: Props) {
             ? [...auto.experience, ...auto.repo, ...auto.deploy]
             : [];
 
+  const showSecretsPanel = active === "secrets" && isAdmin;
   const defaultType: AssetType =
-    active === "all" ? "material" : (active as AssetType);
+    active === "all" || isResourcePanelCategory(active) ? "material" : (active as AssetType);
 
   const selectedRelease = versionTag
     ? releases.find((r) => r.tag === versionTag)
@@ -183,7 +219,9 @@ export function ResourceCenter({ project, assets, releases }: Props) {
             >
               {pending ? "同步中…" : "同步版本"}
             </button>
-            <AddAssetForm projectId={project.id} defaultAssetType={defaultType} />
+            {showSecretsPanel ? null : (
+              <AddAssetForm projectId={project.id} defaultAssetType={defaultType} />
+            )}
           </div>
         </div>
 
@@ -220,13 +258,13 @@ export function ResourceCenter({ project, assets, releases }: Props) {
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {RESOURCE_CATEGORIES.map((cat) => {
+          {visibleCategories.map((cat) => {
             const selected = active === cat.id;
             return (
               <button
                 key={cat.id}
                 type="button"
-                onClick={() => setActive(selected ? "all" : cat.id)}
+                onClick={() => selectCategory(selected ? "all" : cat.id)}
                 className={cn(
                   "rounded-xl border p-4 text-left transition",
                   selected
@@ -237,11 +275,13 @@ export function ResourceCenter({ project, assets, releases }: Props) {
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-slate-800">{cat.label}</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                    {categoryCounts[cat.id]}
+                    {cat.panel === "secrets" ? "🔐" : categoryCounts[cat.id]}
                   </span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">{cat.desc}</p>
-                {cat.auto ? (
+                {cat.panel === "secrets" ? (
+                  <p className="mt-2 text-[10px] font-medium text-indigo-600">本项目密钥 · 加密存储</p>
+                ) : cat.auto ? (
                   <p className="mt-2 text-[10px] font-medium text-indigo-600">半自动 · 读项目配置</p>
                 ) : (
                   <p className="mt-2 text-[10px] text-slate-400">手动添加</p>
@@ -254,7 +294,7 @@ export function ResourceCenter({ project, assets, releases }: Props) {
         <div className="mt-3">
           <button
             type="button"
-            onClick={() => setActive("all")}
+            onClick={() => selectCategory("all")}
             className={cn(
               "text-xs font-medium",
               active === "all" ? "text-indigo-700" : "text-slate-500 hover:text-slate-700"
@@ -265,44 +305,58 @@ export function ResourceCenter({ project, assets, releases }: Props) {
         </div>
       </section>
 
-      {autoForActive.length > 0 ? (
-        <section className="rounded-xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-medium text-slate-500">
-            来自项目配置
-          </div>
-          <ul className="divide-y divide-slate-100">
-            {autoForActive.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-start justify-between gap-2 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-800">{item.title}</p>
-                  {item.note ? (
-                    <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500">{item.note}</p>
-                  ) : null}
-                </div>
-                {item.url ? (
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-xs font-medium text-indigo-600 hover:underline"
-                  >
-                    打开 →
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+      {showSecretsPanel ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-800">本项目密钥</h3>
+          <ProjectSecretsPanel projectId={project.id} embedded />
         </section>
-      ) : null}
+      ) : (
+        <>
+          {autoForActive.length > 0 ? (
+            <section className="rounded-xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-medium text-slate-500">
+                来自项目配置
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {autoForActive.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-start justify-between gap-2 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-800">{item.title}</p>
+                      {item.note ? (
+                        <p className="mt-0.5 whitespace-pre-wrap text-xs text-slate-500">
+                          {item.note}
+                        </p>
+                      ) : null}
+                    </div>
+                    {item.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 text-xs font-medium text-indigo-600 hover:underline"
+                      >
+                        打开 →
+                      </a>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
-      <section>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-700">
-            {active === "all" ? "已登记资料" : `${assetTypeLabel(active)} · 已登记`}
-          </h3>
-        </div>
-        <ProjectAssetsTable assets={filteredAssets} />
-      </section>
+          <section>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-slate-700">
+                {active === "all" ? "已登记资料" : `${assetTypeLabel(active)} · 已登记`}
+              </h3>
+            </div>
+            <ProjectAssetsTable assets={filteredAssets} />
+          </section>
+        </>
+      )}
     </div>
   );
 }

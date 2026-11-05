@@ -66,7 +66,7 @@ export async function createProjectSecret(
 
   const name = input.name.trim();
   if (!name) throw new Error("名称必填");
-  if (!input.value) throw new Error("值必填");
+  // 允许先存名、值稍后填；空串也会加密入库
 
   await assertProjectExists(projectId);
 
@@ -75,7 +75,7 @@ export async function createProjectSecret(
     id: secretId(),
     project_id: projectId,
     name,
-    encrypted_value: encryptSecret(input.value),
+    encrypted_value: encryptSecret(input.value ?? ""),
     created_at: now,
     updated_at: now,
   };
@@ -120,7 +120,6 @@ export async function updateProjectSecret(
   };
 
   if (input.value !== undefined) {
-    if (!input.value) throw new Error("值不能为空");
     patch.encrypted_value = encryptSecret(input.value);
   }
 
@@ -182,7 +181,6 @@ export async function upsertProjectSecretByName(
   }
   const name = input.name.trim();
   if (!name) throw new Error("名称必填");
-  if (!input.value) throw new Error("值必填");
   await assertProjectExists(projectId);
 
   const { data: existing, error: fetchError } = await sb()

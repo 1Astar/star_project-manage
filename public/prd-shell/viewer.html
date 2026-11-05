@@ -64,6 +64,11 @@
     .on-page:hover,.on-page:focus-within { width:280px; padding:18px 20px; border-color:#e8eaf0; background:rgba(255,255,255,.98); box-shadow:0 14px 34px rgba(3,17,33,.12); }
     .on-page-title { height:0; margin:0; overflow:hidden; font-size:14px; font-weight:600; opacity:0; transition:height .12s ease, margin .12s ease, opacity .12s ease; white-space:nowrap; }
     .on-page:hover .on-page-title,.on-page:focus-within .on-page-title { height:auto; margin:0 0 10px; opacity:1; }
+    .on-page-version { display:none; margin:0 0 12px; padding:0 0 12px; border-bottom:1px solid transparent; }
+    body.host-mode .on-page-version { display:block; }
+    .on-page-version-select { display:none; width:100%; box-sizing:border-box; margin:0; padding:6px 8px; border:1px solid #e8eaf0; border-radius:8px; background:#fff; color:var(--ink); font:13px "PingFang SC",sans-serif; }
+    .on-page:hover .on-page-version,.on-page:focus-within .on-page-version { border-bottom-color:#e8eaf0; }
+    .on-page:hover .on-page-version-select,.on-page:focus-within .on-page-version-select { display:block; }
     .on-page a { position:relative; display:block; height:14px; padding:0; color:transparent; font-size:13px; line-height:14px; text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:height .12s ease, padding .12s ease, color .12s ease; }
     .on-page a::after { content:''; position:absolute; top:6px; right:0; width:7px; height:3px; border-radius:3px; background:#cfd4dc; transition:background .12s ease; }
     .on-page a.active::after { background:var(--blue); width:11px; }
@@ -544,7 +549,16 @@
 <table><thead><tr><th>场景</th><th>预期结果</th></tr></thead><tbody><tr><td>登录进入桌面</td><td>自动检测 OS 与客户端更新状态，并根据展示优先级规则展示更新弹窗</td></tr><tr><td>OS 与客户端均有更新</td><td>优先展示 OS 更新弹窗</td></tr><tr><td>OS 有更新，客户端无更新或异常（失败、超时）</td><td>只展示 OS 更新弹窗</td></tr><tr><td>OS 无更新或异常（失败、超时），客户端有更新</td><td>展示客户端更新弹窗</td></tr><tr><td>OS 与客户端均无更新</td><td>无更新弹窗</td></tr><tr><td>OS 与客户端均返回异常（失败、超时）</td><td>按现有业务进行提示</td></tr><tr><td>OS 更新完成并重启</td><td>返回桌面后触发展示规则，客户端有更新时展示客户端更新弹窗</td></tr><tr><td>OS 更新弹窗关闭或用户忽略本次更新</td><td>客户端有更新时直接展示客户端更新弹窗</td></tr><tr><td>进入「设置」→「系统设置」</td><td>自动检测 OS 与客户端，并分别更新版本信息行</td></tr><tr><td>在系统设置页面手动检查 OS</td><td>仅检测 OS；结果更新在 OS 版本信息行；有更新时点击「发现新版本，点击下载」展示 OS 更新弹窗</td></tr><tr><td>在系统设置页面手动检查客户端</td><td>仅检测客户端；结果更新在客户端版本信息行；有更新时点击「发现新版本，点击下载」展示客户端更新弹窗</td></tr><tr><td>手动检查结果为无更新</td><td>对应版本信息行展示「已是最新版本」</td></tr><tr><td>手动检查结果为异常（失败、超时）</td><td>对应版本信息行展示异常状态</td></tr><tr><td>手动检查所选项目有更新，点击「发现新版本，点击下载」</td><td>点击对应更新入口后展示该项目的更新弹窗</td></tr></tbody></table>
   </main>
   <nav id="phase-pager" class="phase-pager" aria-label="期次快捷跳转"></nav>
-  <aside class="on-page" aria-label="本页索引"><p class="on-page-title">本页目录</p><nav id="on-page-links"></nav></aside>
+  <aside class="on-page" aria-label="本页索引">
+    <div class="on-page-version" id="on-page-version">
+      <p class="on-page-title">小版本切换</p>
+      <select id="on-page-version-select" class="on-page-version-select" title="同一文档的快照历史" aria-label="小版本切换">
+        <option value="current">当前稿（可编辑）</option>
+      </select>
+    </div>
+    <p class="on-page-title">本页目录</p>
+    <nav id="on-page-links"></nav>
+  </aside>
   <aside id="review-sidebar" class="review-sidebar" aria-label="审阅评论与本页目录"><div class="review-head"><div class="review-tabs" role="tablist" aria-label="侧栏内容"><button id="review-tab-comments" class="active" type="button" role="tab" aria-selected="true">评论 <span id="review-count"></span></button><button id="review-tab-index" type="button" role="tab" aria-selected="false">本页目录</button></div><button id="review-close" type="button" aria-label="收起侧栏">✕</button></div><div id="review-list" class="review-list" role="tabpanel"></div><nav id="review-index" class="review-index" aria-label="本页目录"></nav></aside>
   </div>
   </div>
@@ -1816,17 +1830,51 @@
 
     function notifyHost() {
       if (!HOST_MODE) return;
+      try { commitCurrentPage(); } catch (_) {}
       const current = pageById(pageState.activeId);
       if (current?.prototypeUrl) return;
       try {
         parent.postMessage({
           type: 'STAR_PRD_CHANGE',
           html: documentArea.innerHTML,
-          title: documentArea.querySelector('h1')?.textContent || '',
-          pages: pageState.pages,
+          title: documentArea.querySelector('h1')?.textContent || current?.title || '',
+          activeId: pageState.activeId,
+          pages: pageState.pages.map(page => ({
+            id: page.id,
+            title: page.title,
+            parentId: page.parentId ?? null,
+            order: page.order ?? 0,
+            expanded: page.expanded !== false,
+            content: page.content || '',
+            prototypeUrl: page.prototypeUrl || undefined,
+          })),
           comments: current?.comments || []
         }, '*');
       } catch (_) {}
+    }
+
+    function renderHostVersionSelect(data) {
+      const select = document.getElementById('on-page-version-select');
+      if (!select) return;
+      const versions = Array.isArray(data?.versions) ? data.versions : [];
+      const current = data?.viewVersionId || 'current';
+      select.innerHTML = '';
+      const optCurrent = document.createElement('option');
+      optCurrent.value = 'current';
+      optCurrent.textContent = '当前稿（可编辑）';
+      select.appendChild(optCurrent);
+      versions.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = String(v.id);
+        opt.textContent = v.created_at
+          ? `${v.label} · ${String(v.created_at).slice(0, 10)}`
+          : String(v.label || v.id);
+        select.appendChild(opt);
+      });
+      select.value = versions.some(v => String(v.id) === String(current))
+        ? String(current)
+        : 'current';
+      select.disabled = !hostEditable && current === 'current' ? false : false;
     }
 
     function flattenMermaidBlocksIn(root) {
@@ -1893,36 +1941,35 @@
     }
 
     async function createPage(parentId) {
-      // 宿主模式：多页尚未落库，顶层「＋ 页面」改为让外层新建一份 PRD；子页面暂不支持
-      if (HOST_MODE) {
-        if (parentId) {
-          alert('子页面目录结构即将支持落库。现在请用「＋ 页面」新建另一份 PRD，或用「＋ 原型」挂原型。');
-          return;
-        }
-        const title = await openPrdSaveModal({
-          title: '新建 PRD',
-          hint: '输入新 PRD 名称。',
-          defaultValue: '未命名 PRD'
-        });
-        if (title === null) return;
-        try {
-          parent.postMessage({
-            type: 'STAR_PRD_HOST_CREATE_PAGE',
-            title: String(title).trim() || '未命名 PRD',
-          }, '*');
-        } catch (_) {}
+      // 宿主 / 独立壳统一：在同一文档内新增页面，不再外层「新建整份 PRD」以免覆盖当前正文观感
+      if (HOST_MODE && READONLY) {
+        alert('当前为只读小版本，请先切回「当前稿」再添加页面。');
         return;
       }
       const title = await openPrdSaveModal({
         title: parentId ? '新建子页面' : '新建页面',
-        hint: '输入页面名称。',
+        hint: parentId
+          ? '在当前 PRD 下新增子页面，不会替换已有正文。'
+          : '在当前 PRD 内新增同级页面，不会替换已有正文。',
         defaultValue: '未命名页面'
       });
       if (title === null) return;
-      const siblings = childrenOf(parentId);
+      commitCurrentPage();
+      const parent = parentId ? pageById(parentId) : null;
+      const resolvedParentId = parent
+        ? parentId
+        : (pageState.pages.find(p => !p.parentId)?.id || null);
+      const siblings = childrenOf(resolvedParentId);
       const name = String(title).trim() || '未命名页面';
-      const page = { id:newId(), title:name, parentId, order:siblings.length, expanded:true, content:`<h1>${escapeHtml(name)}</h1><p><br></p>` };
-      if (parentId && pageById(parentId)) pageById(parentId).expanded = true;
+      const page = {
+        id: newId(),
+        title: name,
+        parentId: resolvedParentId,
+        order: siblings.length,
+        expanded: true,
+        content: `<h1>${escapeHtml(name)}</h1><p><br></p>`
+      };
+      if (resolvedParentId && pageById(resolvedParentId)) pageById(resolvedParentId).expanded = true;
       pageState.pages.push(page);
       savePageState();
       openPage(page.id);
@@ -4387,11 +4434,20 @@
 
     function applyHostPayload(data) {
       if (!data || typeof data !== 'object') return;
+      // 先提交当前编辑，避免宿主重载时冲掉未同步的键入（多页时尤其重要）
+      try { commitCurrentPage(); } catch (_) {}
       if (Array.isArray(data.pages) && data.pages.length) {
-        pageState.pages = data.pages.map(page => ({
-          ...page,
-          comments: Array.isArray(page.comments) ? page.comments : (Array.isArray(data.comments) ? data.comments : [])
-        }));
+        const prevById = new Map((pageState.pages || []).map(p => [p.id, p]));
+        pageState.pages = data.pages.map(page => {
+          const prev = prevById.get(page.id);
+          return {
+            ...page,
+            content: page.content != null ? page.content : (prev?.content || ''),
+            comments: Array.isArray(page.comments)
+              ? page.comments
+              : (Array.isArray(data.comments) ? data.comments : (prev?.comments || []))
+          };
+        });
         pageState.activeId = data.activeId || data.pages[0].id;
       }
       const active = pageById(pageState.activeId) || pageState.pages[0];
@@ -4407,10 +4463,14 @@
         if (section) section.textContent = data.section;
       }
       if (typeof data.review === 'boolean') setReviewOpen(data.review);
+      renderHostVersionSelect(data);
       if (active?.prototypeUrl) {
         showPrototypeFrame(active.prototypeUrl);
       } else {
-        if (typeof data.html === 'string') {
+        // 多页时以 pages[].content 为准；仅单页或主动下发 html 时覆盖当前页
+        if (Array.isArray(data.pages) && data.pages.length > 1) {
+          documentArea.innerHTML = active?.content || '<h1>未命名页面</h1><p><br></p>';
+        } else if (typeof data.html === 'string') {
           if (active) active.content = data.html;
           documentArea.innerHTML = data.html;
         } else if (active?.content) {
@@ -4422,6 +4482,14 @@
       renderPageTree();
       renderReviewComments();
     }
+
+    document.getElementById('on-page-version-select')?.addEventListener('change', event => {
+      if (!HOST_MODE) return;
+      const value = event.target?.value || 'current';
+      try {
+        parent.postMessage({ type: 'STAR_PRD_VERSION', versionId: value }, '*');
+      } catch (_) {}
+    });
 
     window.addEventListener('message', event => {
       if (event.data?.type === 'STAR_PRD_LOAD') applyHostPayload(event.data);

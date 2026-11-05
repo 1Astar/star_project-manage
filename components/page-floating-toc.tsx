@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 import type { OutlineItem } from "@/lib/wiki-pages/outline";
 
 /**
- * Notion 风右侧悬浮大纲：点标题滚动定位，滚动时高亮当前章节。
+ * 悬浮大纲（非常驻侧栏）：
+ * - 默认只显示右侧短线（图1）
+ * - 悬停整条导航时展开标题（图2）；当前章标题与短线高亮
+ * - 始终落在顶栏（含项目 Tab）下方，不盖住导航
  */
 export function PageFloatingToc({
   items,
@@ -14,6 +17,26 @@ export function PageFloatingToc({
   className?: string;
 }) {
   const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const [expanded, setExpanded] = useState(false);
+  const [topPx, setTopPx] = useState(176);
+
+  useEffect(() => {
+    const header = document.getElementById("workbench-chrome-header");
+    if (!header) return;
+    const sync = () => {
+      const bottom = header.getBoundingClientRect().bottom;
+      // 顶栏底边 + 间距；至少留出 Tab 行
+      setTopPx(Math.max(144, Math.ceil(bottom + 8)));
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(header);
+    window.addEventListener("resize", sync);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", sync);
+    };
+  }, []);
 
   useEffect(() => {
     if (items.length === 0) return;
@@ -63,35 +86,68 @@ export function PageFloatingToc({
   return (
     <aside
       className={[
-        "pointer-events-none fixed right-4 top-24 z-30 hidden w-44 xl:block",
+        // 内容带内垂直居中；z 低于 header(z-20)，不盖 Tab
+        "pointer-events-none fixed bottom-6 right-3 z-10 hidden xl:flex xl:items-center xl:justify-end",
         className,
       ].join(" ")}
+      style={{ top: topPx }}
       aria-label="页面大纲"
+      onMouseEnter={() => setExpanded(true)}
+      onMouseLeave={() => setExpanded(false)}
+      onFocus={() => setExpanded(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setExpanded(false);
+        }
+      }}
     >
-      <nav className="pointer-events-auto max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-lg shadow-slate-900/5 backdrop-blur">
-        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-          大纲
-        </p>
-        <ul className="space-y-0.5">
+      <nav
+        className={[
+          "pointer-events-auto flex max-h-full flex-col overflow-y-auto overflow-x-visible",
+          "rounded-xl transition-[padding,background-color,box-shadow,border-color] duration-150",
+          expanded
+            ? "border border-slate-200/90 bg-white/95 px-2.5 py-2 shadow-lg shadow-slate-900/8 backdrop-blur"
+            : "border border-transparent bg-transparent px-1.5 py-1",
+        ].join(" ")}
+      >
+        <ul className="flex flex-col gap-1.5">
           {items.map((it) => {
             const active = it.id === activeId;
+            const barW =
+              it.level === 1 ? "w-4" : it.level === 3 ? "w-2" : "w-3";
             return (
               <li key={it.id}>
                 <button
                   type="button"
                   onClick={() => jump(it.id)}
-                  className={[
-                    "block w-full truncate rounded-md px-2 py-1 text-left text-[12px] leading-snug transition",
-                    it.level === 1 ? "font-medium" : "",
-                    it.level === 3 ? "pl-4 text-[11px]" : "",
-                    it.level === 2 ? "pl-2" : "",
-                    active
-                      ? "bg-sky-50 text-sky-700"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800",
-                  ].join(" ")}
                   title={it.text}
+                  className="group flex w-full items-center justify-end gap-2 rounded-md py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
                 >
-                  {it.text}
+                  <span
+                    className={[
+                      "min-w-0 truncate text-right text-[12px] leading-snug transition-all duration-150",
+                      expanded
+                        ? "max-w-[10.5rem] opacity-100"
+                        : "max-w-0 overflow-hidden opacity-0",
+                      it.level === 1 ? "font-medium" : "",
+                      it.level === 3 ? "text-[11px]" : "",
+                      active
+                        ? "text-sky-700"
+                        : "text-slate-500 group-hover:text-slate-800",
+                    ].join(" ")}
+                  >
+                    {it.text}
+                  </span>
+                  <span
+                    className={[
+                      "relative h-1 shrink-0 rounded-full transition-colors",
+                      barW,
+                      // 扩大热区，方便点到短线
+                      "after:absolute after:-inset-y-2 after:-inset-x-1.5 after:content-['']",
+                      active ? "bg-sky-500" : "bg-slate-300 group-hover:bg-slate-400",
+                    ].join(" ")}
+                    aria-hidden
+                  />
                 </button>
               </li>
             );

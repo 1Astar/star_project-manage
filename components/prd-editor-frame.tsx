@@ -21,6 +21,17 @@ export type PrdHostComment = {
   replies?: Array<{ id: string; text: string; createdAt?: string }>;
 };
 
+export type PrdHostVersion = {
+  id: string;
+  label: string;
+  created_at?: string;
+};
+
+export type PrdHtmlChangeMeta = {
+  activeId?: string;
+  pages?: PrdHostPage[];
+};
+
 export function PrdEditorFrame({
   brand,
   section,
@@ -30,6 +41,8 @@ export function PrdEditorFrame({
   editable,
   review,
   comments = [],
+  versions = [],
+  viewVersionId = "current",
   revision,
   highlightTick = 0,
   commentsOpenTick = 0,
@@ -37,6 +50,7 @@ export function PrdEditorFrame({
   onCommentsChange,
   onHostCreatePage,
   onHostLinkPrototype,
+  onVersionChange,
 }: {
   brand: string;
   section: string;
@@ -46,13 +60,16 @@ export function PrdEditorFrame({
   editable: boolean;
   review: boolean;
   comments?: PrdHostComment[];
+  versions?: PrdHostVersion[];
+  viewVersionId?: string | "current";
   revision: string;
   highlightTick?: number;
   commentsOpenTick?: number;
-  onHtmlChange?: (html: string, title: string) => void;
+  onHtmlChange?: (html: string, title: string, meta?: PrdHtmlChangeMeta) => void;
   onCommentsChange?: (comments: PrdHostComment[]) => void;
   onHostCreatePage?: (title: string) => void;
   onHostLinkPrototype?: () => void;
+  onVersionChange?: (versionId: string | "current") => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
@@ -65,6 +82,8 @@ export function PrdEditorFrame({
     editable,
     review,
     comments,
+    versions,
+    viewVersionId,
   });
   payloadRef.current = {
     brand,
@@ -75,6 +94,8 @@ export function PrdEditorFrame({
     editable,
     review,
     comments,
+    versions,
+    viewVersionId,
   };
   const changeRef = useRef(onHtmlChange);
   changeRef.current = onHtmlChange;
@@ -84,6 +105,8 @@ export function PrdEditorFrame({
   hostCreateRef.current = onHostCreatePage;
   const hostLinkProtoRef = useRef(onHostLinkPrototype);
   hostLinkProtoRef.current = onHostLinkPrototype;
+  const versionRef = useRef(onVersionChange);
+  versionRef.current = onVersionChange;
   const copyWaitRef = useRef<{
     resolve: (v: { html: string; text: string }) => void;
     reject: (e: Error) => void;
@@ -102,13 +125,27 @@ export function PrdEditorFrame({
         postLoad();
       }
       if (event.data?.type === "STAR_PRD_CHANGE") {
+        const pagesPayload = Array.isArray(event.data.pages)
+          ? (event.data.pages as PrdHostPage[])
+          : undefined;
         changeRef.current?.(
           String(event.data.html ?? ""),
-          String(event.data.title ?? "")
+          String(event.data.title ?? ""),
+          {
+            activeId: event.data.activeId
+              ? String(event.data.activeId)
+              : undefined,
+            pages: pagesPayload,
+          }
         );
         if (Array.isArray(event.data.comments)) {
           commentsRef.current?.(event.data.comments as PrdHostComment[]);
         }
+      }
+      if (event.data?.type === "STAR_PRD_VERSION") {
+        versionRef.current?.(
+          (event.data.versionId as string | "current") || "current"
+        );
       }
       if (event.data?.type === "STAR_PRD_COPY_PAYLOAD") {
         const wait = copyWaitRef.current;
@@ -124,6 +161,7 @@ export function PrdEditorFrame({
         });
       }
       if (event.data?.type === "STAR_PRD_HOST_CREATE_PAGE") {
+        // 兼容旧壳：现已改为壳内同文档加页；若仍收到则忽略新建整份 PRD
         hostCreateRef.current?.(String(event.data.title ?? "未命名 PRD"));
       }
       if (event.data?.type === "STAR_PRD_HOST_LINK_PROTOTYPE") {

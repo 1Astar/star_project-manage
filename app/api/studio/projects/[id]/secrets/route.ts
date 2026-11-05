@@ -26,8 +26,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   const { id } = await context.params;
   const body = await readStudioBody<UpsertProjectSecretInput>(request);
-  if (!body?.name || body.value === undefined) {
-    return studioErr("name、value 必填");
+  if (!body?.name?.trim()) {
+    return studioErr("name 必填");
+  }
+  if (body.value === undefined) {
+    body.value = "";
   }
 
   try {

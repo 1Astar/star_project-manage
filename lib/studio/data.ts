@@ -25,6 +25,11 @@ export async function getAllIdeas() {
   return ideas;
 }
 
+export async function getIdeaById(id: string) {
+  const { ideas } = await getScopedStudioSnapshot();
+  return ideas.find((i) => i.id === id) ?? null;
+}
+
 export async function getAllEvolutionLogs() {
   const { evolutionLogs } = await getScopedStudioSnapshot();
   return evolutionLogs;

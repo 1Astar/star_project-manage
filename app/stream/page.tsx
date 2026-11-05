@@ -6,6 +6,7 @@ import { StructuredCapturePanel } from "@/components/studio/structured-capture-p
 import { IdeaDigestPanel } from "@/components/studio/idea-digest-panel";
 import { BrainstormSplitPanel } from "@/components/studio/brainstorm-split-panel";
 import { IdeaStreamTimeline } from "@/components/studio/idea-stream-timeline";
+import { IdeaStreamCards } from "@/components/studio/idea-stream-cards";
 import { InboxTableView } from "@/components/studio/inbox-table-view";
 import {
   IdeaStreamTabs,
@@ -20,7 +21,9 @@ import { getIdeaDateGroup, isIdeaOnDate } from "@/lib/studio/idea-stream-utils";
 import type { Idea, IdeaStatus } from "@/lib/studio/types";
 
 function parseView(view?: string): StreamView {
-  return view === "table" ? "table" : "timeline";
+  if (view === "table") return "table";
+  if (view === "cards" || view === "card") return "cards";
+  return "timeline";
 }
 
 type StreamKind = "star" | "planet" | "meteor";
@@ -157,7 +160,7 @@ export default async function StreamPage({
   return (
     <WorkbenchShell
       title="灵感流"
-      subtitle="脑暴洪水 · 表格可调列宽与筛选 · 时间线速记"
+      subtitle="脑暴洪水 · 时间线 / 卡片 / 表格 · 卡片可一键转需求"
       actions={<InboxSyncButton />}
       nav={
         <Suspense fallback={<div className="h-9" />}>
@@ -208,6 +211,8 @@ export default async function StreamPage({
 
         {currentView === "timeline" ? (
           <IdeaStreamTimeline items={ideasWithMeta} focusIdeaId={focusIdeaId} />
+        ) : currentView === "cards" ? (
+          <IdeaStreamCards items={ideasWithMeta} focusIdeaId={focusIdeaId} />
         ) : (
           <InboxTableView rows={ideasWithMeta} emptyMessage={emptyMessage} />
         )}

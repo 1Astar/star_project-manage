@@ -40,7 +40,7 @@ function slimWikiPage(p: {
 }
 
 /**
- * Notion 风 Wiki 页树 MCP：list / get / create / update。
+ * Notion 风 Wiki 页树 MCP：list / get / create / update / delete。
  * 挂载：hostKind+hostKey（模块名或实体 id）；子页用 parentId。
  */
 export function registerWikiPageTools(server: McpServer) {
@@ -342,6 +342,73 @@ export function registerWikiPageTools(server: McpServer) {
       } catch (error) {
         return mcpError(
           error instanceof Error ? error.message : "update_wiki_page 失败"
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    "delete_wiki_page",
+    {
+      title: "Delete Wiki Page",
+      description:
+        "硬删除 Wiki 页及其全部子页。用于清误建/重复骨架；confirm 必须为 true。站内「子页面」列表也可删。",
+      inputSchema: {
+        pageId: z.string().min(1),
+        confirm: z
+          .boolean()
+          .describe("必须传 true 才删除，防止误触"),
+      },
+    },
+    async (input) => {
+      try {
+        if (input.confirm !== true) {
+          return mcpError('请传 confirm:true 确认删除（含全部子页）');
+        }
+        const { deleteWikiPage, getWikiPage, listProjectWikiPages } =
+          await import("@/lib/wiki-pages/store");
+
+        const existing = await getWikiPage(input.pageId);
+        if (!existing) return mcpError(`页面不存在：${input.pageId}`);
+
+        const all = await listProjectWikiPages(existing.project_id);
+        const toRemove = new Set<string>([input.pageId]);
+        let grew = true;
+        while (grew) {
+          grew = false;
+          for (const p of all) {
+            if (
+              p.parent_id &&
+              toRemove.has(p.parent_id) &&
+              !toRemove.has(p.id)
+            ) {
+              toRemove.add(p.id);
+              grew = true;
+            }
+          }
+        }
+
+        await deleteWikiPage(input.pageId);
+
+        await logAiAction({
+          action: "delete_wiki_page",
+          payload: {
+            pageId: input.pageId,
+            projectId: existing.project_id,
+            title: existing.title,
+            deletedCount: toRemove.size,
+          },
+        });
+
+        return mcpJson({
+          ok: true,
+          deletedId: input.pageId,
+          deletedCount: toRemove.size,
+          title: existing.title,
+        });
+      } catch (error) {
+        return mcpError(
+          error instanceof Error ? error.message : "delete_wiki_page 失败"
         );
       }
     }

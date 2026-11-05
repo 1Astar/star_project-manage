@@ -13,6 +13,7 @@ export type ResourceCategoryId =
   | "material"
   | "prompt"
   | "api"
+  | "secrets"
   | "deploy"
   | "video";
 
@@ -22,6 +23,10 @@ export type ResourceCategoryDef = {
   desc: string;
   /** 半自动：从项目字段生成条目 */
   auto: boolean;
+  /** 非资料表：嵌入专用面板（如项目密钥） */
+  panel?: "secrets";
+  /** 仅管理员可见 */
+  adminOnly?: boolean;
 };
 
 export const RESOURCE_CATEGORIES: ResourceCategoryDef[] = [
@@ -32,6 +37,14 @@ export const RESOURCE_CATEGORIES: ResourceCategoryDef[] = [
   { id: "material", label: "素材", desc: "图片 / 竞品 / 参考素材", auto: false },
   { id: "prompt", label: "Prompt / Skill", desc: "提示词、Agent Skill、MCP 说明（归档用）", auto: false },
   { id: "api", label: "API", desc: "接口文档与密钥说明链接", auto: false },
+  {
+    id: "secrets",
+    label: "密钥",
+    desc: "本项目环境变量名与值；库内加密，可复制名/值",
+    auto: false,
+    panel: "secrets",
+    adminOnly: true,
+  },
   { id: "deploy", label: "部署", desc: "Vercel / 启动说明", auto: true },
   { id: "video", label: "视频", desc: "演示与讲解视频", auto: false },
 ];
@@ -44,6 +57,7 @@ const LEGACY_TO_CATEGORY: Record<string, ResourceCategoryId> = {
   material: "material",
   prompt: "prompt",
   api: "api",
+  secrets: "secrets",
   deploy: "deploy",
   video: "video",
   competitor: "material",
@@ -63,7 +77,16 @@ export function normalizeAssetType(type: string | null | undefined): AssetType {
 
 export function assetTypeLabel(type: string | null | undefined): string {
   const cat = normalizeAssetCategory(type);
-  return ASSET_TYPE_LABELS[cat] ?? type ?? "素材";
+  const fromCat = RESOURCE_CATEGORIES.find((c) => c.id === cat)?.label;
+  if (fromCat) return fromCat;
+  return ASSET_TYPE_LABELS[cat as AssetType] ?? type ?? "素材";
+}
+
+export function isResourcePanelCategory(
+  id: ResourceCategoryId | "all"
+): id is ResourceCategoryId {
+  if (id === "all") return false;
+  return RESOURCE_CATEGORIES.some((c) => c.id === id && c.panel);
 }
 
 export type ResourceAutoItem = {

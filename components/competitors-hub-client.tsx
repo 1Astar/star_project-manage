@@ -113,7 +113,7 @@ export function CompetitorsHubClient({
               href={marketPrimaryUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+              className="btn-primary"
             >
               {marketFormal
                 ? "打开市场竞品分析工具 ↗"
@@ -174,17 +174,14 @@ export function CompetitorsHubClient({
             </div>
           </dl>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link
-              href={featuresHref}
-              className="inline-flex items-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <Link href={featuresHref} className="btn-primary">
               打开功能竞品分析
             </Link>
             <a
               href={`/competitor-maps/nas-offline.html#${FEATURE_COMPETITOR_DEFAULT_HASH}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="btn-secondary"
             >
               新开完整地图 ↗
             </a>

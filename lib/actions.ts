@@ -1009,6 +1009,39 @@ export async function linkPrototypeToPrdAction(input: {
   revalidatePath(`/projects/${input.projectSlug}/prototype`);
 }
 
+export async function deletePrototypeAction(input: {
+  prototypeId: string;
+  projectId: string;
+  projectSlug: string;
+}) {
+  assertNotViewerWrite();
+  const { deletePrototype } = await import("@/lib/db/local-store");
+  const {
+    listProjectPrds,
+    updateProjectPrd,
+  } = await import("@/lib/prds/store");
+
+  const removed = await deletePrototype(input.prototypeId);
+  if (!removed) throw new Error("原型不存在");
+
+  // 从挂过该原型的 PRD 上摘掉链接
+  const prds = await listProjectPrds(input.projectId);
+  for (const prd of prds) {
+    if (!prd.linked_prototypes.some((l) => l.prototype_id === input.prototypeId)) {
+      continue;
+    }
+    await updateProjectPrd(prd.id, {
+      linked_prototypes: prd.linked_prototypes.filter(
+        (l) => l.prototype_id !== input.prototypeId
+      ),
+    });
+  }
+
+  revalidatePath(`/projects/${input.projectSlug}/prd`);
+  revalidatePath(`/projects/${input.projectSlug}/prototype`);
+  return removed;
+}
+
 export async function addFeatureModuleFromPrdAction(input: {
   studioProjectId: string;
   projectSlug: string;

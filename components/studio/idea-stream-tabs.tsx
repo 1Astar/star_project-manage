@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { ViewSwitch } from "@/components/view-switch";
 import { cn } from "@/lib/utils";
 
-export type StreamView = "timeline" | "table";
+export type StreamView = "timeline" | "cards" | "table";
 
 const VIEWS: { id: StreamView; label: string }[] = [
   { id: "timeline", label: "时间线" },
+  { id: "cards", label: "卡片" },
   { id: "table", label: "表格" },
 ];
 
@@ -26,23 +28,7 @@ export function IdeaStreamTabs({ currentView }: { currentView: StreamView }) {
   }
 
   return (
-    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
-      {VIEWS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          onClick={() => switchView(item.id)}
-          className={cn(
-            "rounded-lg px-4 py-1.5 text-sm font-medium transition",
-            currentView === item.id
-              ? "bg-white text-indigo-700 shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
-          )}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
+    <ViewSwitch options={VIEWS} value={currentView} onChange={switchView} />
   );
 }
 

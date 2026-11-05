@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { deletePrototypeAction } from "@/lib/actions";
 import { KanbanBoard } from "@/components/task-board";
 import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type { Prototype, Requirement, RoleTask } from "@/lib/types";
@@ -52,11 +53,30 @@ export function PrototypeWorkspace({
   const [showUpload, setShowUpload] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [protoList, setProtoList] = useState(prototypes);
+  const [activeProtoId, setActiveProtoId] = useState<string | null>(
+    prototypes.find((p) => p.requirement_id === (requirements[0]?.id ?? ""))?.id ??
+      prototypes[0]?.id ??
+      null
+  );
+
+  useEffect(() => {
+    setProtoList(prototypes);
+  }, [prototypes]);
 
   const selectedReq = requirements.find((r) => r.id === selectedReqId);
-  const prototype = prototypes.find((p) => p.requirement_id === selectedReqId) ?? prototypes[0];
+  const prototype =
+    protoList.find((p) => p.id === activeProtoId) ??
+    protoList.find((p) => p.requirement_id === selectedReqId) ??
+    protoList[0];
   const prototypeSrc = resolvePrototypeUrl(prototype?.storage_path);
   const hasPreview = Boolean(prototype?.external_url || prototypeSrc);
+
+  useEffect(() => {
+    const bound =
+      protoList.find((p) => p.requirement_id === selectedReqId) ?? protoList[0];
+    setActiveProtoId(bound?.id ?? null);
+  }, [selectedReqId, protoList]);
 
   const sidebarTasks = useMemo(
     () => tasks.filter((t) => t.requirement_id === selectedReqId),
@@ -180,9 +200,14 @@ export function PrototypeWorkspace({
   return (
     <div className="grid min-h-[70vh] gap-4 lg:grid-cols-[1.4fr_1fr]">
       <section className="card overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-sm font-medium">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-sm font-medium">
           <div>
             原型预览
+            {prototype?.name ? (
+              <span className="ml-2 font-normal text-slate-500">
+                {prototype.name}
+              </span>
+            ) : null}
             {prototype?.external_url ? (
               <a
                 href={prototype.external_url}
@@ -194,16 +219,57 @@ export function PrototypeWorkspace({
               </a>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setShowUpload((v) => !v);
-              setMsg(null);
-            }}
-            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-normal text-slate-600 hover:bg-slate-50"
-          >
-            {showUpload ? "收起" : hasPreview ? "更换原型" : "上传原型"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {prototype ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  if (
+                    !confirm(
+                      `删除原型「${prototype.name}」？不可恢复；已挂到 PRD 的链接会一并去掉。`
+                    )
+                  ) {
+                    return;
+                  }
+                  startTransition(async () => {
+                    try {
+                      await deletePrototypeAction({
+                        prototypeId: prototype.id,
+                        projectId,
+                        projectSlug,
+                      });
+                      setProtoList((prev) =>
+                        prev.filter((p) => p.id !== prototype.id)
+                      );
+                      setMsg({ text: "已删除原型", ok: true });
+                      setShowUpload(false);
+                      router.refresh();
+                    } catch (e) {
+                      setMsg({
+                        text:
+                          e instanceof Error ? e.message : "删除失败",
+                        ok: false,
+                      });
+                    }
+                  });
+                }}
+                className="rounded-lg border border-rose-200 px-2.5 py-1 text-xs font-normal text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+              >
+                删除原型
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setShowUpload((v) => !v);
+                setMsg(null);
+              }}
+              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-normal text-slate-600 hover:bg-slate-50"
+            >
+              {showUpload ? "收起" : hasPreview ? "更换/新建" : "上传原型"}
+            </button>
+          </div>
         </div>
         <div className="flex h-[calc(70vh-48px)] items-center justify-center bg-slate-100 p-6">
           {showUpload || !hasPreview ? (
@@ -234,6 +300,76 @@ export function PrototypeWorkspace({
       </section>
 
       <section className="space-y-4">
+        <div className="card p-4">
+          <p className="text-sm font-medium text-slate-700">本项目原型</p>
+          {protoList.length === 0 ? (
+            <p className="mt-2 text-xs text-slate-400">还没有原型，先上传或填外链。</p>
+          ) : (
+            <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+              {protoList.map((p) => (
+                <li
+                  key={p.id}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs ${
+                    p.id === prototype?.id
+                      ? "bg-indigo-50 text-indigo-900"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 truncate text-left"
+                    onClick={() => {
+                      setActiveProtoId(p.id);
+                      setShowUpload(false);
+                      if (p.requirement_id) setSelectedReqId(p.requirement_id);
+                    }}
+                  >
+                    {p.name}
+                    <span className="ml-1 text-slate-400">
+                      {p.type === "external_url" ? "外链" : "文件"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-rose-600 hover:underline"
+                    disabled={pending}
+                    onClick={() => {
+                      if (
+                        !confirm(
+                          `删除原型「${p.name}」？不可恢复；已挂到 PRD 的链接会一并去掉。`
+                        )
+                      ) {
+                        return;
+                      }
+                      startTransition(async () => {
+                        try {
+                          await deletePrototypeAction({
+                            prototypeId: p.id,
+                            projectId,
+                            projectSlug,
+                          });
+                          setProtoList((prev) =>
+                            prev.filter((x) => x.id !== p.id)
+                          );
+                          setMsg({ text: "已删除原型", ok: true });
+                          router.refresh();
+                        } catch (e) {
+                          setMsg({
+                            text:
+                              e instanceof Error ? e.message : "删除失败",
+                            ok: false,
+                          });
+                        }
+                      });
+                    }}
+                  >
+                    删除
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <div className="card p-4">
           <label className="text-sm font-medium text-slate-700">绑定需求</label>
           <select

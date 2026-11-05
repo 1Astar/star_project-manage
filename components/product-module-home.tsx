@@ -255,7 +255,7 @@ export function ProductModuleHomeView({
   }
 
   return (
-    <div className="relative space-y-4 xl:pr-48">
+    <div className="relative space-y-4">
       <PageFloatingToc items={outline} />
 
       <div className="flex flex-wrap items-start justify-between gap-3">

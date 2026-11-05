@@ -186,8 +186,8 @@ export function registerPrdTools(server: McpServer) {
 
         const row = await updateProjectPrd(input.prdId, {
           title: input.title,
-          modulePath: input.modulePath,
-          htmlContent,
+          module_path: input.modulePath,
+          html_content: htmlContent,
         });
 
         await logAiAction({

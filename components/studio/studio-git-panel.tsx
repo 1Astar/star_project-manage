@@ -35,7 +35,7 @@ export function StudioGitPanel({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(!studioProjectHasGit(project));
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const hasRepo = studioProjectHasGit(project);
   const githubUrl = studioProjectRepoUrl(project);
@@ -98,7 +98,8 @@ export function StudioGitPanel({
                     「代码目录」填成了链接，同步时会被忽略。请改成仓库内相对路径（如
                     工具/private/工具/star-pm），或清空拉整仓。
                   </p>
-                ) : null}                <div>
+                ) : null}
+                <div>
                   <span className="text-slate-400">分支：</span>
                   {project.githubBranch || "（未配置分支）"}
                 </div>
@@ -132,10 +133,10 @@ export function StudioGitPanel({
               ) : null}
               <button
                 type="button"
-                onClick={() => setShowSettings((v) => !v)}
+                onClick={() => setSettingsOpen(true)}
                 className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50"
               >
-                {showSettings ? "收起配置" : "编辑绑定"}
+                编辑绑定
               </button>
               <button
                 type="button"
@@ -177,12 +178,56 @@ export function StudioGitPanel({
         </section>
       ) : (
         <section className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6">
-          <h2 className="text-lg font-semibold text-slate-800">Git 仓库未绑定</h2>
-          <p className="mt-1 text-sm text-slate-500">绑定后可在此同步 commit、驱动任务完成检测。</p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">Git 仓库未绑定</h2>
+              <p className="mt-1 text-sm text-slate-500">绑定后可在此同步 commit、驱动任务完成检测。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              绑定仓库
+            </button>
+          </div>
         </section>
       )}
 
-      {showSettings || !hasRepo ? <StudioGitSettings project={project} /> : null}
+      {settingsOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/45 p-3 pt-[6vh] sm:p-6"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="studio-git-settings-title"
+            className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+              <h2 id="studio-git-settings-title" className="font-semibold text-slate-800">
+                {hasRepo ? "编辑绑定" : "绑定仓库"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              >
+                关闭
+              </button>
+            </div>
+            <div className="max-h-[80vh] overflow-y-auto p-5">
+              <StudioGitSettings
+                project={project}
+                embedded
+                onSaved={() => setSettingsOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

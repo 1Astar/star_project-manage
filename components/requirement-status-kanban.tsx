@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveRequirementDetailAction } from "@/lib/actions";
+import { EntityCard } from "@/components/entity-card";
 import { StudioBadge } from "@/components/studio/shell";
 import type { Requirement } from "@/lib/types";
 import { isLeafRequirement } from "@/lib/requirement-tree";
@@ -194,7 +195,7 @@ export function RequirementStatusKanban({
                 ) : (
                   colItems.map((item) => (
                     <li key={item.req.id}>
-                      <article
+                      <div
                         draggable
                         onDragStart={(e) => {
                           e.dataTransfer.setData("text/req-id", item.req.id);
@@ -206,44 +207,45 @@ export function RequirementStatusKanban({
                           setOverColumn(null);
                         }}
                         className={cn(
-                          "cursor-grab rounded-lg border border-slate-200 bg-white p-3 shadow-sm active:cursor-grabbing",
-                          draggingId === item.req.id ? "opacity-60" : "hover:border-indigo-200"
+                          "cursor-grab active:cursor-grabbing",
+                          draggingId === item.req.id ? "opacity-60" : null
                         )}
                       >
-                        <button
-                          type="button"
-                          className="w-full text-left"
-                          onClick={() => onOpen?.(item.req.id, item.projectSlug)}
-                        >
-                          {showProjectName ? (
-                            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-indigo-600">
-                              {item.projectName}
-                            </div>
-                          ) : null}
-                          <div className="text-sm font-medium text-slate-900 hover:text-indigo-700">
-                            {item.req.title}
-                          </div>
-                          {item.req.priority ? (
-                            <div className="mt-1.5">
-                              <StudioBadge
-                                tone={item.req.priority === "P0" ? "p0" : "muted"}
-                              >
-                                {item.req.priority}
-                              </StudioBadge>
-                            </div>
-                          ) : null}
-                          {item.req.assignees?.length ? (
-                            <p className="mt-1.5 text-[11px] text-slate-400">
-                              {item.req.assignees.join("、")}
-                            </p>
-                          ) : null}
-                          {item.req.next_step?.trim() ? (
-                            <p className="mt-1 line-clamp-2 text-[11px] text-slate-500">
-                              {item.req.next_step}
-                            </p>
-                          ) : null}
-                        </button>
-                      </article>
+                        <EntityCard
+                          compact
+                          title={item.req.title}
+                          description={item.req.next_step?.trim() || null}
+                          onOpen={() => onOpen?.(item.req.id, item.projectSlug)}
+                          className="hover:border-indigo-200"
+                          tags={
+                            (showProjectName && item.projectName) ||
+                            item.req.priority ||
+                            item.req.assignees?.length ? (
+                              <>
+                                {showProjectName && item.projectName ? (
+                                  <span className="text-[10px] font-medium uppercase tracking-wide text-indigo-600">
+                                    {item.projectName}
+                                  </span>
+                                ) : null}
+                                {item.req.priority ? (
+                                  <StudioBadge
+                                    tone={
+                                      item.req.priority === "P0" ? "p0" : "muted"
+                                    }
+                                  >
+                                    {item.req.priority}
+                                  </StudioBadge>
+                                ) : null}
+                                {item.req.assignees?.length ? (
+                                  <span className="text-[11px] text-slate-400">
+                                    {item.req.assignees.join("、")}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : undefined
+                          }
+                        />
+                      </div>
                     </li>
                   ))
                 )}

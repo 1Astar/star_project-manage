@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { StudioBadge } from "@/components/studio/shell";
 import { ConvertIdeaButton } from "@/components/studio/convert-idea-button";
+import { ConvertIdeaToRequirementButton } from "@/components/studio/convert-idea-to-requirement-button";
 import {
   IDEA_TYPE_EMOJI,
   IDEA_DATE_GROUP_LABELS,
@@ -114,7 +115,14 @@ export function IdeaStreamTimeline({
                         </p>
                       ) : null}
                     </div>
-                    <div className="shrink-0 self-center">
+                    <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
+                      <ConvertIdeaToRequirementButton
+                        ideaId={idea.id}
+                        ideaTitle={idea.title}
+                        relatedProjectId={idea.relatedProjectId}
+                        defaultAcceptance={idea.suggestedNextStep}
+                        compact
+                      />
                       <ConvertIdeaButton
                         ideaId={idea.id}
                         ideaTitle={idea.title}

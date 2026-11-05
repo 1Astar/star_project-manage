@@ -62,14 +62,38 @@ export function MarkdownWithLinkedViews({
   } | null>(null);
   const [slashFilter, setSlashFilter] = useState("");
   const [focusedMdIndex, setFocusedMdIndex] = useState(0);
+  /** 块编辑时：仅当前块显示源码框，其余块仍渲染 Markdown */
+  const [activeMdId, setActiveMdId] = useState<string | null>(null);
+  /** 点「编辑正文」后进入分块阅读（仍是 Preview），再点某一块才出 textarea */
+  const [forceBlocks, setForceBlocks] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
   const taRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
     if (blockEditing) setLocal(explodeMdBlocks(splitBodySegments(content)));
-    else setLocal(null);
+    else {
+      setLocal(null);
+      setActiveMdId(null);
+      setForceBlocks(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blockEditing]);
+
+  function exitBlockEdit() {
+    setPicker(null);
+    setSlashFilter("");
+    setActiveMdId(null);
+    setForceBlocks(false);
+  }
+
+  useEffect(() => {
+    if (!activeMdId) return;
+    const ta = taRefs.current[activeMdId];
+    if (!ta) return;
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+  }, [activeMdId]);
 
   function emit(next: BodySegment[]) {
     if (blockEditing) setLocal(next);
@@ -100,10 +124,12 @@ export function MarkdownWithLinkedViews({
   function insertMd(atIndex: number, text: string, slash?: { start: number; end: number }) {
     const next = [...segments];
     const seg = next[atIndex];
-    const block: BodySegment = { type: "md", id: `md-${Date.now()}`, text };
+    const blockId = `md-${Date.now()}`;
+    const block: BodySegment = { type: "md", id: blockId, text };
     if (!seg || seg.type !== "md") {
       next.splice(atIndex + 1, 0, block);
       emit(next);
+      setActiveMdId(blockId);
       return;
     }
     if (slash) {
@@ -120,6 +146,7 @@ export function MarkdownWithLinkedViews({
       next.splice(atIndex + 1, 0, block);
     }
     emit(next);
+    setActiveMdId(blockId);
   }
 
   function insertView(
@@ -169,6 +196,7 @@ export function MarkdownWithLinkedViews({
     if (!segments[idx] || segments[idx]?.type !== "md") {
       idx = segments.findIndex((s) => s.type === "md");
     }
+    setForceBlocks(true);
     setPicker({ index: idx < 0 ? 0 : idx, skipSlash: true });
   }
 
@@ -189,11 +217,115 @@ export function MarkdownWithLinkedViews({
   }
 
   const viewMode = !blockEditing;
+  /** 默认阅读：连续渲染（含夹着的关联视图）；点「编辑正文」才拆块 */
+  const readingMode =
+    !picker && activeMdId === null && !forceBlocks;
+
+  if (readingMode) {
+    const md = content.trim();
+    const runs: Array<
+      | { kind: "md"; text: string }
+      | { kind: "view"; seg: Extract<BodySegment, { type: "view" }> }
+    > = [];
+    for (const seg of segments) {
+      if (seg.type === "view") {
+        runs.push({ kind: "view", seg });
+        continue;
+      }
+      const last = runs[runs.length - 1];
+      if (last?.kind === "md") {
+        last.text = last.text
+          ? `${last.text}${last.text.endsWith("\n") ? "\n" : "\n\n"}${seg.text}`
+          : seg.text;
+      } else {
+        runs.push({ kind: "md", text: seg.text });
+      }
+    }
+    return (
+      <div className="space-y-1">
+        {blockEditing ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setForceBlocks(true);
+                setActiveMdId(null);
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              编辑正文
+            </button>
+            <button
+              type="button"
+              onClick={openInsertMenu}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+            >
+              插入块
+            </button>
+            <span className="text-[11px] text-slate-400">
+              阅读中 · 已渲染 Markdown；点「编辑正文」再改某一段
+            </span>
+          </div>
+        ) : null}
+        {md ? (
+          <div className="space-y-3">
+            {runs.map((run, i) =>
+              run.kind === "md" ? (
+                run.text.trim() ? (
+                  <MarkdownPreview
+                    key={`md-run-${i}`}
+                    content={run.text}
+                    withHeadingIds
+                    preferInAppLinks
+                  />
+                ) : null
+              ) : (
+                <LinkedViewBlock
+                  key={run.seg.id}
+                  projectId={projectId}
+                  projectSlug={projectSlug}
+                  config={run.seg.config}
+                  rows={libraries[run.seg.config.source] ?? []}
+                  source={sources.find((s) => s.id === run.seg.config.source)}
+                  canEdit={canEdit}
+                  onChange={
+                    onChange
+                      ? (cfg) => updateView(run.seg.id, cfg)
+                      : undefined
+                  }
+                  onDelete={
+                    canEdit && onChange
+                      ? () => removeView(run.seg.id)
+                      : undefined
+                  }
+                  onOpenRow={onOpenRow}
+                  moduleOptions={moduleOptions}
+                />
+              )
+            )}
+          </div>
+        ) : viewMode && canEdit && onChange ? (
+          <p className="text-sm text-slate-400">
+            暂无正文。点「插入块」，或输入 / 。
+          </p>
+        ) : (
+          <p className="text-sm text-slate-400">暂无正文。</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
-      {canEdit && onChange ? (
+      {blockEditing ? (
         <div className="mb-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={exitBlockEdit}
+            className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-800 hover:bg-indigo-100"
+          >
+            完成编辑
+          </button>
           <button
             type="button"
             onClick={openInsertMenu}
@@ -202,7 +334,9 @@ export function MarkdownWithLinkedViews({
             插入块
           </button>
           <span className="text-[11px] text-slate-400">
-            行首输入 / 插入标题、列表或关联视图；左侧 ⋮⋮ 拖动排序
+            {activeMdId
+              ? "正在编辑一块 · Esc 或「完成编辑」回到阅读"
+              : "点某一段编辑；行首 / 插入；左侧 ⋮⋮ 拖动"}
           </span>
         </div>
       ) : null}
@@ -256,15 +390,45 @@ export function MarkdownWithLinkedViews({
             />
           );
         }
-        if (viewMode) {
-          const text = seg.text.trim();
-          if (!text) return null;
+        const text = seg.text.trim();
+        const showPreview =
+          viewMode || (blockEditing && activeMdId !== seg.id);
+        if (showPreview) {
+          if (!text && viewMode) return null;
           return frame(
-            <MarkdownPreview
-              content={seg.text}
-              withHeadingIds
-              preferInAppLinks
-            />
+            <div
+              role={blockEditing ? "button" : undefined}
+              tabIndex={blockEditing ? 0 : undefined}
+              onClick={() => {
+                if (!blockEditing) return;
+                setFocusedMdIndex(index);
+                setActiveMdId(seg.id);
+              }}
+              onKeyDown={(e) => {
+                if (!blockEditing) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setFocusedMdIndex(index);
+                  setActiveMdId(seg.id);
+                }
+              }}
+              className={
+                blockEditing
+                  ? "cursor-text rounded-lg px-2 py-1.5 hover:bg-slate-50"
+                  : undefined
+              }
+              title={blockEditing ? "点击编辑" : undefined}
+            >
+              {text ? (
+                <MarkdownPreview
+                  content={seg.text}
+                  withHeadingIds
+                  preferInAppLinks
+                />
+              ) : (
+                <p className="text-sm text-slate-400">空段落，点击编辑</p>
+              )}
+            </div>
           );
         }
         const showSlash =
@@ -280,6 +444,12 @@ export function MarkdownWithLinkedViews({
               }}
               value={seg.text}
               onFocus={() => setFocusedMdIndex(index)}
+              onBlur={() => {
+                // 延迟：点菜单时不立刻收起
+                window.setTimeout(() => {
+                  setActiveMdId((cur) => (cur === seg.id ? null : cur));
+                }, 150);
+              }}
               onChange={(e) => {
                 const value = e.target.value;
                 const caret = e.target.selectionStart ?? value.length;
@@ -302,13 +472,17 @@ export function MarkdownWithLinkedViews({
               }}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
+                  e.preventDefault();
                   setPicker(null);
                   setSlashFilter("");
+                  (e.target as HTMLTextAreaElement).blur();
+                  // Esc：退出块编辑，回到连续阅读
+                  exitBlockEdit();
                 }
               }}
               rows={Math.max(2, seg.text.split("\n").length + 1)}
               placeholder="输入文字，或 / 插入块"
-              className="w-full resize-y rounded-lg border border-transparent px-2 py-1.5 text-sm leading-relaxed text-slate-800 hover:border-slate-200 focus:border-slate-300"
+              className="w-full resize-y rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-sm leading-relaxed text-slate-800 shadow-sm focus:border-indigo-300"
             />
             {showSlash && picker ? (
               <SlashAndSourceMenu

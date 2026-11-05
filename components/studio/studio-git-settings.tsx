@@ -5,7 +5,16 @@ import { useState, useTransition } from "react";
 import type { Project } from "@/lib/studio/types";
 import { parseFeatureModulesInput } from "@/lib/studio/project-modules";
 
-export function StudioGitSettings({ project }: { project: Project }) {
+export function StudioGitSettings({
+  project,
+  embedded = false,
+  onSaved,
+}: {
+  project: Project;
+  /** 嵌在弹窗内时去掉外层卡片边框 */
+  embedded?: boolean;
+  onSaved?: () => void;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
@@ -82,6 +91,7 @@ export function StudioGitSettings({ project }: { project: Project }) {
           setMessage("已保存（仓库 + 功能板块）");
         }
         router.refresh();
+        onSaved?.();
       } catch {
         setError("网络错误");
       }
@@ -89,9 +99,15 @@ export function StudioGitSettings({ project }: { project: Project }) {
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="font-semibold text-slate-800">代码仓库</h2>
-      <p className="mt-1 text-sm text-slate-500">
+    <section
+      className={
+        embedded
+          ? ""
+          : "rounded-xl border border-slate-200 bg-white p-5"
+      }
+    >
+      {embedded ? null : <h2 className="font-semibold text-slate-800">代码仓库</h2>}
+      <p className={`text-sm text-slate-500 ${embedded ? "" : "mt-1"}`}>
         绑定仓库与<strong>实际分支</strong>；代码目录填仓库相对路径后，同步/任务匹配只看改动该目录的 commit。
       </p>
       <form onSubmit={handleSave} className="mt-4 space-y-3">

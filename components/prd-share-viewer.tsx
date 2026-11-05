@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { annotateHtmlDiff } from "@/lib/prds/html-diff";
+import { unpackPrdDocument } from "@/lib/prds/doc-pages";
 import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type { PrdReviewComment, ProjectPrd, Prototype } from "@/lib/types";
 import { PrdEditorFrame } from "@/components/prd-editor-frame";
@@ -19,34 +20,60 @@ export function PrdShareViewer({
   const [versionId, setVersionId] = useState<string | "current">("current");
   const [showDiff, setShowDiff] = useState(false);
 
+  const sourceHtml = useMemo(() => {
+    if (versionId === "current") return prd.html_content;
+    return (
+      (prd.versions ?? []).find((v) => v.id === versionId)?.html_content ??
+      prd.html_content
+    );
+  }, [prd, versionId]);
+
+  const unpacked = useMemo(() => unpackPrdDocument(sourceHtml), [sourceHtml]);
+
   const html = useMemo(() => {
     const versions = prd.versions ?? [];
+    const display = unpacked.html;
     if (versionId === "current") {
-      if (!showDiff || !versions.length) return prd.html_content;
+      if (!showDiff || !versions.length) return display;
       const last = versions[versions.length - 1];
-      return last
-        ? annotateHtmlDiff(last.html_content, prd.html_content)
-        : prd.html_content;
+      if (!last) return display;
+      return annotateHtmlDiff(unpackPrdDocument(last.html_content).html, display);
     }
+    if (!showDiff) return display;
     const version = versions.find((v) => v.id === versionId);
-    if (!version) return prd.html_content;
-    if (!showDiff) return version.html_content;
+    if (!version) return display;
     const index = versions.findIndex((v) => v.id === version.id);
     const previous = index > 0 ? versions[index - 1] : null;
-    if (!previous) return version.html_content;
-    return annotateHtmlDiff(previous.html_content, version.html_content);
-  }, [prd, versionId, showDiff]);
+    if (!previous) return display;
+    return annotateHtmlDiff(
+      unpackPrdDocument(previous.html_content).html,
+      display
+    );
+  }, [prd, versionId, showDiff, unpacked.html]);
 
-  const pages = useMemo(
-    () => [
-      {
-        id: prd.id,
-        title: prd.title,
-        parentId: null as string | null,
-        order: 0,
-        expanded: true,
-        content: html,
-      },
+  const pages = useMemo(() => {
+    const rootId = unpacked.pages?.find((p) => !p.parentId)?.id ?? prd.id;
+    const contentPages = unpacked.pages?.length
+      ? unpacked.pages.map((p) => ({
+          id: p.id,
+          title: p.title,
+          parentId: p.parentId,
+          order: p.order,
+          expanded: true,
+          content: p.id === rootId ? html : p.content,
+        }))
+      : [
+          {
+            id: prd.id,
+            title: prd.title,
+            parentId: null as string | null,
+            order: 0,
+            expanded: true,
+            content: html,
+          },
+        ];
+    return [
+      ...contentPages,
       ...prd.linked_prototypes.flatMap((link, index) => {
         const proto = prototypes.find((p) => p.id === link.prototype_id);
         if (!proto) return [];
@@ -55,17 +82,16 @@ export function PrdShareViewer({
           {
             id: proto.id,
             title: `Prototype｜${proto.name}`,
-            parentId: prd.id,
-            order: index,
+            parentId: rootId,
+            order: 1000 + index,
             expanded: true,
             content: `<h1>Prototype｜${proto.name}</h1>`,
             prototypeUrl: url || undefined,
           },
         ];
       }),
-    ],
-    [prd, prototypes, html]
-  );
+    ];
+  }, [prd, prototypes, html, unpacked.pages]);
 
   return (
     <div className="flex h-screen flex-col bg-slate-100">

@@ -76,7 +76,7 @@ export function ProjectMoreMenu({
       <div className="absolute right-0 z-50 mt-1 min-w-[180px] overflow-visible rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
         {showSecrets ? (
           <a
-            href={`/projects/${routeId}/secrets`}
+            href={`/projects/${routeId}/resources?cat=secrets`}
             className="block whitespace-nowrap px-3 py-2 text-slate-700 hover:bg-slate-50"
           >
             项目密钥

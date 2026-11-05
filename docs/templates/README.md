@@ -8,7 +8,8 @@ Idea → Project 主链路不变。
 |---|---|---|
 | **Concept** | 产品方案设计（定位→洞察） | [product-concept-template.md](./product-concept-template.md) |
 | **Case Study** | 作品集叙事（editorial portfolio） | [case-study-template.md](./case-study-template.md) · [case-study-prompt.md](./case-study-prompt.md) |
-| **PRD** | 可开发规格（字段/异常/验收） | （后续） |
+| **PRD** | 可开发规格（简单/复杂） | [prd-simple.md](./prd-simple.md) · [prd-complex.md](./prd-complex.md) |
+| **交付看板** | 模块 PRD+原型成套进度 | [module-delivery-board.md](./module-delivery-board.md) |
 
 示例 Case Study：[`../case-studies/随心而行-case-study.md`](../case-studies/随心而行-case-study.md)（`proj-moonpie`）
 

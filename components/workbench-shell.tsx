@@ -19,7 +19,6 @@ export const WORKBENCH_NAV = [
   { href: "/todos", label: "今日要做", icon: "☑", adminOnly: false },
   { href: "/evolution", label: "演进记录", icon: "↻", adminOnly: false },
   { href: "/assets", label: "资料 / 链接", icon: "🔗", adminOnly: false },
-  { href: "/keys", label: "密钥索引", icon: "🔑", adminOnly: true },
   { href: "/settings", label: "设置", icon: "⚙", adminOnly: false },
 ] as const;
 
@@ -136,7 +135,10 @@ export function WorkbenchShell({
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="relative z-20 border-b border-slate-200 bg-white px-6 py-4">
+        <header
+          id="workbench-chrome-header"
+          className="relative z-20 border-b border-slate-200 bg-white px-6 py-4"
+        >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-slate-900">{title}</h1>

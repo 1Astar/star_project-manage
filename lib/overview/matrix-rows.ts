@@ -67,10 +67,22 @@ export function sectionFromModulePath(path: string | null | undefined): string {
   return raw.split(/[>/·\-|／]/)[0]?.trim() || "未分板块";
 }
 
+/**
+ * 优化建议与 Bug 共用 bug 表。识别规则（任一命中即优化）：
+ * 1. 标题以 [优化] / 【优化】开头（导入常见前缀）
+ * 2. 描述含「来自优化表」或「Excel 优化表」等导入标记
+ * 3. 有 suggestion，且无复现步骤（或描述已标明来自优化表）
+ */
 export function isOptimizationBug(b: Bug): boolean {
+  const title = (b.title ?? "").trim();
+  if (/^[\[【]\s*优化\s*[\]】]/.test(title)) return true;
+
+  const desc = (b.description ?? "").trim();
+  if (/来自优化表|Excel\s*优化表|出处[：:].*优化表/.test(desc)) return true;
+
   const sug = (b.suggestion ?? "").trim();
   if (!sug) return false;
-  if (/来自优化表/.test(b.description ?? "")) return true;
+  if (/来自优化表|Excel\s*优化表/.test(desc)) return true;
   return !(b.repro_steps ?? "").trim();
 }
 
@@ -163,7 +175,11 @@ export function buildOverviewMatrixRows(input: {
   for (const b of bugs) {
     const opt = isOptimizationBug(b);
     const summary = opt
-      ? (b.suggestion ?? "").slice(0, 200)
+      ? [b.suggestion, b.description, b.actual_result]
+          .map((s) => (s ?? "").trim())
+          .filter(Boolean)
+          .join("\n")
+          .slice(0, 200)
       : [b.actual_result, b.description, b.suggestion]
           .map((s) => (s ?? "").trim())
           .filter(Boolean)

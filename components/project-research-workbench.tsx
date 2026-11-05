@@ -367,11 +367,7 @@ export function ProjectResearchWorkbench({
   const peekOpen = Boolean(peek);
 
   return (
-    <div
-      className={`flex items-stretch gap-0 ${
-        peekOpen ? "min-h-[calc(100vh-8rem)]" : ""
-      }`}
-    >
+    <div className="flex items-start gap-0">
       <div
         className={`min-w-0 space-y-4 ${
           peekOpen ? "w-[min(100%,42%)] shrink-0 pr-3" : "w-full"
@@ -773,7 +769,7 @@ export function ProjectResearchWorkbench({
       </div>
 
       {peek ? (
-        <div className="sticky top-2 flex h-[calc(100vh-5.5rem)] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="sticky top-2 flex max-h-[calc(100vh-5.5rem)] min-h-0 min-w-0 flex-1 flex-col self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <EntitySidePeek
             variant="panel"
             item={peek}

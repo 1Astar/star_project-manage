@@ -1,8 +1,8 @@
 import { notFound, redirect } from "next/navigation";
-import { ProjectSecretsPanel } from "@/components/studio/project-secrets-panel";
 import { getAdminSession } from "@/lib/auth/session";
 import { resolveProjectRoute } from "@/lib/project-bridge";
 
+/** 项目密钥已并入资源中心「密钥」分类 */
 export default async function ProjectSecretsPage({
   params,
 }: {
@@ -15,7 +15,7 @@ export default async function ProjectSecretsPage({
 
   const { id } = await params;
   const ctx = await resolveProjectRoute(id);
-  if (!ctx.studio) notFound();
+  if (!ctx.studio && !ctx.pmProject && !ctx.pmSlug) notFound();
 
-  return <ProjectSecretsPanel projectId={ctx.studio.id} />;
+  redirect(`/projects/${ctx.routeId}/resources?cat=secrets`);
 }
