@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
   useTransition,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -32,6 +34,11 @@ import {
   previewPrdImport,
   type PrdImportPreview,
 } from "@/lib/prds/import-text";
+import {
+  buildVersionOutline,
+  groupPrdsByVersion,
+  type VersionOutlineNode,
+} from "@/lib/prds/version-tree";
 import { resolvePrototypeUrl } from "@/lib/prototypes/resolve-url";
 import type {
   PrdReviewComment,
@@ -105,16 +112,15 @@ export function PrdWorkspaceClient({
     [prds, openId]
   );
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, ProjectPrd[]>();
-    for (const prd of prds) {
-      const key = prd.module_path?.trim() || "未分板块";
-      const list = map.get(key) ?? [];
-      list.push(prd);
-      map.set(key, list);
-    }
-    return [...map.entries()];
-  }, [prds]);
+  /** 外层只显示版本根（如 APP重构1.0）；展开后是板块 → PRD/原型 */
+  const versionGroups = useMemo(() => groupPrdsByVersion(prds), [prds]);
+  const [expandedVersions, setExpandedVersions] = useState<
+    Record<string, boolean>
+  >({});
+  /** 展开版本后，内层节点默认展开；显式 true = 收起 */
+  const [collapsedOutline, setCollapsedOutline] = useState<
+    Record<string, boolean>
+  >({});
 
   const currentHtml = selected
     ? draftHtml || selected.html_content
@@ -820,60 +826,60 @@ export function PrdWorkspaceClient({
         </div>
       ) : null}
 
-      <div className="space-y-5">
-        {grouped.map(([moduleName, rows]) => (
-          <section key={moduleName}>
-            <h3 className="mb-2 text-sm font-medium text-slate-500">{moduleName}</h3>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white py-1">
-              {rows.map((prd) => {
-                const protoLinks = prd.linked_prototypes
-                  .map((link) => {
-                    const proto = protoList.find((p) => p.id === link.prototype_id);
-                    if (!proto) return null;
-                    const url =
-                      proto.external_url || resolvePrototypeUrl(proto.storage_path);
-                    return { link, proto, url };
-                  })
-                  .filter(
-                    (
-                      row
-                    ): row is {
-                      link: (typeof prd.linked_prototypes)[number];
-                      proto: Prototype;
-                      url: string;
-                    } => Boolean(row)
-                  );
-                return (
-                  <div key={prd.id}>
-                    <div className="flex items-center gap-2 px-2 py-1">
-                      <button
-                        type="button"
-                        className="flex min-w-0 flex-1 items-center justify-between rounded-lg px-2 py-2 text-left hover:bg-slate-50"
-                        onClick={() => openPrd(prd)}
-                      >
-                        <span className="truncate font-medium text-slate-800">
-                          {prd.title}
-                        </span>
-                        <span className="shrink-0 text-xs text-slate-400">
-                          {(prd.versions ?? []).at(-1)?.label ?? "1.0"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
-                        onClick={() => copyShare(prd)}
-                      >
-                        复制链接
-                      </button>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600"
-                        disabled={pending}
-                        onClick={() => {
+      <div className="space-y-2">
+        {versionGroups.map((group) => {
+          const open = Boolean(expandedVersions[group.key]);
+          const outline = open
+            ? buildVersionOutline(group, protoList)
+            : [];
+          return (
+            <section
+              key={group.key}
+              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+            >
+              <button
+                type="button"
+                className="flex w-full items-center gap-1 px-2 py-2.5 text-left hover:bg-slate-50"
+                onClick={() =>
+                  setExpandedVersions((prev) => ({
+                    ...prev,
+                    [group.key]: !prev[group.key],
+                  }))
+                }
+                aria-expanded={open}
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-sm text-slate-400">
+                  {open ? "⌄" : "›"}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-slate-800">
+                  {group.key}
+                </span>
+                <span className="shrink-0 pr-1 text-xs text-slate-400">
+                  {group.prds.length} 篇
+                </span>
+              </button>
+              {open ? (
+                <div className="border-t border-slate-100 px-1 pb-2 pt-1">
+                  {outline.length === 0 ? (
+                    <p className="px-3 py-2 text-sm text-slate-400">
+                      此版本下暂无文档
+                    </p>
+                  ) : (
+                    outline.map((node) => (
+                      <VersionOutlineRow
+                        key={node.id}
+                        node={node}
+                        depth={0}
+                        collapsed={collapsedOutline}
+                        setCollapsed={setCollapsedOutline}
+                        openId={openId}
+                        activePageId={activePageId}
+                        pending={pending}
+                        onOpen={openPrd}
+                        onCopy={copyShare}
+                        onDelete={(prd) => {
                           if (
-                            !confirm(
-                              `删除 PRD「${prd.title}」？不可恢复。`
-                            )
+                            !confirm(`删除 PRD「${prd.title}」？不可恢复。`)
                           ) {
                             return;
                           }
@@ -896,41 +902,14 @@ export function PrdWorkspaceClient({
                             }
                           });
                         }}
-                      >
-                        删除
-                      </button>
-                    </div>
-                    {protoLinks.map(({ proto, url }) => (
-                      <div
-                        key={proto.id}
-                        className="ml-6 flex items-center gap-2 px-2 py-0.5"
-                      >
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-center rounded-lg px-2 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-50"
-                          onClick={() => openPrd(prd, proto.id)}
-                        >
-                          Prototype｜{proto.name}
-                        </button>
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="shrink-0 px-1 text-slate-400"
-                            title="在新窗口打开原型"
-                          >
-                            ↗
-                          </a>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+                      />
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
       </div>
 
       {selected ? (
@@ -1531,6 +1510,198 @@ export function PrdWorkspaceClient({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function VersionOutlineRow({
+  node,
+  depth,
+  collapsed,
+  setCollapsed,
+  openId,
+  activePageId,
+  pending,
+  onOpen,
+  onCopy,
+  onDelete,
+}: {
+  node: VersionOutlineNode;
+  depth: number;
+  collapsed: Record<string, boolean>;
+  setCollapsed: Dispatch<SetStateAction<Record<string, boolean>>>;
+  openId: string | null;
+  activePageId: string | null;
+  pending: boolean;
+  onOpen: (prd: ProjectPrd, pageId?: string) => void;
+  onCopy: (prd: ProjectPrd) => void;
+  onDelete: (prd: ProjectPrd) => void;
+}) {
+  const childNodes =
+    node.kind === "folder"
+      ? node.children
+      : node.kind === "prd"
+        ? node.children ?? []
+        : [];
+  const hasChildren = childNodes.length > 0;
+  const isCollapsed = Boolean(collapsed[node.id]);
+  const pad = 8 + depth * 17;
+
+  if (node.kind === "folder") {
+    return (
+      <div>
+        <button
+          type="button"
+          className="flex w-full items-center gap-1 rounded-lg py-1.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+          style={{ paddingLeft: pad, paddingRight: 8 }}
+          onClick={() =>
+            setCollapsed((prev) => ({
+              ...prev,
+              [node.id]: !prev[node.id],
+            }))
+          }
+        >
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-xs text-slate-400">
+            {isCollapsed ? "›" : "⌄"}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium">{node.title}</span>
+        </button>
+        {!isCollapsed
+          ? childNodes.map((child) => (
+              <VersionOutlineRow
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                collapsed={collapsed}
+                setCollapsed={setCollapsed}
+                openId={openId}
+                activePageId={activePageId}
+                pending={pending}
+                onOpen={onOpen}
+                onCopy={onCopy}
+                onDelete={onDelete}
+              />
+            ))
+          : null}
+      </div>
+    );
+  }
+
+  if (node.kind === "proto") {
+    const active =
+      openId === node.prd.id && activePageId === node.protoId;
+    return (
+      <div
+        className={`group flex items-center gap-1 rounded-lg py-1.5 text-sm ${
+          active
+            ? "bg-sky-50 font-medium text-sky-700"
+            : "text-slate-600 hover:bg-slate-50"
+        }`}
+        style={{ paddingLeft: pad, paddingRight: 8 }}
+      >
+        <span className="h-5 w-5 shrink-0" aria-hidden />
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left"
+          onClick={() => onOpen(node.prd, node.protoId)}
+        >
+          {node.title}
+        </button>
+        {node.url ? (
+          <a
+            href={node.url}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 px-1 text-slate-400 opacity-0 group-hover:opacity-100"
+            title="在新窗口打开原型"
+            onClick={(e) => e.stopPropagation()}
+          >
+            ↗
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  const active =
+    openId === node.prd.id &&
+    (!node.pageId || activePageId === node.pageId || !activePageId);
+  return (
+    <div>
+      <div
+        className={`group flex items-center gap-1 rounded-lg py-1.5 text-sm ${
+          active
+            ? "bg-sky-50 font-medium text-sky-700"
+            : "text-slate-700 hover:bg-slate-50"
+        }`}
+        style={{ paddingLeft: pad, paddingRight: 8 }}
+      >
+        <span
+          className={`flex h-5 w-5 shrink-0 items-center justify-center text-xs text-slate-400 ${
+            hasChildren ? "" : "invisible"
+          }`}
+        >
+          {hasChildren ? (
+            <button
+              type="button"
+              className="h-5 w-5"
+              onClick={() =>
+                setCollapsed((prev) => ({
+                  ...prev,
+                  [node.id]: !prev[node.id],
+                }))
+              }
+              aria-label={isCollapsed ? "展开" : "收起"}
+            >
+              {isCollapsed ? "›" : "⌄"}
+            </button>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left"
+          onClick={() => onOpen(node.prd, node.pageId)}
+        >
+          {node.title}
+        </button>
+        <span className="hidden shrink-0 items-center gap-1 group-hover:flex">
+          <button
+            type="button"
+            className="rounded border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-500"
+            onClick={() => onCopy(node.prd)}
+          >
+            复制链接
+          </button>
+          <button
+            type="button"
+            className="rounded border border-rose-200 px-1.5 py-0.5 text-[11px] text-rose-600"
+            disabled={pending}
+            onClick={() => onDelete(node.prd)}
+          >
+            删除
+          </button>
+        </span>
+        <span className="shrink-0 text-[11px] text-slate-400 group-hover:hidden">
+          {(node.prd.versions ?? []).at(-1)?.label ?? "1.0"}
+        </span>
+      </div>
+      {hasChildren && !isCollapsed
+        ? childNodes.map((child) => (
+            <VersionOutlineRow
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              setCollapsed={setCollapsed}
+              openId={openId}
+              activePageId={activePageId}
+              pending={pending}
+              onOpen={onOpen}
+              onCopy={onCopy}
+              onDelete={onDelete}
+            />
+          ))
+        : null}
     </div>
   );
 }
