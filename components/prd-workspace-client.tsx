@@ -17,12 +17,12 @@ import {
   linkPrototypeToPrdAction,
   updatePrdAction,
 } from "@/lib/actions";
-import { annotateHtmlDiff } from "@/lib/prds/html-diff";
 import {
   packPrdDocument,
   unpackPrdDocument,
   type PrdDocPage,
 } from "@/lib/prds/doc-pages";
+import { PrdSideDiff } from "@/components/prd-side-diff";
 import {
   downloadPrdHtmlAndMarkdown,
   downloadPrdMarkdown,
@@ -151,51 +151,57 @@ export function PrdWorkspaceClient({
     return fromPages || unpackedSource.html;
   }, [selected, unpackedSource.pages, unpackedSource.html, resolvedActivePageId]);
 
+  /** 当前查看的正文（不做内联标注；对比改用左右分栏） */
   const editorHtml = useMemo(() => {
     if (!selected) return "";
-    const versions = selected.versions ?? [];
-    const displayCurrent = activePageRawHtml;
-    if (viewVersionId === "current") {
-      if (!showDiff || !versions.length) return displayCurrent;
-      const last = versions[versions.length - 1];
-      if (!last) return displayCurrent;
-      const prevUnpacked = unpackPrdDocument(last.html_content);
-      const prevDisplay =
-        prevUnpacked.pages?.find((p) => p.id === resolvedActivePageId)
-          ?.content || prevUnpacked.html;
-      return annotateHtmlDiff(prevDisplay, displayCurrent);
-    }
-    if (!showDiff) return displayCurrent;
-    const version = versions.find((v) => v.id === viewVersionId);
-    if (!version) return displayCurrent;
-    const index = versions.findIndex((v) => v.id === version.id);
-    const previous = index > 0 ? versions[index - 1] : null;
-    if (!previous) return displayCurrent;
-    const prevUnpacked = unpackPrdDocument(previous.html_content);
-    const prevDisplay =
-      prevUnpacked.pages?.find((p) => p.id === resolvedActivePageId)?.content ||
-      prevUnpacked.html;
-    return annotateHtmlDiff(prevDisplay, displayCurrent);
-  }, [
-    selected,
-    viewVersionId,
-    activePageRawHtml,
-    showDiff,
-    resolvedActivePageId,
-  ]);
+    return activePageRawHtml;
+  }, [selected, activePageRawHtml]);
 
   const editingCurrent = viewVersionId === "current" && !showDiff;
 
-  const diffAgainstLabel = useMemo(() => {
-    const vers = selected?.versions ?? [];
-    if (!showDiff || !vers.length) return null;
+  const diffPair = useMemo(() => {
+    if (!selected || !showDiff) return null;
+    const versions = selected.versions ?? [];
+    if (!versions.length) return null;
+    let previousHtml = "";
+    let previousLabel = "";
+    let currentHtml = activePageRawHtml;
+    let currentLabel = "当前稿";
     if (viewVersionId === "current") {
-      return vers[vers.length - 1]?.label ?? null;
+      const last = versions[versions.length - 1];
+      if (!last) return null;
+      const prevUnpacked = unpackPrdDocument(last.html_content);
+      previousHtml =
+        prevUnpacked.pages?.find((p) => p.id === resolvedActivePageId)
+          ?.content || prevUnpacked.html;
+      previousLabel = last.label;
+    } else {
+      const index = versions.findIndex((v) => v.id === viewVersionId);
+      const version = versions[index];
+      if (!version) return null;
+      const currUnpacked = unpackPrdDocument(version.html_content);
+      currentHtml =
+        currUnpacked.pages?.find((p) => p.id === resolvedActivePageId)
+          ?.content || currUnpacked.html;
+      currentLabel = version.label;
+      const previous = index > 0 ? versions[index - 1] : null;
+      if (!previous) return null;
+      const prevUnpacked = unpackPrdDocument(previous.html_content);
+      previousHtml =
+        prevUnpacked.pages?.find((p) => p.id === resolvedActivePageId)
+          ?.content || prevUnpacked.html;
+      previousLabel = previous.label;
     }
-    const index = vers.findIndex((v) => v.id === viewVersionId);
-    if (index <= 0) return null;
-    return vers[index - 1]?.label ?? null;
-  }, [showDiff, selected?.versions, viewVersionId]);
+    return { previousHtml, currentHtml, previousLabel, currentLabel };
+  }, [
+    selected,
+    showDiff,
+    viewVersionId,
+    activePageRawHtml,
+    resolvedActivePageId,
+  ]);
+
+  const diffAgainstLabel = diffPair?.previousLabel ?? null;
 
   const hostPages: PrdHostPage[] = useMemo(() => {
     if (!selected) return [];
@@ -211,9 +217,7 @@ export function PrdWorkspaceClient({
             parentId: p.parentId,
             order: p.order,
             expanded: true,
-            // 标注改动时只给当前活动页套 diff，其它页保持原内容
-            content:
-              isActive && showDiff ? editorHtml : p.content || editorHtml,
+            content: p.content || editorHtml,
           };
         })
       : [
@@ -971,8 +975,8 @@ export function PrdWorkspaceClient({
                   className="flex items-center gap-1 text-xs text-slate-600"
                   title={
                     (selected.versions ?? []).length
-                      ? "相对相邻上一小版本做块级增删标注"
-                      : "请先「保存为小版本」后再标注"
+                      ? "左右分栏对比相邻上一小版本（红删 / 绿增）"
+                      : "请先「保存为小版本」后再对比"
                   }
                 >
                   <input
@@ -981,7 +985,7 @@ export function PrdWorkspaceClient({
                     disabled={!(selected.versions ?? []).length}
                     onChange={(e) => setShowDiff(e.target.checked)}
                   />
-                  标注改动
+                  版本对比
                   {diffAgainstLabel ? (
                     <span className="text-slate-400">相对 {diffAgainstLabel}</span>
                   ) : null}
@@ -1464,12 +1468,15 @@ export function PrdWorkspaceClient({
                 </div>
               </div>
             ) : null}
-            {!editingCurrent ? (
+            {showDiff && diffPair ? (
+              <p className="border-b border-indigo-100 bg-indigo-50 px-4 py-2 text-xs text-indigo-950">
+                左右分栏对比（类 VS Code）：左旧右新，红=删除/改前，绿=新增/改后；滚动同步。取消「版本对比」可回编辑。
+              </p>
+            ) : !editingCurrent ? (
               <p className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-950">
                 当前为<strong>只读</strong>
-                {showDiff ? "（已勾选「标注相对上一版改动」）" : ""}
                 {viewVersionId !== "current" ? "（正在看历史小版本）" : ""}
-                ：无法粘贴或改正文。取消标注并选回「当前稿」后即可编辑；仍可用上方「复制正文」拷出内容与结构。
+                ：无法粘贴或改正文。选回「当前稿」后即可编辑；仍可用上方「复制正文」拷出内容与结构。
               </p>
             ) : (
               <p className="border-b border-slate-100 px-4 py-1 text-[11px] text-slate-500">
@@ -1477,40 +1484,49 @@ export function PrdWorkspaceClient({
               </p>
             )}
             <div className="min-h-0 flex-1">
-              <PrdEditorFrame
-                brand={projectTitle}
-                section={selected.module_path || "PRD"}
-                html={editorHtml}
-                pages={hostPages}
-                activeId={resolvedActivePageId || selected.id}
-                editable={editingCurrent}
-                review={suggest}
-                comments={hostComments}
-                versions={(selected.versions ?? []).map((v) => ({
-                  id: v.id,
-                  label: v.label,
-                  created_at: v.created_at,
-                }))}
-                viewVersionId={viewVersionId}
-                revision={`${selected.id}:${activePageId}:${viewVersionId}:${showDiff}:${suggest}:${hostPages
-                  .map((p) => p.id)
-                  .join(",")}:${selected.linked_prototypes
-                  .map((l) => l.prototype_id)
-                  .join(",")}`}
-                commentsOpenTick={commentsOpenTick}
-                onHtmlChange={onHtmlChange}
-                onCommentsChange={onCommentsChange}
-                onHostCreatePage={() => {
-                  setMessage(
-                    "请在左侧点「＋ 页面 / 子页面」：会在同一份 PRD 内新增，不会替换正文。"
-                  );
-                }}
-                onHostLinkPrototype={() => focusPrototypeLinker()}
-                onVersionChange={(versionId) => {
-                  setViewVersionId(versionId);
-                  setShowDiff(false);
-                }}
-              />
+              {showDiff && diffPair ? (
+                <PrdSideDiff
+                  previousHtml={diffPair.previousHtml}
+                  currentHtml={diffPair.currentHtml}
+                  previousLabel={diffPair.previousLabel}
+                  currentLabel={diffPair.currentLabel}
+                />
+              ) : (
+                <PrdEditorFrame
+                  brand={projectTitle}
+                  section={selected.module_path || "PRD"}
+                  html={editorHtml}
+                  pages={hostPages}
+                  activeId={resolvedActivePageId || selected.id}
+                  editable={editingCurrent}
+                  review={suggest}
+                  comments={hostComments}
+                  versions={(selected.versions ?? []).map((v) => ({
+                    id: v.id,
+                    label: v.label,
+                    created_at: v.created_at,
+                  }))}
+                  viewVersionId={viewVersionId}
+                  revision={`${selected.id}:${activePageId}:${viewVersionId}:${showDiff}:${suggest}:${hostPages
+                    .map((p) => p.id)
+                    .join(",")}:${selected.linked_prototypes
+                    .map((l) => l.prototype_id)
+                    .join(",")}`}
+                  commentsOpenTick={commentsOpenTick}
+                  onHtmlChange={onHtmlChange}
+                  onCommentsChange={onCommentsChange}
+                  onHostCreatePage={() => {
+                    setMessage(
+                      "请在左侧点「＋ 页面 / 子页面」：会在同一份 PRD 内新增，不会替换正文。"
+                    );
+                  }}
+                  onHostLinkPrototype={() => focusPrototypeLinker()}
+                  onVersionChange={(versionId) => {
+                    setViewVersionId(versionId);
+                    setShowDiff(false);
+                  }}
+                />
+              )}
             </div>
           </div>
         </div>
