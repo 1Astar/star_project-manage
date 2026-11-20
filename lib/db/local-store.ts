@@ -533,11 +533,26 @@ export type RequirementBoardItem = {
   project_slug: string;
 };
 
-/** 跨项目需求看板：叶子需求 + 所属项目 */
+/**
+ * 跨项目需求看板：叶子需求 + 所属项目。
+ * 生产路径禁止 readDb() 整库（曾导致 CF Error 1102 拖垮整站）。
+ */
 export async function getAllRequirementsBoard(): Promise<{
   items: RequirementBoardItem[];
   projects: Array<{ id: string; name: string; slug: string }>;
 }> {
+  if (isSupabaseConfigured()) {
+    try {
+      const { loadRequirementsBoardSlim } = await import(
+        "@/lib/db/requirements-board"
+      );
+      return await loadRequirementsBoardSlim();
+    } catch (e) {
+      console.error("getAllRequirementsBoard slim failed", e);
+      return { items: [], projects: [] };
+    }
+  }
+
   const db = await readDb();
   const projectMap = new Map(db.projects.map((p) => [p.id, p]));
   const byProject = new Map<string, Requirement[]>();

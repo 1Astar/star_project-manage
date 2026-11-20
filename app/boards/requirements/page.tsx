@@ -10,7 +10,24 @@ export const dynamic = "force-dynamic";
 
 export default async function GlobalRequirementsBoardPage() {
   const session = await getAdminSession();
-  const { items, projects } = await getAllRequirementsBoard();
+  let items: Awaited<ReturnType<typeof getAllRequirementsBoard>>["items"] = [];
+  let projects: Awaited<ReturnType<typeof getAllRequirementsBoard>>["projects"] =
+    [];
+  let loadError: string | null = null;
+
+  try {
+    const board = await Promise.race([
+      getAllRequirementsBoard(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("需求总览加载超时")), 12_000)
+      ),
+    ]);
+    items = board.items;
+    projects = board.projects;
+  } catch (e) {
+    console.error("boards/requirements", e);
+    loadError = e instanceof Error ? e.message : "加载失败";
+  }
 
   return (
     <WorkbenchShell
@@ -23,6 +40,11 @@ export default async function GlobalRequirementsBoardPage() {
         </Link>
       }
     >
+      {loadError ? (
+        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          需求总览暂时加载失败（{loadError}）。请刷新重试；勿连续猛刷以免拖垮站点。
+        </p>
+      ) : null}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <Suspense fallback={<div className="h-40 rounded-xl bg-slate-50" />}>
           <GlobalRequirementBoard initialItems={items} projects={projects} />
